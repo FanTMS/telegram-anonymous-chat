@@ -1,0 +1,35 @@
+# Установка поведения по умолчанию для автоматической нормализации переводов строк
+* text=auto eol=lf
+
+# Файлы исходного кода должны всегда использовать LF
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.css text eol=lf
+*.scss text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+
+# Документы
+*.txt text eol=lf
+*.md text eol=lf
+LICENSE text eol=lf
+
+# Скрипты должны иметь LF даже в Windows
+*.sh text eol=lf
+
+# Бинарные файлы
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary

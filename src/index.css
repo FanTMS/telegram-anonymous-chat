@@ -1,0 +1,370 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Цвета Telegram */
+  --tg-theme-bg-color: var(--tg-theme-bg-color, #fff);
+  --tg-theme-text-color: var(--tg-theme-text-color, #000);
+  --tg-theme-hint-color: var(--tg-theme-hint-color, #999);
+  --tg-theme-link-color: var(--tg-theme-link-color, #2678b6);
+  --tg-theme-button-color: var(--tg-theme-button-color, #2678b6);
+  --tg-theme-button-text-color: var(--tg-theme-button-text-color, #fff);
+  --tg-theme-secondary-bg-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+
+  /* Основные переменные темы */
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  --primary: 240 5.9% 10%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --ring: 240 5.9% 10%;
+  --radius: 0.5rem;
+  --chart-1: 12 76% 61%;
+  --chart-2: 173 58% 39%;
+  --chart-3: 197 37% 24%;
+  --chart-4: 43 74% 66%;
+  --chart-5: 27 87% 67%;
+}
+
+body {
+  background-color: var(--tg-theme-bg-color);
+  color: var(--tg-theme-text-color);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+body.dark {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 240 5.9% 10%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 240 4.9% 83.9%;
+  --chart-1: 220 70% 50%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 30 80% 55%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
+  color-scheme: dark;
+}
+
+/* Темная тема */
+body.dark {
+  background-color: #1A1A1A;
+  color: #ffffff;
+}
+
+/* Светлая тема */
+body.light {
+  background-color: #f5f5f5;
+  color: #000000;
+}
+
+/* Стили для нижней навигации */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  border-top-width: 1px;
+  z-index: 10;
+}
+
+.dark .bottom-nav {
+  background-color: #1A1A1A;
+  border-top: 1px solid #333333;
+}
+
+.light .bottom-nav {
+  background-color: #ffffff;
+  border-top: 1px solid #e0e0e0;
+}
+
+/* Современные стили для нижней навигации */
+.tg-navbar {
+  border-top-width: 1px;
+  background-color: rgba(255, 255, 255, 0.8);
+  /* Fallback */
+  background-color: rgba(var(--tg-theme-bg-color-rgb, 255, 255, 255), 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.dark .tg-navbar {
+  background-color: rgba(26, 26, 26, 0.8);
+  border-top-color: rgba(51, 51, 51, 0.8);
+  box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.2);
+}
+
+@supports not (backdrop-filter: blur(10px)) {
+  .tg-navbar {
+    background-color: var(--tg-theme-bg-color, #ffffff);
+  }
+
+  .dark .tg-navbar {
+    background-color: #1A1A1A;
+  }
+}
+
+/* Обеспечиваем поддержку жестов и безопасной зоны для iOS */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .tg-navbar {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pt-2.pb-20 {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0));
+  }
+}
+
+/* Анимация нажатия для мобильных устройств */
+@media (hover: none) {
+  .tg-navbar a:active {
+    opacity: 0.7;
+  }
+}
+
+/* Стили для бейджей уведомлений */
+.badge {
+  position: absolute;
+  top: -5px;
+  right: -8px;
+  background-color: #ff3d4d;
+  color: white;
+  font-size: 11px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Telegram MiniApp стили */
+@layer components {
+  .tg-container {
+    @apply max-w-lg mx-auto px-3 py-2;
+  }
+
+  .tg-card {
+    @apply rounded-2xl shadow-sm border-0 overflow-hidden;
+    background-color: var(--tg-theme-secondary-bg-color);
+  }
+
+  .tg-button {
+    @apply rounded-xl py-3 font-medium text-center transition-all;
+    background-color: var(--tg-theme-button-color);
+    color: var(--tg-theme-button-text-color);
+  }
+
+  .tg-button-outline {
+    @apply rounded-xl py-3 font-medium text-center border transition-all;
+    color: var(--tg-theme-button-color);
+    border-color: var(--tg-theme-button-color);
+    background-color: transparent;
+  }
+
+  .tg-input {
+    @apply rounded-xl border-0 py-3 px-4;
+    background-color: var(--tg-theme-secondary-bg-color);
+    color: var(--tg-theme-text-color);
+  }
+
+  .tg-header {
+    @apply text-xl font-bold mb-4;
+  }
+
+  .tg-animation {
+    @apply transition-all duration-300 ease-in-out;
+  }
+
+  .tg-button-sm {
+    @apply px-3 py-1.5 text-sm rounded-lg font-medium transition-all;
+    background-color: var(--tg-theme-button-color);
+    color: var(--tg-theme-button-text-color);
+  }
+
+  .tg-button-primary {
+    @apply px-4 py-2 text-sm rounded-lg font-medium transition-all flex items-center;
+    background-color: var(--tg-theme-button-color);
+    color: var(--tg-theme-button-text-color);
+  }
+
+  .tg-button-outline {
+    @apply px-4 py-2 text-sm rounded-lg font-medium transition-all border;
+    color: var(--tg-theme-button-color);
+    border-color: var(--tg-theme-button-color);
+    background-color: transparent;
+  }
+
+  .tg-filter-btn {
+    @apply px-3 py-1.5 text-sm whitespace-nowrap rounded-lg transition-colors;
+    @apply border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300;
+  }
+
+  .tg-filter-btn-active {
+    background-color: var(--tg-theme-button-color);
+    color: var(--tg-theme-button-text-color);
+    border-color: var(--tg-theme-button-color);
+  }
+
+  .tg-checkbox {
+    @apply relative inline-flex items-center cursor-pointer;
+  }
+
+  .tg-checkbox-input {
+    @apply sr-only;
+  }
+
+  .tg-checkbox-mark {
+    @apply w-5 h-5 flex items-center justify-center rounded border border-gray-300 dark:border-gray-600 transition-colors;
+  }
+
+  .tg-checkbox-input:checked~.tg-checkbox-mark {
+    background-color: var(--tg-theme-button-color);
+    border-color: var(--tg-theme-button-color);
+  }
+
+  .tg-checkbox-input:checked~.tg-checkbox-mark:after {
+    content: '';
+    @apply block w-2 h-2 bg-white rounded-full;
+  }
+
+  .tg-checkbox-label {
+    @apply ml-2 text-sm;
+  }
+}
+
+/* Анимации */
+.fade-enter {
+  opacity: 0;
+}
+
+.fade-enter-active {
+  opacity: 1;
+  transition: opacity 300ms;
+}
+
+.fade-exit {
+  opacity: 1;
+}
+
+.fade-exit-active {
+  opacity: 0;
+  transition: opacity 300ms;
+}
+
+/* Улучшение элементов для тач-устройств */
+button,
+a,
+input,
+select,
+textarea {
+  @apply outline-none;
+  touch-action: manipulation;
+}
+
+/* Стили для скрытия полосы прокрутки, но с сохранением функциональности */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  /* IE и Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+  /* Chrome, Safari и Opera */
+}
+
+/* Скрытие скроллбара для горизонтальной прокрутки */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  /* IE и Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  /* Chrome, Safari и Opera */
+}
+
+/* Спиннер загрузки */
+.spinner {
+  display: inline-block;
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(var(--tg-theme-button-color-rgb, 38, 120, 182), 0.2);
+  border-radius: 50%;
+  border-top-color: var(--tg-theme-button-color, #2678b6);
+  animation: spinner 1s ease-in-out infinite;
+}
+
+@keyframes spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Улучшение для line-clamp поддержки */
+.line-clamp-1,
+.line-clamp-2,
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-1 {
+  -webkit-line-clamp: 1;
+}
+
+.line-clamp-2 {
+  -webkit-line-clamp: 2;
+}
+
+.line-clamp-3 {
+  -webkit-line-clamp: 3;
+}
+
+/* Остальные стили из вашего проекта */
