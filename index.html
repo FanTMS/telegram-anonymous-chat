@@ -3,8 +3,8 @@
 
 <head>
   <meta charset="UTF-8" />
-  <!-- Изменяем метатеги для управления отображением -->
-  <meta name="viewport" content="width=1024, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta http-equiv="X-UA-Compatible" content="ie=edge" />
   <title>Анонимный чат</title>
   <!-- Базовые стили -->
@@ -18,17 +18,11 @@
       -moz-osx-font-smoothing: grayscale;
       background-color: var(--tg-theme-bg-color, #ffffff);
       color: var(--tg-theme-text-color, #000000);
-      min-width: 1024px;
-      /* Минимальная ширина для десктопного отображения */
-      overflow-x: auto;
-      /* Разрешаем горизонтальную прокрутку */
     }
 
     #root {
       min-height: 100vh;
       width: 100%;
-      min-width: 1024px;
-      /* Соответствует ширине body */
     }
 
     /* Остальные стили не меняются */
@@ -70,41 +64,7 @@
         border-left-color: #2678b6;
       }
     }
-
-    /* Скрипт для автоматического масштабирования на мобильных устройствах */
-    @media (max-width: 1023px) {
-      body {
-        /* Убираем необходимость горизонтальной прокрутки */
-        overflow-x: hidden;
-        /* Контент занимает всю область просмотра */
-        width: 100%;
-      }
-    }
   </style>
-  <!-- Добавляем скрипт для управления масштабом на мобильных устройствах -->
-  <script>
-    // Функция для установки правильного масштаба
-    function setViewportScale() {
-      // Получаем реальную ширину устройства
-      const deviceWidth = Math.min(window.innerWidth, screen.width);
-
-      // Если устройство мобильное (менее 1024px)
-      if (deviceWidth < 1024) {
-        // Вычисляем нужный масштаб
-        const scale = deviceWidth / 1024;
-
-        // Устанавливаем метатег с правильным масштабом
-        const viewport = document.querySelector('meta[name="viewport"]');
-        if (viewport) {
-          viewport.setAttribute('content', `width=1024, initial-scale=${scale}, maximum-scale=${scale}, user-scalable=no`);
-        }
-      }
-    }
-
-    // Вызываем функцию при загрузке и изменении размера
-    window.addEventListener('load', setViewportScale);
-    window.addEventListener('resize', setViewportScale);
-  </script>
 </head>
 
 <body>
