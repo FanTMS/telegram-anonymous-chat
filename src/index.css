@@ -395,7 +395,7 @@ textarea {
 }
 
 .line-clamp-3 {
-  -webkit-line-clamp-3;
+  -webkit-line-clamp: 3;
 }
 
 /* Остальные стили из вашего проекта */
