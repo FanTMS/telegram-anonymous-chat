@@ -1,54 +1,46 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'framer-motion'; // Добавляем импорт framer-motion
 
 interface NavButtonProps {
   to: string;
+  icon: string;
   label: string;
-  icon: React.ReactNode;
-  isActive?: boolean;
+  isActive: boolean;
   hasNotification?: boolean;
   onClick?: () => void;
 }
 
 export const NavButton: React.FC<NavButtonProps> = ({
   to,
-  label,
   icon,
-  isActive = false,
+  label,
+  isActive,
   hasNotification = false,
   onClick
 }) => {
-  // Используем единый стиль кнопок для всех устройств
-  const activeClasses = isActive
-    ? 'text-blue-500 dark:text-blue-400'
-    : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200';
-
   return (
     <Link
       to={to}
+      className={`nav-button ${isActive ? 'active' : ''}`}
       onClick={onClick}
-      className={`nav-button ${activeClasses}`}
     >
-      <div className="relative">
-        <div className="nav-button-icon">{icon}</div>
+      <motion.span
+        className="icon-container"
+        whileTap={{ scale: 0.9 }}
+        transition={{ duration: 0.2 }}
+      >
+        <span className="icon">{icon}</span>
         {hasNotification && (
-          <motion.div
+          <motion.span
+            className="notification-dot"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"
+            transition={{ duration: 0.3 }}
           />
         )}
-      </div>
-      <span className="text-xs">{label}</span>
-      {isActive && (
-        <motion.div
-          layoutId="navbar-indicator"
-          className="absolute top-0 left-0 right-0 h-1 bg-blue-500 dark:bg-blue-400 rounded-b"
-          style={{ width: '50%', left: '25%', top: '-1px' }}
-          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-        />
-      )}
+      </motion.span>
+      <span className="label">{label}</span>
     </Link>
   );
 };

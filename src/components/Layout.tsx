@@ -4,8 +4,8 @@ import WebApp from '@twa-dev/sdk'
 import { isAdmin as checkAdmin, getCurrentUser, saveUser, User } from '../utils/user'
 import { NavButton } from './NavButton'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChatRedirectHandler } from './ChatRedirectHandler'
 import { hasNewChat, getNewChatNotification, markChatNotificationAsRead } from '../utils/matchmaking'
+import '../styles/navbar.css' // Добавляем отдельный файл стилей для навигации
 
 export const Layout = () => {
   const location = useLocation()
@@ -14,6 +14,7 @@ export const Layout = () => {
   const [hasNewMessage, setHasNewMessage] = useState(false)
   const [isLoading, setIsLoading] = useState(true) // Добавляем состояние загрузки
   const [loadingTimeout, setLoadingTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [isMenuOpen, setIsMenuOpen] = useState(false) // Новое состояние для мобильного меню
 
   // Инициализация с таймаутом
   useEffect(() => {
@@ -28,6 +29,7 @@ export const Layout = () => {
     return () => {
       if (loadingTimeout) clearTimeout(loadingTimeout);
     };
+    // Убираем loadingTimeout из зависимостей, чтобы избежать цикличности
   }, []);
 
   // Проверяем, является ли пользователь администратором
@@ -87,6 +89,7 @@ export const Layout = () => {
     const intervalId = setInterval(checkNewChats, 10000); // проверка каждые 10 секунд
 
     return () => clearInterval(intervalId);
+    // Убираем loadingTimeout из зависимостей
   }, []);
 
   // Функция создания демо-пользователя
@@ -206,7 +209,9 @@ export const Layout = () => {
     }
   }
 
-  // Оптимизируем обработку чатов
+  // Оптимизируем обработку чатов - удаляем дублирующую логику
+  // Этот useEffect уже есть выше, поэтому удаляем дублирование
+  /*
   useEffect(() => {
     // Функция для проверки новых чатов
     const checkNewChats = () => {
@@ -222,7 +227,8 @@ export const Layout = () => {
     const intervalId = setInterval(checkNewChats, 3000);
 
     return () => clearInterval(intervalId);
-  }, [location.pathname]); // Добавляем зависимость от маршрута
+  }, [location.pathname]); 
+  */
 
   // Добавляем проверку для перенаправления чатов
   useEffect(() => {
@@ -265,6 +271,11 @@ export const Layout = () => {
     };
   }, [navigate, location.pathname]);
 
+  // Функция для переключения мобильного меню
+  const toggleMenu = () => {
+    setIsMenuOpen(!isMenuOpen);
+  }
+
   // Отображаем индикатор загрузки, если Layout всё еще инициализируется
   if (isLoading) {
     return (
@@ -284,20 +295,15 @@ export const Layout = () => {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
-          className="pt-2 pb-20" // Отступ снизу для навигации
+          className="main-content-area"
         >
           <Outlet />
         </motion.div>
       </AnimatePresence>
 
-      {/* Нижняя навигация с оригинальными кнопками */}
-      <motion.nav
-        className="tg-navbar"
-        initial={{ y: 100 }}
-        animate={{ y: 0 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      >
-        <div className="flex justify-around items-center w-full max-w-lg mx-auto">
+      {/* Улучшенная навигационная панель с современным дизайном */}
+      <div className="bottom-nav-container">
+        <div>
           <NavButton
             to="/"
             icon="🏠"
@@ -344,7 +350,7 @@ export const Layout = () => {
             />
           )}
         </div>
-      </motion.nav>
+      </div>
     </div>
   );
 }

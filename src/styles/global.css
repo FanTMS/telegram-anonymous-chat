@@ -1,0 +1,238 @@
+/* Универсальное навигационное меню */
+.tg-navbar-universal {
+    display: none;
+}
+
+.navbar-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+.logo-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+}
+
+.app-title {
+    font-size: 1.25rem;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.menu-toggle {
+    display: none;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.hamburger {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 24px;
+    height: 18px;
+}
+
+.hamburger span {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background-color: var(--tg-theme-button-text-color, #ffffff);
+    transition: all 0.3s ease;
+}
+
+.hamburger.active span:nth-child(1) {
+    transform: translateY(8px) rotate(45deg);
+}
+
+.hamburger.active span:nth-child(2) {
+    opacity: 0;
+}
+
+.hamburger.active span:nth-child(3) {
+    transform: translateY(-8px) rotate(-45deg);
+}
+
+.nav-links {
+    display: flex;
+    justify-content: center;
+    padding-bottom: 0.75rem;
+}
+
+.nav-button-container {
+    display: flex;
+    flex-direction: row;
+    /* Всегда в ряд */
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    flex-wrap: nowrap;
+    /* Предотвращает перенос элементов */
+}
+
+.content-container {
+    padding: 1rem;
+    padding-bottom: 1rem;
+    /* Уменьшаем отступ, так как панель теперь sticky */
+    min-height: calc(100vh - 120px);
+}
+
+/* Адаптивные стили для мобильных устройств */
+@media (max-width: 768px) {
+    .menu-toggle {
+        display: block;
+    }
+
+    .nav-links {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.5s ease;
+        padding: 0;
+    }
+
+    .nav-links.open {
+        max-height: 500px;
+        padding-bottom: 0.75rem;
+    }
+
+    .nav-button-container {
+        flex-direction: row;
+        /* Принудительно горизонтально */
+        flex-wrap: nowrap;
+        gap: 0;
+        /* Убираем отступы между кнопками */
+    }
+
+    .nav-button {
+        flex: 1;
+        min-width: auto;
+        /* Позволяем кнопкам подстраиваться под экран */
+        justify-content: center;
+    }
+}
+
+/* Стили для NavButton, чтобы они выглядели одинаково */
+.nav-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    transition: background-color 0.3s;
+    text-decoration: none;
+    color: var(--tg-theme-button-text-color, #ffffff);
+    font-size: 0.8rem;
+    flex: 1;
+    max-width: 100px;
+    /* Ограничиваем максимальную ширину */
+    min-width: 40px;
+    /* Минимальная ширина */
+}
+
+.nav-button.active {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.nav-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.nav-button .icon {
+    font-size: 1.5rem;
+}
+
+.nav-button .label {
+    font-size: 0.75rem;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.notification-dot {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 8px;
+    height: 8px;
+    background-color: #ff4d4f;
+    border-radius: 50%;
+}
+
+.icon-container {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0.25rem;
+}
+
+.notification-dot {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 8px;
+    height: 8px;
+    background-color: #ff4d4f;
+    border-radius: 50%;
+}
+
+@media (max-width: 768px) {
+    .nav-button {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+/* Фиксированное навигационное меню внизу */
+.tg-navbar-fixed {
+    position: sticky;
+    /* Меняем с fixed на sticky */
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: var(--tg-theme-button-color, #2678b6);
+    color: var(--tg-theme-button-text-color, #ffffff);
+    z-index: 1000;
+    padding: 0.5rem 0;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Адаптивные стили для мобильных устройств с меньшим размером экрана */
+@media (max-width: 480px) {
+    .nav-button {
+        min-width: 45px;
+        padding: 0.5rem 0.25rem;
+    }
+
+    .nav-button .icon {
+        font-size: 1.25rem;
+    }
+
+    .nav-button .label {
+        font-size: 0.65rem;
+    }
+}
+
+/* Для очень маленьких экранов можно скрыть текст и показывать только иконки */
+@media (max-width: 350px) {
+    .nav-button .label {
+        font-size: 0.6rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+
+    .nav-button .icon {
+        font-size: 1.2rem;
+    }
+
+    .nav-button {
+        min-width: 40px;
+    }
+}
