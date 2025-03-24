@@ -39,6 +39,59 @@ export const Layout = () => {
             padding: 8px 0 !important;
             z-index: 100 !important;
           }
+          
+          /* Унифицируем стили навигационных кнопок */
+          .tg-navbar .nav-button {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 8px 12px !important;
+            border-radius: 8px !important;
+            transition: all 0.2s ease !important;
+            font-size: 0.75rem !important;
+            position: relative !important;
+            min-width: 64px !important;
+          }
+          
+          .tg-navbar .nav-button-icon {
+            font-size: 1.25rem !important;
+            margin-bottom: 4px !important;
+            display: block !important;
+          }
+          
+          .tg-navbar .nav-button-label {
+            display: block !important;
+            font-size: 0.75rem !important;
+            white-space: nowrap !important;
+            text-align: center !important;
+          }
+          
+          /* Нотификации должны отображаться правильно */
+          .tg-navbar .notification-badge {
+            position: absolute !important;
+            top: 0 !important;
+            right: 0 !important;
+            width: 8px !important;
+            height: 8px !important;
+            background-color: #ff3b30 !important;
+            border-radius: 50% !important;
+            border: 2px solid var(--tg-theme-bg-color, #ffffff) !important;
+          }
+          
+          /* Активное состояние кнопки */
+          .tg-navbar .nav-button.active {
+            color: var(--tg-theme-button-color, #2678b6) !important;
+          }
+          
+          /* Выравнивание контейнера кнопок */
+          .tg-navbar .flex.justify-around {
+            display: flex !important;
+            justify-content: space-around !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 0 !important;
+          }
         }
       `;
       document.head.appendChild(styleElement);

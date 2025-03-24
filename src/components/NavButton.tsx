@@ -1,54 +1,46 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import React from 'react'
+import { Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
 
 interface NavButtonProps {
-  to: string;
-  label: string;
-  icon: React.ReactNode;
-  isActive?: boolean;
-  hasNotification?: boolean;
-  onClick?: () => void;
+  to: string
+  icon: string
+  label: string
+  isActive?: boolean
+  hasNotification?: boolean
+  onClick?: () => void
 }
 
 export const NavButton: React.FC<NavButtonProps> = ({
   to,
-  label,
   icon,
+  label,
   isActive = false,
   hasNotification = false,
   onClick
 }) => {
-  // Используем единый стиль кнопок для всех устройств
-  const activeClasses = isActive
-    ? 'text-blue-500 dark:text-blue-400'
-    : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200';
+  // Добавляем явно CSS-классы для унификации стилей
+  const baseClass = 'nav-button'
+  const activeClass = isActive ? 'active' : ''
 
   return (
-    <Link
-      to={to}
-      onClick={onClick}
-      className={`nav-button ${activeClasses}`}
+    <motion.div
+      whileTap={{ scale: 0.95 }}
+      className={`${baseClass} ${activeClass}`}
     >
-      <div className="relative">
-        <div className="nav-button-icon">{icon}</div>
-        {hasNotification && (
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"
-          />
-        )}
-      </div>
-      <span className="text-xs">{label}</span>
-      {isActive && (
-        <motion.div
-          layoutId="navbar-indicator"
-          className="absolute top-0 left-0 right-0 h-1 bg-blue-500 dark:bg-blue-400 rounded-b"
-          style={{ width: '50%', left: '25%', top: '-1px' }}
-          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-        />
-      )}
-    </Link>
-  );
-};
+      <Link
+        to={to}
+        onClick={onClick}
+        className="flex flex-col items-center"
+      >
+        <div className="relative">
+          <span className="nav-button-icon">{icon}</span>
+          {hasNotification && (
+            <span className="notification-badge absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-800"></span>
+          )}
+        </div>
+        <span className="nav-button-label text-xs mt-1">{label}</span>
+      </Link>
+    </motion.div>
+  )
+}
