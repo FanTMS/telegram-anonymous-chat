@@ -4,6 +4,15 @@ module.exports = {
   content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
   theme: {
     extend: {
+      screens: {
+        // Переопределяем брейкпоинты, чтобы даже мобильные устройства 
+        // использовали десктопную версию
+        'sm': '1px', // Минимальный размер, чтобы все устройства попадали в эту категорию
+        'md': '1px',
+        'lg': '1px',
+        'xl': '1px',
+        '2xl': '1px',
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
