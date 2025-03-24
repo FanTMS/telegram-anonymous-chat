@@ -17,7 +17,7 @@
 
 ```bash
 # Клонирование репозитория
-git clone https://github.com/your-username/telegram-anonymous-chat.git
+git clone https://github.com/ваш-username/telegram-anonymous-chat.git
 cd telegram-anonymous-chat
 
 # Установка зависимостей
