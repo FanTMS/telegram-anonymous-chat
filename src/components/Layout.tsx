@@ -4,8 +4,8 @@ import WebApp from '@twa-dev/sdk'
 import { isAdmin as checkAdmin, getCurrentUser, saveUser, User } from '../utils/user'
 import { NavButton } from './NavButton'
 import { motion, AnimatePresence } from 'framer-motion'
+import { ChatRedirectHandler } from './ChatRedirectHandler'
 import { hasNewChat, getNewChatNotification, markChatNotificationAsRead } from '../utils/matchmaking'
-import '../styles/navbar.css' // Добавляем отдельный файл стилей для навигации
 
 export const Layout = () => {
   const location = useLocation()
@@ -14,7 +14,45 @@ export const Layout = () => {
   const [hasNewMessage, setHasNewMessage] = useState(false)
   const [isLoading, setIsLoading] = useState(true) // Добавляем состояние загрузки
   const [loadingTimeout, setLoadingTimeout] = useState<NodeJS.Timeout | null>(null)
-  const [isMenuOpen, setIsMenuOpen] = useState(false) // Новое состояние для мобильного меню
+
+  // Принудительно устанавливаем десктопную версию навигации
+  // Это гарантирует, что на всех устройствах будет использоваться одинаковое меню
+  const forceDesktopNavigation = () => {
+    try {
+      // Добавляем класс для CSS, который будет игнорировать мобильные медиа-запросы
+      document.documentElement.classList.add('force-desktop-navigation');
+
+      // Добавляем стили для принудительного отображения десктопной версии меню
+      const styleElement = document.createElement('style');
+      styleElement.innerHTML = `
+        /* Игнорируем мобильные стили для навигации */
+        @media screen and (max-width: 768px) {
+          .tg-navbar {
+            display: flex !important;
+            /* Копируем стили с десктопной версии */
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            background-color: var(--tg-theme-bg-color, #ffffff) !important;
+            border-top: 1px solid rgba(0, 0, 0, 0.1) !important;
+            padding: 8px 0 !important;
+            z-index: 100 !important;
+          }
+        }
+      `;
+      document.head.appendChild(styleElement);
+
+      console.log('Принудительно установлена десктопная версия навигации');
+    } catch (error) {
+      console.error('Ошибка при настройке навигации:', error);
+    }
+  };
+
+  // Вызываем функцию форсирования десктопной навигации при монтировании
+  useEffect(() => {
+    forceDesktopNavigation();
+  }, []);
 
   // Инициализация с таймаутом
   useEffect(() => {
@@ -29,7 +67,6 @@ export const Layout = () => {
     return () => {
       if (loadingTimeout) clearTimeout(loadingTimeout);
     };
-    // Убираем loadingTimeout из зависимостей, чтобы избежать цикличности
   }, []);
 
   // Проверяем, является ли пользователь администратором
@@ -89,7 +126,6 @@ export const Layout = () => {
     const intervalId = setInterval(checkNewChats, 10000); // проверка каждые 10 секунд
 
     return () => clearInterval(intervalId);
-    // Убираем loadingTimeout из зависимостей
   }, []);
 
   // Функция создания демо-пользователя
@@ -209,9 +245,7 @@ export const Layout = () => {
     }
   }
 
-  // Оптимизируем обработку чатов - удаляем дублирующую логику
-  // Этот useEffect уже есть выше, поэтому удаляем дублирование
-  /*
+  // Оптимизируем обработку чатов
   useEffect(() => {
     // Функция для проверки новых чатов
     const checkNewChats = () => {
@@ -227,8 +261,7 @@ export const Layout = () => {
     const intervalId = setInterval(checkNewChats, 3000);
 
     return () => clearInterval(intervalId);
-  }, [location.pathname]); 
-  */
+  }, [location.pathname]); // Добавляем зависимость от маршрута
 
   // Добавляем проверку для перенаправления чатов
   useEffect(() => {
@@ -271,11 +304,6 @@ export const Layout = () => {
     };
   }, [navigate, location.pathname]);
 
-  // Функция для переключения мобильного меню
-  const toggleMenu = () => {
-    setIsMenuOpen(!isMenuOpen);
-  }
-
   // Отображаем индикатор загрузки, если Layout всё еще инициализируется
   if (isLoading) {
     return (
@@ -295,15 +323,20 @@ export const Layout = () => {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
-          className="main-content-area"
+          className="pt-2 pb-20" // Отступ снизу для навигации
         >
           <Outlet />
         </motion.div>
       </AnimatePresence>
 
-      {/* Улучшенная навигационная панель с современным дизайном */}
-      <div className="bottom-nav-container">
-        <div>
+      {/* Нижняя навигация с оригинальными кнопками */}
+      <motion.nav
+        className="tg-navbar"
+        initial={{ y: 100 }}
+        animate={{ y: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      >
+        <div className="flex justify-around items-center w-full max-w-lg mx-auto">
           <NavButton
             to="/"
             icon="🏠"
@@ -350,7 +383,7 @@ export const Layout = () => {
             />
           )}
         </div>
-      </div>
+      </motion.nav>
     </div>
   );
 }
