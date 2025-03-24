@@ -274,13 +274,6 @@ export const Layout = () => {
     );
   }
 
-  const navItems = [
-    { path: '/', icon: '🏠', label: 'Главная' },
-    { path: '/chats', icon: '💬', label: 'Чаты' },
-    { path: '/profile', icon: '👤', label: 'Профиль' },
-    // Другие пункты меню
-  ];
-
   return (
     <div className="tg-container">
       {/* Основной контент */}
@@ -297,24 +290,59 @@ export const Layout = () => {
         </motion.div>
       </AnimatePresence>
 
-      {/* Нижняя навигация с индикатором нового сообщения */}
+      {/* Нижняя навигация с оригинальными кнопками */}
       <motion.nav
-        className="fixed bottom-0 left-0 right-0 tg-navbar"
+        className="tg-navbar"
         initial={{ y: 100 }}
         animate={{ y: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       >
-        <div className="grid grid-cols-6 items-center max-w-md mx-auto">
-          {navItems.map((item) => (
+        <div className="flex justify-around items-center w-full max-w-lg mx-auto">
+          <NavButton
+            to="/"
+            icon="🏠"
+            label="Главная"
+            isActive={location.pathname === '/' || location.pathname.startsWith('/chat')}
+          />
+          <NavButton
+            to="/friends"
+            icon="👥"
+            label="Друзья"
+            isActive={location.pathname === '/friends'}
+            hasNotification={hasNewMessage}
+          />
+          <NavButton
+            to="/groups"
+            icon="👨‍👩‍👧‍👦"
+            label="Группы"
+            isActive={location.pathname === '/groups'}
+          />
+          <NavButton
+            to="/chats"
+            icon="💬"
+            label="Чаты"
+            isActive={location.pathname === '/chats' || location.pathname.startsWith('/direct/chat')}
+          />
+          <NavButton
+            to="/store"
+            icon="🛒"
+            label="Магазин"
+            isActive={location.pathname === '/store'}
+          />
+          <NavButton
+            to="/profile"
+            icon="👤"
+            label="Профиль"
+            isActive={location.pathname === '/profile'}
+          />
+          {isAdminUser && (
             <NavButton
-              key={item.path}
-              to={item.path}
-              icon={item.icon}
-              label={item.label}
-              isActive={location.pathname === item.path}
-              hasNotification={hasNewMessage && item.path === '/chats'}
+              to="/admin"
+              icon="⚙️"
+              label="Админ"
+              isActive={location.pathname.includes('/admin')}
             />
-          ))}
+          )}
         </div>
       </motion.nav>
     </div>

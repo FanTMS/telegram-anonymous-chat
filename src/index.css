@@ -91,8 +91,9 @@ body.light {
   color: #000000;
 }
 
-/* Стили для нижней навигации - унифицируем для всех устройств */
-.bottom-nav {
+/* Стили для нижней навигации - полностью унифицируем для всех устройств */
+.bottom-nav,
+.tg-navbar {
   position: fixed;
   bottom: 0;
   left: 0;
@@ -103,21 +104,57 @@ body.light {
   align-items: center;
   border-top-width: 1px;
   z-index: 10;
-  /* Стилизация как в десктопной версии */
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  /* Унифицированная стилизация для всех устройств */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background-color: rgba(var(--tg-theme-bg-color-rgb, 255, 255, 255), 0.8);
+  box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
 }
 
-.dark .bottom-nav {
+.dark .bottom-nav,
+.dark .tg-navbar {
   background-color: rgba(26, 26, 26, 0.8);
-  border-top: 1px solid #333333;
+  border-top-color: rgba(51, 51, 51, 0.8);
   box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.2);
 }
 
-.light .bottom-nav {
-  background-color: rgba(255, 255, 255, 0.8);
-  border-top: 1px solid #e0e0e0;
-  box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.05);
+/* Единый стиль для навигационных кнопок на всех устройствах */
+.nav-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+  position: relative;
+}
+
+.nav-button-icon {
+  font-size: 1.25rem;
+  margin-bottom: 4px;
+}
+
+/* Убираем различные медиа-запросы, чтобы поведение было консистентным */
+@media (hover: hover) {
+  .nav-button:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+  }
+
+  .dark .nav-button:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* Общие отступы для безопасных зон */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+
+  .tg-navbar,
+  .bottom-nav {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
 }
 
 /* Унифицируем стили навигации */
