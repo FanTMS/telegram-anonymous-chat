@@ -5,9 +5,32 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { User, getCurrentUser, saveUser } from '../utils/user'
 import { getUserPurchases, AvatarItem } from '../utils/store'
 import Confetti from 'react-confetti'
-import { useWindowSize } from 'react-use'
+// Закомментируем эту строку и используем собственную функцию для определения размера окна
+// import { useWindowSize } from 'react-use'
 import { InterestsSelector } from '../components/InterestsSelector'
 import { availableInterests } from '../utils/interests'
+
+// Добавим собственную функцию useWindowSize
+const useWindowSize = () => {
+  const [windowSize, setWindowSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return windowSize;
+};
 
 const safeWebApp = {
   showPopup: (params: any) => {
@@ -443,21 +466,21 @@ export const Profile = () => {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-4">
-                <p className="text-gray-500 dark:text-gray-400 mb-3">
-                  У вас пока нет аватаров
-                </p>
-                <button
-                  onClick={() => navigate('/store')}
-                  className="tg-button-sm"
-                >
-                  Перейти в магазин
-                </button>
-              </div>
-            )}
+          <div className="text-center py-4">
+            <p className="text-gray-500 dark:text-gray-400 mb-3">
+              У вас пока нет аватаров
+            </p>
+            <button
+              onClick={() => navigate('/store')}
+              className="tg-button-sm"
+            >
+              Перейти в магазин
+            </button>
           </div>
         )}
-      </motion.div>
-    </div>
+      </div>
+    )}
+  </motion.div>
+</div>
   );
 };
