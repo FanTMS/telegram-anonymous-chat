@@ -91,7 +91,7 @@ body.light {
   color: #000000;
 }
 
-/* Стили для нижней навигации */
+/* Стили для нижней навигации - унифицируем для всех устройств */
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -103,16 +103,74 @@ body.light {
   align-items: center;
   border-top-width: 1px;
   z-index: 10;
+  /* Стилизация как в десктопной версии */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .dark .bottom-nav {
-  background-color: #1A1A1A;
+  background-color: rgba(26, 26, 26, 0.8);
   border-top: 1px solid #333333;
+  box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.2);
 }
 
 .light .bottom-nav {
-  background-color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.8);
   border-top: 1px solid #e0e0e0;
+  box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* Унифицируем стили навигации */
+.tg-navbar {
+  border-top-width: 1px;
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.dark .tg-navbar {
+  background-color: rgba(26, 26, 26, 0.8);
+  border-top-color: rgba(51, 51, 51, 0.8);
+  box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Удаляем разные медиа запросы, которые могут влиять на отображение */
+@supports not (backdrop-filter: blur(10px)) {
+  .tg-navbar {
+    background-color: var(--tg-theme-bg-color, #ffffff);
+  }
+
+  .dark .tg-navbar {
+    background-color: #1A1A1A;
+  }
+}
+
+/* Настраиваем отступы для устройств с notch */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+
+  .tg-navbar,
+  .bottom-nav {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .pt-2.pb-20 {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0));
+  }
+}
+
+/* Переопределяем стили навигационных кнопок чтобы они выглядели одинаково */
+.nav-button {
+  @apply flex flex-col items-center justify-center p-2 rounded-lg transition-colors;
+  font-size: 0.875rem;
+  /* 14px */
+}
+
+.nav-button-icon {
+  @apply text-lg mb-1;
+  font-size: 1.25rem;
+  /* 20px */
 }
 
 /* Современные стили для нижней навигации */
