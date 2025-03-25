@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import WebApp from '@twa-dev/sdk'
 import '../styles/bot-chat.css'
@@ -15,6 +15,12 @@ interface BotMessage {
   isLoading?: boolean
 }
 
+// Интерфейс методов бота, доступных извне
+export interface BotChatMethods {
+  addMessage: (type: MessageType, text: string) => void;
+  clearMessages: () => void;
+}
+
 interface BotChatInterfaceProps {
   initialMessages?: BotMessage[]
   onSendMessage?: (message: string) => void
@@ -23,18 +29,19 @@ interface BotChatInterfaceProps {
   className?: string
 }
 
-export const BotChatInterface = ({
+export const BotChatInterface = forwardRef<BotChatMethods, BotChatInterfaceProps>(({
   initialMessages = [],
   onSendMessage,
   suggestedCommands = ['Привет', 'Помощь', 'Найти собеседника', 'Мой профиль'],
   showTypingIndicator = false,
   className = ''
-}: BotChatInterfaceProps) => {
+}, ref) => {
   const [messages, setMessages] = useState<BotMessage[]>(initialMessages)
   const [newMessage, setNewMessage] = useState('')
   const [isTyping, setIsTyping] = useState(showTypingIndicator)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const commandsRef = useRef<HTMLDivElement>(null)
   const [expandedInput, setExpandedInput] = useState(false)
   const isDarkTheme = WebApp.colorScheme === 'dark'
 
@@ -42,6 +49,11 @@ export const BotChatInterface = ({
   useEffect(() => {
     scrollToBottom()
   }, [messages, isTyping])
+
+  // Обновление статуса печати из внешних пропсов
+  useEffect(() => {
+    setIsTyping(showTypingIndicator)
+  }, [showTypingIndicator])
 
   // Прокрутка к последнему сообщению
   const scrollToBottom = () => {
@@ -58,6 +70,17 @@ export const BotChatInterface = ({
     }
     setMessages(prev => [...prev, newMsg])
   }
+
+  // Очистка всех сообщений
+  const clearMessages = () => {
+    setMessages([])
+  }
+
+  // Экспортируем методы через ref для использования извне
+  useImperativeHandle(ref, () => ({
+    addMessage,
+    clearMessages
+  }));
 
   // Обработка авторесайза текстового поля
   useEffect(() => {
@@ -98,16 +121,45 @@ export const BotChatInterface = ({
 
   // Обработчик нажатия на команду
   const handleCommandClick = (command: string) => {
-    setNewMessage(command)
-    if (inputRef.current) {
-      inputRef.current.focus()
+    // Добавляем тактильную обратную связь
+    if (WebApp && WebApp.HapticFeedback) {
+      WebApp.HapticFeedback.impactOccurred('light');
     }
 
-    // Тактильная обратная связь
-    if (WebApp && WebApp.isExpanded && WebApp.HapticFeedback) {
-      WebApp.HapticFeedback.impactOccurred('light')
+    // Устанавливаем команду в поле ввода
+    setNewMessage(command);
+
+    // Фокусируемся на поле ввода
+    if (inputRef.current) {
+      inputRef.current.focus();
     }
-  }
+
+    // Автоматически отправляем команду после небольшой задержки
+    setTimeout(() => {
+      handleSendMessage();
+    }, 300);
+  };
+
+  // Рендеринг панели команд
+  const renderCommandsPanel = () => {
+    return (
+      <div className="bot-commands-container">
+        <div className="bot-commands-scroll" ref={commandsRef}>
+          {suggestedCommands.map((command, index) => (
+            <motion.button
+              key={`cmd-${index}`}
+              className="bot-command-chip"
+              onClick={() => handleCommandClick(command)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              {command}
+            </motion.button>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className={`bot-chat-container ${className}`}>
@@ -176,25 +228,7 @@ export const BotChatInterface = ({
       </div>
 
       {/* Подсказки с командами */}
-      <div className="bot-commands-container">
-        <div className="bot-commands-scroll">
-          <AnimatePresence>
-            {suggestedCommands.map((command, index) => (
-              <motion.button
-                key={command}
-                onClick={() => handleCommandClick(command)}
-                className="bot-command-chip"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1, duration: 0.3 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                {command}
-              </motion.button>
-            ))}
-          </AnimatePresence>
-        </div>
-      </div>
+      {renderCommandsPanel()}
 
       {/* Поле ввода сообщения */}
       <div className="bot-input-container">
@@ -228,4 +262,4 @@ export const BotChatInterface = ({
       </div>
     </div>
   )
-}
+});

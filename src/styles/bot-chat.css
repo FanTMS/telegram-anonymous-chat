@@ -310,8 +310,10 @@
 
 /* Команды бота */
 .bot-commands-container {
-    padding: 8px 16px;
     border-top: 1px solid rgba(0, 0, 0, 0.05);
+    padding: 12px 16px 8px;
+    overflow-x: hidden;
+    /* Изменено с auto на hidden, контейнер не должен иметь горизонтальный скролл */
     background-color: var(--tg-theme-bg-color, #fff);
 }
 
@@ -327,6 +329,8 @@
     scrollbar-width: none;
     -ms-overflow-style: none;
     padding: 4px 0;
+    -webkit-overflow-scrolling: touch;
+    /* Плавный скролл на iOS */
 }
 
 .bot-commands-scroll::-webkit-scrollbar {
@@ -344,40 +348,25 @@
     cursor: pointer;
     transition: background-color 0.2s, transform 0.2s;
     position: relative;
-    overflow: hidden;
+    flex-shrink: 0;
+    /* Предотвращаем сжатие чипов */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    /* Тонкая тень для лучшей видимости */
+    font-weight: 500;
+    /* Увеличиваем толщину шрифта для лучшей видимости */
 }
 
-.bot-command-chip:after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--tg-theme-button-color, #2678b6);
-    opacity: 0;
-    border-radius: 16px;
-    transition: opacity 0.3s;
+.dark .bot-command-chip {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-.bot-command-chip:hover:after {
-    opacity: 0.08;
-}
-
-.dark .bot-command-chip:hover:after {
-    opacity: 0.15;
-}
-
-.bot-command-chip:hover {
-    background-color: rgba(var(--tg-theme-button-color-rgb, 38, 120, 182), 0.1);
-}
-
-.dark .bot-command-chip:hover {
-    background-color: rgba(var(--tg-theme-button-color-rgb, 38, 120, 182), 0.2);
-}
-
+.bot-command-chip:hover,
 .bot-command-chip:active {
-    transform: scale(0.95);
+    background-color: var(--tg-theme-button-color, #2678b6);
+    color: var(--tg-theme-button-text-color, #fff);
+    transform: translateY(-1px);
 }
 
 /* Волновой эффект при нажатии на команду */
@@ -485,15 +474,24 @@
     }
 
     .bot-message.bot-message {
-        max-width: 85%;
+        max-width: 90%;
     }
 
     .bot-message.user-message {
-        max-width: 85%;
+        max-width: 90%;
     }
 
     .bot-input {
         font-size: 14px;
+    }
+
+    .bot-command-chip {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+
+    .bot-commands-container {
+        padding: 8px 12px 6px;
     }
 }
 
