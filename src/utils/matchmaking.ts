@@ -1,4 +1,4 @@
-import { User, getCurrentUser, getUserById, createDemoUser, saveUser } from './user';
+import { User, getCurrentUser, getUserById, saveUser } from './user';
 import { createChat, getChatById } from './chat';
 
 // Включаем подробное логирование
@@ -99,11 +99,6 @@ export const startSearching = (
         // Сохраняем обновленный список
         saveSearchingUsers(searchingUsers);
 
-        // Для демо-режима, добавляем демо-пользователя если в списке только 1 пользователь
-        if (searchingUsers.length === 1 && !window.demoUserAdded) {
-            createDemoUserForMatching();
-        }
-
         // Пытаемся найти соответствие сразу
         findMatch()
             .then(result => {
@@ -119,43 +114,6 @@ export const startSearching = (
     } catch (error) {
         console.error('Ошибка при начале поиска:', error);
         return false;
-    }
-};
-
-// Создать демо-пользователя для поиска совпадений
-export const createDemoUserForMatching = (): User | null => {
-    try {
-        // Создаем демо-пользователя
-        const demoUser = createDemoUser("Демо Собеседник");
-        if (!demoUser) {
-            console.error('Не удалось создать демо-пользователя');
-            return null;
-        }
-
-        console.log(`Создан демо-пользователь для поиска: ${demoUser.id}`);
-
-        // Добавляем пользователя в поиск
-        const searchingUsers = getSearchingUsers();
-        searchingUsers.push({
-            userId: demoUser.id,
-            startedAt: Date.now(),
-            preferences: {
-                random: true,
-                interests: [],
-                ageRange: [0, 100]
-            }
-        });
-
-        // Сохраняем обновленный список
-        saveSearchingUsers(searchingUsers);
-
-        // Устанавливаем флаг, что демо-пользователь был добавлен
-        window.demoUserAdded = true;
-
-        return demoUser;
-    } catch (error) {
-        console.error('Ошибка при создании демо-пользователя для поиска:', error);
-        return null;
     }
 };
 
@@ -398,7 +356,7 @@ export const stopMatchmakingService = (intervalId: number): void => {
     }
 };
 
-// Ручной триггер поиска совпадения (для демо/отладки)
+// Ручной триггер поиска совпадения (для отладки)
 export const triggerMatchmaking = async (): Promise<boolean> => {
     console.log('🔄 Ручной запуск поиска совпадения');
     return await findMatch();

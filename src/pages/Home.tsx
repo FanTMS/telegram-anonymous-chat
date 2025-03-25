@@ -9,7 +9,7 @@ import { getUserCurrency } from '../utils/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UserRegistration } from '../components/UserRegistration'
 import { InterestsSelector } from '../components/InterestsSelector'
-import { startSearching, stopSearching, isUserSearching, startMatchmakingService, stopMatchmakingService, markChatNotificationAsRead, hasNewChat, getNewChatNotification, createDemoUserForMatching, triggerMatchmaking } from '../utils/matchmaking'
+import { startSearching, stopSearching, isUserSearching, startMatchmakingService, stopMatchmakingService, markChatNotificationAsRead, hasNewChat, getNewChatNotification, triggerMatchmaking } from '../utils/matchmaking'
 
 // Интерфейс для режима поиска
 type SearchMode = 'interests' | 'random';
@@ -110,7 +110,6 @@ export const Home = () => {
   const [matchmakingServiceId, setMatchmakingServiceId] = useState<number | null>(null)
   const searchTimerRef = useRef<number | null>(null)
   const [foundChatId, setFoundChatId] = useState<string | null>(null)
-  const [isDemoMode, setIsDemoMode] = useState(false)
 
   // Проверяем, является ли пользователь администратором и существует ли пользователь
   useEffect(() => {
@@ -365,32 +364,6 @@ export const Home = () => {
     navigate(`/chat/${chatId}`);
   };
 
-  // Запускаем демо-режим
-  const startDemoMode = () => {
-    const demoUser = createDemoUserForMatching();
-    if (demoUser) {
-      setIsDemoMode(true);
-
-      // Запускаем поиск для текущего пользователя
-      handleStartSearch();
-
-      // Уведомляем пользователя
-      alert(`Демо-режим активирован! Создан собеседник "${demoUser.name}" для поиска пары. Теперь совпадение должно произойти автоматически через несколько секунд.`);
-
-      // Запускаем поиск пары через 2 секунды (чтобы дать UI время обновиться)
-      setTimeout(() => {
-        triggerMatchmaking()
-          .then(result => {
-            if (!result) {
-              console.error('Не удалось найти пару в демо-режиме');
-            }
-          });
-      }, 2000);
-    } else {
-      alert('Не удалось запустить демо-режим');
-    }
-  };
-
   // Удаляем блоки, связанные с демо-режимом и рекомендациями
   const renderSearchBlock = () => {
     if (foundChatId) {
@@ -531,15 +504,6 @@ export const Home = () => {
             className="bg-gradient-to-r from-pink-500 to-purple-600 text-white font-medium shadow-lg"
           >
             <span className="mr-2">👤</span> Найти собеседника
-          </Button>
-
-          <Button
-            onClick={startDemoMode}
-            fullWidth
-            variant="outline"
-            className="border-blue-400 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-          >
-            <span className="mr-2">🤖</span> Демо-режим (симуляция)
           </Button>
 
           <Button
