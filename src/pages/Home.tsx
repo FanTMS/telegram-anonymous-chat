@@ -273,6 +273,58 @@ export const Home = () => {
     };
   }, [isSearching]);
 
+  // Обработчик событий для обнаружения новых чатов
+  useEffect(() => {
+    // Функция проверки наличия новых чатов
+    const checkNewChats = () => {
+      const user = getCurrentUser();
+      if (!user) return;
+
+      console.log('Проверка наличия новых чатов...');
+      if (hasNewChat(user.id)) {
+        console.log('Найден новый чат!');
+        const notification = getNewChatNotification(user.id);
+        if (notification) {
+          setFoundChatId(notification.chatId);
+          // Останавливаем поиск
+          if (isSearching) {
+            stopSearchTimer();
+            setIsSearching(false);
+            stopSearching();
+          }
+        }
+      }
+    };
+
+    // Проверяем при монтировании компонента
+    checkNewChats();
+
+    // Также обрабатываем событие chatFound
+    const handleChatFound = (event: CustomEvent) => {
+      console.log('Получено событие о новом чате:', event.detail.chatId);
+      setFoundChatId(event.detail.chatId);
+
+      // Останавливаем поиск, если он был активен
+      if (isSearching) {
+        stopSearchTimer();
+        setIsSearching(false);
+        stopSearching();
+      }
+    };
+
+    // Добавляем обработчик события
+    window.addEventListener('chatFound', handleChatFound as EventListener);
+
+    // Запускаем периодическую проверку
+    const checkInterval = setInterval(checkNewChats, 3000);
+
+    // Очистка при размонтировании
+    return () => {
+      window.removeEventListener('chatFound', handleChatFound as EventListener);
+      clearInterval(checkInterval);
+    };
+  }, [isSearching]);
+
   const handleGoToProfile = () => {
     navigate('/direct/profile')
   }
@@ -395,6 +447,7 @@ export const Home = () => {
     }
 
     console.log(`Начинаем поиск собеседника... Режим: ${searchMode}`);
+    console.log(`Текущий пользователь: ${user.id}`);
 
     // Запускаем поиск с выбранными параметрами
     const success = startSearching(
@@ -409,30 +462,19 @@ export const Home = () => {
       startSearchTimer();
       startMatchmaking(); // Запускаем сервис подбора
 
+      // Принудительно запускаем поиск совпадения
+      triggerMatchmaking().then(result => {
+        if (result) {
+          console.log('Найдено совпадение сразу после запуска поиска!');
+        }
+      });
+
       // Анимируем кнопку Telegram (в реальном приложении)
       if (WebApp.MainButton) {
         WebApp.MainButton.setText('Поиск собеседника...');
         WebApp.MainButton.show();
         WebApp.MainButton.disable();
       }
-
-      // Запускаем проверку на наличие новых чатов
-      const checkNewChatsInterval = setInterval(() => {
-        if (hasNewChat(user.id)) {
-          console.log('Найден новый чат во время поиска!');
-          const notification = getNewChatNotification(user.id);
-          if (notification && !notification.isRead) {
-            setFoundChatId(notification.chatId);
-            // Останавливаем поиск
-            stopSearchTimer();
-            setIsSearching(false);
-            clearInterval(checkNewChatsInterval);
-          }
-        }
-      }, 2000);
-
-      // Сохраняем интервал для очистки при размонтировании
-      (window as any)._newChatCheckInterval = checkNewChatsInterval;
     } else {
       console.error('Не удалось запустить поиск');
     }

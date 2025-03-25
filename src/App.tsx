@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router-dom'
 import { router } from './routes'
 import { startMatchmakingService, stopMatchmakingService } from './utils/matchmaking'
 import { validateLocalStorage } from './utils/database';
+import WebApp from '@twa-dev/sdk';
 
 // Инициализация глобальных переменных для интервалов и флагов
 if (typeof window !== 'undefined') {
@@ -18,12 +19,36 @@ export const App = () => {
   // Инициализация глобальных сервисов и установка светлой темы
   useEffect(() => {
     try {
-      // Валидируем данные в localStorage при запуске приложения
-      validateLocalStorage();
-
       // Принудительно устанавливаем светлую тему для всех пользователей
       document.body.classList.remove('dark');
       document.body.classList.add('light');
+
+      // Пытаемся переопределить тему Telegram WebApp
+      try {
+        if (WebApp && WebApp.setHeaderColor) {
+          WebApp.setHeaderColor('secondary_bg_color');
+        }
+
+        if (WebApp && WebApp.setBackgroundColor) {
+          WebApp.setBackgroundColor('#ffffff');
+        }
+      } catch (e) {
+        console.log('WebApp theme setting error:', e);
+      }
+
+      // Добавляем обработчик изменения темы Telegram, чтобы вернуть светлую тему
+      const handleThemeChange = () => {
+        document.body.classList.remove('dark');
+        document.body.classList.add('light');
+      };
+
+      // Подписываемся на изменения темы
+      if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', handleThemeChange);
+      }
+
+      // Валидируем данные в localStorage при запуске приложения
+      validateLocalStorage();
 
       // Проверяем структуру основных данных
       const checkAndFixLocalStorage = () => {
@@ -77,7 +102,7 @@ export const App = () => {
 
       // Запуск сервиса поиска совпадений
       console.log("Запуск глобального сервиса подбора пар");
-      const serviceId = startMatchmakingService(5000); // Проверка каждые 5 секунд
+      const serviceId = startMatchmakingService(3000); // Сократили время проверки до 3 секунд
       setMatchmakingServiceId(serviceId);
 
       // Обработка ошибок в глобальном контексте
@@ -89,6 +114,11 @@ export const App = () => {
       window.addEventListener('error', errorHandler);
 
       return () => {
+        // Отписка от события изменения темы
+        if (window.matchMedia) {
+          window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', handleThemeChange);
+        }
+
         // Отключение обработчика ошибок
         window.removeEventListener('error', errorHandler);
 

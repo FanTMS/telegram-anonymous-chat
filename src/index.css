@@ -2,17 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Принудительно устанавливаем светлую тему для всего приложения */
 :root {
   /* Цвета Telegram */
-  --tg-theme-bg-color: var(--tg-theme-bg-color, #fff);
-  --tg-theme-text-color: var(--tg-theme-text-color, #000);
-  --tg-theme-hint-color: var(--tg-theme-hint-color, #999);
-  --tg-theme-link-color: var(--tg-theme-link-color, #2678b6);
-  --tg-theme-button-color: var(--tg-theme-button-color, #2678b6);
-  --tg-theme-button-text-color: var(--tg-theme-button-text-color, #fff);
-  --tg-theme-secondary-bg-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+  --tg-theme-bg-color: #ffffff;
+  --tg-theme-text-color: #000000;
+  --tg-theme-hint-color: #999999;
+  --tg-theme-link-color: #2678b6;
+  --tg-theme-button-color: #2678b6;
+  --tg-theme-button-text-color: #ffffff;
+  --tg-theme-secondary-bg-color: #f0f0f0;
+  --tg-theme-bg-color-rgb: 255, 255, 255;
+  --tg-theme-text-color-rgb: 0, 0, 0;
+  --tg-theme-button-color-rgb: 38, 120, 182;
 
-  /* Основные переменные темы */
+  /* Основные переменные светлой темы */
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;
   --card: 0 0% 100%;
@@ -41,9 +45,10 @@
   color-scheme: light;
 }
 
+/* Принудительно устанавливаем светлый фон для body */
 body {
-  background-color: #f5f5f5;
-  color: #000000;
+  background-color: #f5f5f5 !important;
+  color: #000000 !important;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   -webkit-tap-highlight-color: transparent;
   margin: 0;
@@ -52,86 +57,41 @@ body {
   max-width: 100vw;
 }
 
+/* Полностью переопределяем стили тёмной темы, чтобы они не применялись */
 body.dark {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --card: 240 10% 3.9%;
-  --card-foreground: 0 0% 98%;
-  --popover: 240 10% 3.9%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 0 0% 98%;
-  --primary-foreground: 240 5.9% 10%;
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
-  --accent: 240 3.7% 15.9%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
-  --ring: 240 4.9% 83.9%;
-  --chart-1: 220 70% 50%;
-  --chart-2: 160 60% 45%;
-  --chart-3: 30 80% 55%;
-  --chart-4: 280 65% 60%;
-  --chart-5: 340 75% 55%;
-  color-scheme: dark;
-}
-
-/* Темная тема */
-body.dark {
-  background-color: #1A1A1A;
-  color: #ffffff;
-}
-
-/* Светлая тема */
-body.light {
-  background-color: #f5f5f5;
-  color: #000000;
-}
-
-/* Принудительно устанавливаем светлую тему для всего приложения */
-:root {
-  --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
-  --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 3.9%;
-  --primary: 240 5.9% 10%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
-  --accent: 240 4.8% 95.9%;
-  --accent-foreground: 240 5.9% 10%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 240 5.9% 10%;
-  --radius: 0.5rem;
-  --chart-1: 220 70% 50%;
-  --chart-2: 160 60% 45%;
-  --chart-3: 30 80% 55%;
-  --chart-4: 280 65% 60%;
-  --chart-5: 340 75% 55%;
-  color-scheme: light;
-}
-
-/* Устанавливаем светлую тему для body и отключаем темную тему */
-body {
-  background-color: #f5f5f5;
-  color: #000000;
-}
-
-/* Игнорируем класс .dark для обеспечения светлой темы */
-.dark {
   background-color: #f5f5f5 !important;
   color: #000000 !important;
+
+  --tg-theme-bg-color: #ffffff !important;
+  --tg-theme-text-color: #000000 !important;
+  --tg-theme-hint-color: #999999 !important;
+  --tg-theme-link-color: #2678b6 !important;
+  --tg-theme-button-color: #2678b6 !important;
+  --tg-theme-button-text-color: #ffffff !important;
+  --tg-theme-secondary-bg-color: #f0f0f0 !important;
+  --tg-theme-bg-color-rgb: 255, 255, 255 !important;
+  --tg-theme-text-color-rgb: 0, 0, 0 !important;
+
+  --background: 0 0% 100% !important;
+  --foreground: 240 10% 3.9% !important;
+  --card: 0 0% 100% !important;
+  --card-foreground: 240 10% 3.9% !important;
+  --popover: 0 0% 100% !important;
+  --popover-foreground: 240 10% 3.9% !important;
+  --primary: 240 5.9% 10% !important;
+  --primary-foreground: 0 0% 98% !important;
+  --secondary: 240 4.8% 95.9% !important;
+  --secondary-foreground: 240 5.9% 10% !important;
+  --muted: 240 4.8% 95.9% !important;
+  --muted-foreground: 240 3.8% 46.1% !important;
+  --accent: 240 4.8% 95.9% !important;
+  --accent-foreground: 240 5.9% 10% !important;
+  --destructive: 0 84.2% 60.2% !important;
+  --destructive-foreground: 0 0% 98% !important;
+  --border: 240 5.9% 90% !important;
+  --input: 240 5.9% 90% !important;
+  --ring: 240 5.9% 10% !important;
+  color-scheme: light !important;
 }
 
 /* Переопределяем специфичные для темной темы стили на светлые */
@@ -159,6 +119,38 @@ body {
 .dark .bot-command-chip {
   background-color: #f0f0f0 !important;
   color: #000 !important;
+}
+
+.dark .typing-dots {
+  background-color: #f0f0f0 !important;
+}
+
+.dark .typing-dots span {
+  background-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Переопределяем все карточки, кнопки и другие элементы интерфейса */
+.dark .card,
+.dark .bg-gray-800,
+.dark .bg-gray-900,
+.dark .bg-gray-800\/95,
+.dark .bg-gray-900\/95 {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+.dark .text-gray-300,
+.dark .text-gray-400,
+.dark .text-gray-100,
+.dark .text-gray-200,
+.dark .text-white {
+  color: #1a1a1a !important;
+}
+
+.dark .border-gray-700,
+.dark .border-gray-800,
+.dark .border-gray-600 {
+  border-color: #e5e5e5 !important;
 }
 
 /* Стили для нижней навигации - полностью унифицируем для всех устройств */
