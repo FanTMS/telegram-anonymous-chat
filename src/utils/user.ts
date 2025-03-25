@@ -499,25 +499,38 @@ export const setAdminByTelegramId = (telegramId: string): boolean => {
   }
 }
 
-// Проверка, является ли текущий пользователь администратором
+// Модифицируем функцию для проверки админских прав с учетом локальной разработки
 export const isAdmin = (): boolean => {
   try {
-    const currentUser = getCurrentUser()
+    // Проверяем, запущено ли приложение локально
+    const isLocalhost =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname.includes('192.168.');
+
+    // Если это локальная разработка, автоматически даем права администратора
+    if (isLocalhost) {
+      console.log('Локальный запуск: права администратора предоставлены автоматически');
+      return true;
+    }
+
+    // Стандартная проверка для не-локальных запусков
+    const currentUser = getCurrentUser();
 
     if (currentUser?.isAdmin) {
-      return true
+      return true;
     }
 
     // Проверяем через Telegram ID, если есть
     if (currentUser?.telegramData?.telegramId) {
-      const admins = getAdmins()
-      return admins.includes(currentUser.telegramData.telegramId)
+      const admins = getAdmins();
+      return admins.includes(currentUser.telegramData.telegramId);
     }
 
-    return false
+    return false;
   } catch (error) {
-    console.error('Failed to check admin status', error)
-    return false
+    console.error('Failed to check admin status', error);
+    return false;
   }
 }
 

@@ -333,60 +333,147 @@ export class TelegramIntegration {
   }
 }
 
-// Функция для проверки и исправления данных в localStorage
-export const validateLocalStorage = () => {
+// Базовый модуль для работы с локальным хранилищем
+
+/**
+ * Проверяет и исправляет структуру данных в localStorage
+ */
+export const validateLocalStorage = (): boolean => {
   try {
-    // Проверка чатов
-    const chatsData = localStorage.getItem('chats');
-    if (chatsData) {
+    console.log('Проверка структуры данных в localStorage...');
+
+    // Проверяем структуру users
+    if (!localStorage.getItem('users')) {
+      localStorage.setItem('users', JSON.stringify([]));
+      console.log('Инициализирован пустой массив пользователей');
+    } else {
       try {
-        const chats = JSON.parse(chatsData);
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        if (!Array.isArray(users)) {
+          console.warn('Некорректные данные пользователей, сбрасываем');
+          localStorage.setItem('users', JSON.stringify([]));
+        }
+      } catch (e) {
+        console.error('Ошибка при парсинге данных пользователей:', e);
+        localStorage.setItem('users', JSON.stringify([]));
+      }
+    }
+
+    // Проверяем структуру chats
+    if (!localStorage.getItem('chats')) {
+      localStorage.setItem('chats', JSON.stringify([]));
+      console.log('Инициализирован пустой массив чатов');
+    } else {
+      try {
+        const chats = JSON.parse(localStorage.getItem('chats') || '[]');
         if (!Array.isArray(chats)) {
-          console.error('Данные чатов не являются массивом, сбрасываем');
+          console.warn('Некорректные данные чатов, сбрасываем');
           localStorage.setItem('chats', JSON.stringify([]));
         }
       } catch (e) {
-        console.error('Ошибка при парсинге данных чатов, сбрасываем', e);
+        console.error('Ошибка при парсинге данных чатов:', e);
         localStorage.setItem('chats', JSON.stringify([]));
       }
     }
 
-    // Проверка текущего пользователя
-    const currentUserId = localStorage.getItem('current_user_id');
-    if (currentUserId) {
-      const userKey = `user_${currentUserId}`;
-      const userData = localStorage.getItem(userKey);
-
-      if (!userData) {
-        console.error('Текущий пользователь не найден, сбрасываем ID');
-        localStorage.removeItem('current_user_id');
-      } else {
-        try {
-          JSON.parse(userData);
-        } catch (e) {
-          console.error('Ошибка при парсинге данных пользователя, сбрасываем', e);
-          localStorage.removeItem(userKey);
-          localStorage.removeItem('current_user_id');
+    // Проверяем структуру searching_users
+    if (!localStorage.getItem('searching_users')) {
+      localStorage.setItem('searching_users', JSON.stringify([]));
+      console.log('Инициализирован пустой массив ищущих пользователей');
+    } else {
+      try {
+        const searchingUsers = JSON.parse(localStorage.getItem('searching_users') || '[]');
+        if (!Array.isArray(searchingUsers)) {
+          console.warn('Некорректные данные поиска, сбрасываем');
+          localStorage.setItem('searching_users', JSON.stringify([]));
         }
+      } catch (e) {
+        console.error('Ошибка при парсинге данных поиска:', e);
+        localStorage.setItem('searching_users', JSON.stringify([]));
       }
     }
 
+    console.log('Проверка структуры данных в localStorage завершена успешно');
     return true;
   } catch (error) {
-    console.error('Ошибка при валидации localStorage:', error);
+    console.error('Ошибка при проверке структуры данных:', error);
     return false;
   }
 };
 
-// Создаем и экспортируем экземпляр базы данных с более стабильными настройками
-export const db = new UserDatabase({
-  // Используем localStorage в любом окружении для стабильности
-  storageType: StorageType.LOCAL_STORAGE,
-  // Увеличим интервал синхронизации чтобы снизить нагрузку
-  syncInterval: 60000, // раз в минуту
-  // Только в production используем сжатие
-  useCompression: import.meta.env.PROD
-});
+// Простой интерфейс для работы с данными
+export const db = {
+  async getData(key: string): Promise<any> {
+    try {
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error(`Ошибка при получении данных для ${key}:`, error);
+      return null;
+    }
+  },
 
-// Экспортируем экземпляр интеграции с Telegram
-export const telegramApi = TelegramIntegration.getInstance()
+  async saveData(key: string, data: any): Promise<boolean> {
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+      return true;
+    } catch (error) {
+      console.error(`Ошибка при сохранении данных для ${key}:`, error);
+      return false;
+    }
+  },
+
+  async removeData(key: string): Promise<boolean> {
+    try {
+      localStorage.removeItem(key);
+      return true;
+    } catch (error) {
+      console.error(`Ошибка при удалении данных для ${key}:`, error);
+      return false;
+    }
+  },
+
+  async clearAllData(): Promise<boolean> {
+    try {
+      localStorage.clear();
+      return true;
+    } catch (error) {
+      console.error('Ошибка при очистке всех данных:', error);
+      return false;
+    }
+  }
+};
+
+// Интеграция с Telegram API
+export const telegramApi = {
+  isInitialized: false,
+
+  isReady(): boolean {
+    return this.isInitialized;
+  },
+
+  async initialize(): Promise<boolean> {
+    try {
+      this.isInitialized = true;
+      return true;
+    } catch (error) {
+      console.error('Failed to initialize Telegram API:', error);
+      return false;
+    }
+  },
+
+  getUserId(): string | null {
+    // Заглушка для локального тестирования
+    return '12345678';
+  },
+
+  getUserData(): any {
+    // Заглушка для локального тестирования
+    return {
+      id: '12345678',
+      first_name: 'TestUser',
+      username: 'test_user',
+      language_code: 'ru'
+    };
+  }
+};

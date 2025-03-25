@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { UserRegistration } from '../components/UserRegistration'
 import { InterestsSelector } from '../components/InterestsSelector'
 import { startSearching, stopSearching, isUserSearching, startMatchmakingService, stopMatchmakingService, markChatNotificationAsRead, hasNewChat, getNewChatNotification, triggerMatchmaking, getChatById } from '../utils/matchmaking'
+import { useNotifications } from '../utils/notifications'
 
 // Интерфейс для режима поиска
 type SearchMode = 'interests' | 'random';
@@ -174,6 +175,7 @@ const ActionCard: React.FC<ActionCardProps> = ({
 
 export const Home = () => {
   const navigate = useNavigate()
+  const { showSuccess, showError } = useNotifications();
   const [isAdminUser, setIsAdminUser] = useState(false)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [userBalance, setUserBalance] = useState(0)
@@ -189,6 +191,8 @@ export const Home = () => {
   const [matchmakingServiceId, setMatchmakingServiceId] = useState<number | null>(null)
   const searchTimerRef = useRef<number | null>(null)
   const [foundChatId, setFoundChatId] = useState<string | null>(null)
+  const [hasNewChatNotification, setHasNewChatNotification] = useState(false);
+  const [newChatId, setNewChatId] = useState<string | null>(null);
 
   // Проверяем, является ли пользователь администратором и существует ли пользователь
   useEffect(() => {
@@ -407,6 +411,50 @@ export const Home = () => {
     };
   }, [isSearching]); // Зависимость от isSearching
 
+  // Добавим эффект для проверки новых чатов
+  useEffect(() => {
+    // Функция для проверки новых чатов
+    const checkForNewChat = () => {
+      const currentUser = getCurrentUser();
+      if (!currentUser) return;
+
+      try {
+        const newChat = hasNewChat(currentUser.id);
+        setHasNewChatNotification(newChat);
+
+        if (newChat) {
+          const notification = getNewChatNotification(currentUser.id);
+          if (notification) {
+            setNewChatId(notification.chatId);
+            console.log(`[Home] Обнаружен новый чат: ${notification.chatId}`);
+          }
+        }
+      } catch (error) {
+        console.error('[Home] Ошибка при проверке новых чатов:', error);
+      }
+    };
+
+    // Проверяем при монтировании
+    checkForNewChat();
+
+    // Настраиваем слушатель события для нового чата
+    const handleChatFound = (event: CustomEvent) => {
+      const { chatId } = event.detail;
+      console.log('[Home] Обнаружен новый чат:', chatId);
+      checkForNewChat();
+    };
+
+    window.addEventListener('chatFound', handleChatFound as EventListener);
+
+    // Запускаем периодическую проверку
+    const intervalId = setInterval(checkForNewChat, 5000);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('chatFound', handleChatFound as EventListener);
+    };
+  }, []);
+
   const handleGoToProfile = () => {
     navigate('/direct/profile')
   }
@@ -438,6 +486,16 @@ export const Home = () => {
   const handleGoToSettings = () => {
     navigate('/settings')
   }
+
+  // Добавим функцию для перехода к странице тестирования чата
+  const handleGoToTestChat = () => {
+    navigate('/test-chat');
+  };
+
+  // Добавим функцию для перехода к странице отладки
+  const handleGoToDebug = () => {
+    navigate('/debug');
+  };
 
   // Обработчик завершения регистрации
   const handleRegistrationComplete = () => {
@@ -606,7 +664,7 @@ export const Home = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  // Улучшенная функция перехода к чату с дополнительными проверками
+  // Улучшенная функция перехода в чат с дополнительными проверками
   const goToChat = (chatId: string) => {
     try {
       const user = getCurrentUser();
@@ -616,35 +674,119 @@ export const Home = () => {
         return;
       }
 
-      console.log(`Попытка перехода в чат ${chatId} пользователя ${user.id}`);
+      console.log(`[Home] Попытка перехода в чат ${chatId} пользователя ${user.id}`);
 
       // Получаем информацию о чате
       const chat = getChatById(chatId);
-      console.log('Найден чат:', chat);
 
-      if (chat) {
-        // Проверяем, что текущий пользователь участник чата
-        if (Array.isArray(chat.participants) && chat.participants.includes(user.id)) {
-          console.log('Переходим в чат', chatId);
-
-          // Отмечаем уведомление как прочитанное перед переходом
-          markChatNotificationAsRead(user.id);
-
-          // Переходим к чату
-          navigate(`/chat/${chatId}`);
-        } else {
-          console.error('Пользователь не является участником чата');
-          setFoundChatId(null);
-          WebApp.showAlert('Ошибка при подключении к чату. Попробуйте найти собеседника снова.');
-        }
-      } else {
-        console.error('Чат не найден');
+      if (!chat) {
+        console.error(`[Home] Чат с ID ${chatId} не найден`);
         setFoundChatId(null);
         WebApp.showAlert('Чат не найден. Попробуйте найти собеседника снова.');
+        return;
+      }
+
+      console.log(`[Home] Найден чат: ${chat.id} с участниками: ${chat.participants.join(', ')}`);
+
+      // Проверяем, что текущий пользователь участник чата
+      if (Array.isArray(chat.participants) && chat.participants.includes(user.id)) {
+        console.log(`[Home] Переходим в чат ${chatId}`);
+
+        // Отмечаем уведомление как прочитанное перед переходом
+        markChatNotificationAsRead(user.id);
+
+        // Сохраняем ID активного чата перед переходом
+        localStorage.setItem('active_chat_id', chatId);
+
+        // Переходим к чату - исправленный маршрут
+        navigate(`/chat/${chatId}`);
+      } else {
+        console.error(`[Home] Пользователь ${user.id} не является участником чата ${chatId}`);
+        setFoundChatId(null);
+        WebApp.showAlert('Ошибка при подключении к чату. Попробуйте найти собеседника снова.');
       }
     } catch (error) {
-      console.error('Ошибка при переходе в чат:', error);
+      console.error('[Home] Ошибка при переходе в чат:', error);
       WebApp.showAlert('Произошла ошибка. Пожалуйста, попробуйте позже.');
+    }
+  };
+
+  // Улучшим обработчик перехода в чат
+  const handleGoToChat = () => {
+    if (newChatId) {
+      console.log('[Home] Переход в чат:', newChatId);
+      navigate(`/chat/${newChatId}`);
+    } else {
+      checkForNewChat();
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        const notification = getNewChatNotification(currentUser.id);
+        if (notification) {
+          console.log('[Home] Переход в чат из уведомления:', notification.chatId);
+          navigate(`/chat/${notification.chatId}`);
+        } else {
+          showError('Не удалось найти информацию о чате');
+        }
+      }
+    }
+  };
+
+  // Усиливаем обработчик обнаружения нового чата
+  const handleChatFound = (event: CustomEvent) => {
+    console.log('[Home] Получено событие о новом чате:', event.detail);
+
+    // Получаем текущего пользователя
+    const user = getCurrentUser();
+    if (!user) {
+      console.error('[Home] Не удалось получить текущего пользователя');
+      return;
+    }
+
+    const { chatId, participants, timestamp } = event.detail;
+
+    // Проверяем, что событие свежее (не старше 30 секунд)
+    if (timestamp && Date.now() - timestamp > 30000) {
+      console.log('[Home] Игнорируем устаревшее событие создания чата');
+      return;
+    }
+
+    // Проверяем, является ли текущий пользователь участником чата
+    const isParticipant = Array.isArray(participants) && participants.includes(user.id);
+    console.log(`[Home] Пользователь ${user.id} ${isParticipant ? 'является' : 'не является'} участником чата ${chatId}`);
+
+    if (!isParticipant) {
+      console.log('[Home] Событие не относится к текущему пользователю');
+      return;
+    }
+
+    // Проверяем, существует ли чат
+    const chat = getChatById(chatId);
+    if (!chat) {
+      console.error(`[Home] Чат ${chatId} не найден при обработке события`);
+      return;
+    }
+
+    console.log(`[Home] Найден чат: ${chat.id} с участниками: ${chat.participants.join(', ')}`);
+
+    // Останавливаем поиск, если он был активен
+    if (isSearching) {
+      console.log('[Home] Останавливаем активный поиск из-за события chatFound');
+      stopSearchTimer();
+      setIsSearching(false);
+      stopSearching(user.id);
+    }
+
+    // Установка ID найденного чата в состояние
+    setFoundChatId(chatId);
+
+    // Принудительно обновляем уведомления о чате
+    const hasNew = hasNewChat(user.id);
+    setHasNewChatNotification(hasNew);
+
+    // Если пользователь не находится в режиме поиска собеседника,
+    // автоматически переходим в чат
+    if (!isSearching) {
+      goToChat(chatId);
     }
   };
 
@@ -737,7 +879,7 @@ export const Home = () => {
               onClick={handleGoToSettings}
               className="text-sm px-3 py-1 flex items-center shadow-sm rounded-lg font-bold"
             >
-              <span className="mr-1">⚙️</span> Настройки
+              ⚙️ Настройки
             </Button>
           </motion.div>
         </div>
@@ -797,22 +939,8 @@ export const Home = () => {
           transition={{ delay: 0.1 }}
         >
           <Card className="p-4 bg-opacity-95 backdrop-blur-sm shadow-md bg-white dark:bg-gray-800/95 border-l-4 border-indigo-500">
-            <div className="text-sm mb-4">
-              {searchMode === 'random' ? (
-                <div className="flex items-start">
-                  <span className="text-indigo-500 mr-2">ℹ️</span>
-                  <p>
-                    <strong>Случайный поиск:</strong> Мы подберем вам случайного собеседника онлайн без учета интересов.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex items-start">
-                  <span className="text-indigo-500 mr-2">ℹ️</span>
-                  <p>
-                    <strong>Поиск по интересам:</strong> Мы подберем собеседника с похожими интересами для более интересного общения.
-                  </p>
-                </div>
-              )}
+            <div className="text-sm mb-4 text-gray-600 dark:text-gray-300">
+              Найдите собеседника для анонимного общения. Жмите кнопку ниже:
             </div>
 
             <motion.div
@@ -820,13 +948,14 @@ export const Home = () => {
               whileTap={{ scale: 0.98 }}
               className="w-full"
             >
-              <AnimatedButton
+              <Button
                 onClick={handleStartSearch}
                 fullWidth
-                className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold shadow-lg"
+                className="bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-bold py-3 rounded-lg shadow-md"
+                size="large"
               >
-                <span className="mr-2">👤</span> Найти собеседника
-              </AnimatedButton>
+                🔍 Найти собеседника
+              </Button>
             </motion.div>
           </Card>
         </motion.div>
@@ -854,6 +983,42 @@ export const Home = () => {
             animationDelay={0.35}
             buttonAnimation="pulse"
           />
+
+          {/* Добавляем кнопку тестирования для локальной разработки */}
+          {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+            <div className="mt-4 border-t border-gray-200 pt-4">
+              <h3 className="text-sm font-semibold text-gray-500 mb-2">Инструменты разработчика</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Button
+                    onClick={handleGoToTestChat}
+                    fullWidth
+                    variant="outline"
+                    className="border-purple-400 text-purple-500 hover:bg-purple-50"
+                  >
+                    <span className="mr-2">🧪</span> Тестовый чат
+                  </Button>
+                </motion.div>
+
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Button
+                    onClick={handleGoToDebug}
+                    fullWidth
+                    variant="outline"
+                    className="border-indigo-400 text-indigo-500 hover:bg-indigo-50"
+                  >
+                    <span className="mr-2">🛠️</span> Отладка
+                  </Button>
+                </motion.div>
+              </div>
+            </div>
+          )}
 
           {isAdminUser && (
             <ActionCard
@@ -948,3 +1113,7 @@ export const Home = () => {
     </div>
   );
 };
+function checkForNewChat() {
+  throw new Error('Function not implemented.')
+}
+

@@ -14,6 +14,7 @@ export const Layout = () => {
   const [hasNewMessage, setHasNewMessage] = useState(false)
   const [isLoading, setIsLoading] = useState(true) // Добавляем состояние загрузки
   const [loadingTimeout, setLoadingTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [isDevMode, setIsDevMode] = useState(false)
 
   // Инициализация с таймаутом
   useEffect(() => {
@@ -265,6 +266,20 @@ export const Layout = () => {
     };
   }, [navigate, location.pathname]);
 
+  // Показать/скрыть индикатор режима разработки
+  const renderDevModeIndicator = () => {
+    if (!isDevMode) return null;
+
+    return (
+      <div
+        className="fixed bottom-4 right-4 z-50 bg-yellow-400 text-yellow-900 px-3 py-1 rounded-full text-xs font-medium shadow-lg cursor-pointer"
+        onClick={() => navigate('/test-chat')}
+      >
+        Режим разработки
+      </div>
+    );
+  };
+
   // Отображаем индикатор загрузки, если Layout всё еще инициализируется
   if (isLoading) {
     return (
@@ -276,6 +291,9 @@ export const Layout = () => {
 
   return (
     <div className="tg-container">
+      {/* Компонент для перенаправления при появлении нового чата */}
+      <ChatRedirectHandler enabled={true} />
+
       {/* Основной контент */}
       <AnimatePresence mode="wait">
         <motion.div
@@ -345,6 +363,9 @@ export const Layout = () => {
           )}
         </div>
       </motion.nav>
+
+      {/* Индикатор режима разработки */}
+      {renderDevModeIndicator()}
     </div>
   );
 }

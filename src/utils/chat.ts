@@ -13,6 +13,7 @@ export interface Message {
 
 // Интерфейс для чата с дополнительными полями
 export interface Chat {
+  ended: any
   id: string
   participants: string[] // ID участников
   messages: Message[]
@@ -128,7 +129,7 @@ export const sendMessage = (chatId: string, senderId: string, text: string): Mes
   }
 }
 
-// Создание нового чата - убедимся, что функция надежно сохраняет чат
+// Создание нового чата - улучшенная версия
 export const createChat = (participants: string[]): Chat | null => {
   try {
     if (!participants || participants.length < 2) {
@@ -136,48 +137,55 @@ export const createChat = (participants: string[]): Chat | null => {
       return null;
     }
 
+    console.log(`[createChat] Создание чата для участников: ${participants.join(', ')}`);
+
     // Получаем текущие чаты
     const chatsData = localStorage.getItem('chats');
     let chats: Chat[] = [];
 
     if (chatsData) {
       try {
-        chats = JSON.parse(chatsData);
-        // Убедимся, что chats - это массив
-        if (!Array.isArray(chats)) {
-          console.error('Данные чатов повреждены, создаем новый массив');
+        const parsedChats = JSON.parse(chatsData);
+        // Убедимся, что данные - это массив
+        if (Array.isArray(parsedChats)) {
+          chats = parsedChats;
+        } else {
+          console.error('[createChat] Данные чатов повреждены, создаем новый массив');
           chats = [];
         }
       } catch (e) {
-        console.error('Ошибка при чтении данных чатов:', e);
+        console.error('[createChat] Ошибка при чтении данных чатов:', e);
         chats = [];
       }
     }
 
+    // Создаем уникальный ID для чата
+    const chatId = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`[createChat] Создан ID чата: ${chatId}`);
+
     // Создаем новый чат
     const newChat: Chat = {
-      id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      participants: participants,
+      id: chatId,
+      participants: [...participants], // Создаем копию массива
       messages: [],
       createdAt: new Date(),
       isActive: true,
       startedAt: Date.now(),
       userId: participants[0],
       partnerId: participants[1],
-      lastActivity: new Date()
+      lastActivity: new Date(),
+      ended: undefined
     };
-
-    console.log(`Создаем новый чат с ID: ${newChat.id}`);
 
     // Добавляем новый чат в список и сохраняем
     chats.push(newChat);
     localStorage.setItem('chats', JSON.stringify(chats));
 
-    console.log(`Чат успешно создан и сохранен: ${newChat.id}`);
+    console.log(`[createChat] Чат успешно создан и сохранен: ${newChat.id}`);
 
     return newChat;
   } catch (error) {
-    console.error('Ошибка при создании чата:', error);
+    console.error('[createChat] Ошибка при создании чата:', error);
     return null;
   }
 }

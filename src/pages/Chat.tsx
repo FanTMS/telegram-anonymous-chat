@@ -43,14 +43,14 @@ export const Chat = () => {
         throw new Error('Пользователь не авторизован');
       }
 
-      // Если ID чата передан через параметры - используем его, иначе берем из уведомления
+      // Если ID чата передан через параметры - используем его, иначе берем из localStorage
       const targetChatId = chatId || localStorage.getItem('active_chat_id');
 
       if (!targetChatId) {
         throw new Error('ID чата не найден');
       }
 
-      console.log(`Загрузка данных чата ${targetChatId}...`);
+      console.log(`[Chat] Загрузка данных чата ${targetChatId}...`);
 
       // Получаем данные чата
       const chatData = getChatById(targetChatId);
@@ -58,6 +58,8 @@ export const Chat = () => {
       if (!chatData) {
         throw new Error(`Чат с ID ${targetChatId} не найден`);
       }
+
+      console.log(`[Chat] Чат найден! Участники: ${chatData.participants.join(', ')}`);
 
       // Проверяем, что текущий пользователь является участником чата
       if (!chatData.participants.includes(currentUser.id)) {
@@ -104,30 +106,43 @@ export const Chat = () => {
       // Отмечаем уведомление как прочитанное
       markChatNotificationAsRead(currentUser.id);
 
-      console.log(`Чат ${targetChatId} успешно загружен`);
+      console.log(`[Chat] Чат ${targetChatId} успешно загружен`);
     } catch (error: any) {
-      console.error('Ошибка при загрузке чата:', error);
+      console.error('[Chat] Ошибка при загрузке чата:', error);
       setError(error.message || 'Произошла ошибка при загрузке чата');
     } finally {
       setIsLoading(false);
     }
   }
 
-  // Загружаем данные чата при загрузке компонента
+  // Загружаем данные чата при загрузке компонента или изменении ID чата
   useEffect(() => {
+    // Пытаемся получить chat ID из локального хранилища, если он не передан через параметры
+    if (!chatId) {
+      const storedChatId = localStorage.getItem('active_chat_id');
+      if (storedChatId) {
+        console.log(`[Chat] Получен ID чата из localStorage: ${storedChatId}`);
+        // Перенаправляем с URL с корректным ID чата
+        navigate(`/chat/${storedChatId}`, { replace: true });
+        return;
+      }
+    }
+
     loadChatData();
 
     // Запускаем периодическое обновление чата
     const intervalId = setInterval(() => {
-      if (chatId) {
-        const updatedChat = getChatById(chatId);
+      // Только если ID чата определен
+      if (chatId || localStorage.getItem('active_chat_id')) {
+        const id = chatId || localStorage.getItem('active_chat_id');
+        const updatedChat = getChatById(id);
         if (updatedChat) {
           setChat(updatedChat);
           setMessages(updatedChat.messages || []);
 
-          // Проверяем статус игры
-          const gameRequest = getGameRequestForChat(chatId);
-          const game = getActiveGameForChat(chatId);
+          // Проверяем статус игры если она есть
+          const gameRequest = getGameRequestForChat(id);
+          const game = getActiveGameForChat(id);
 
           if (game && !game.isCompleted) {
             setActiveGame(game);
@@ -150,7 +165,7 @@ export const Chat = () => {
     }, 3000);
 
     return () => clearInterval(intervalId);
-  }, [chatId]);
+  }, [chatId, navigate]); // Добавляем зависимость от navigate
 
   // Прокручиваем к последнему сообщению при обновлении списка
   useEffect(() => {

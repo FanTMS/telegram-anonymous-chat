@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getCurrentUser } from '../utils/user';
 import { getSearchingUsers, triggerMatchmaking } from '../utils/matchmaking';
+import { getChatById } from '../utils/chat'; // Импортируем getChatById из chat.ts
 
 // Страница для отладки проблем с чатом
 export const DebugPage = () => {
@@ -102,11 +103,81 @@ export const DebugPage = () => {
         }
     };
 
+    // Функция для полной очистки данных о поиске
+    const resetSearchData = () => {
+        try {
+            localStorage.setItem('searching_users', JSON.stringify([]));
+            addLog('Данные о поиске пользователей очищены');
+            refreshData();
+        } catch (error) {
+            addLog(`Ошибка при очистке данных поиска: ${error}`);
+        }
+    };
+
+    // Функция для очистки всех уведомлений о чатах
+    const resetChatNotifications = () => {
+        try {
+            // Находим все ключи, связанные с уведомлениями о чатах
+            const allKeys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (key.startsWith('new_chat_notification_') || key.startsWith('new_chat_flag_'))) {
+                    allKeys.push(key);
+                }
+            }
+
+            // Удаляем найденные ключи
+            allKeys.forEach(key => localStorage.removeItem(key));
+
+            addLog(`Очищено ${allKeys.length} уведомлений о чатах`);
+            refreshData();
+        } catch (error) {
+            addLog(`Ошибка при очистке уведомлений: ${error}`);
+        }
+    };
+
+    // Проверка состояния уведомлений
+    const checkNotifications = () => {
+        try {
+            const userId = userInfo?.id;
+            if (!userId) {
+                addLog('Нет текущего пользователя для проверки уведомлений');
+                return;
+            }
+
+            const hasFlag = localStorage.getItem(`new_chat_flag_${userId}`) === 'true';
+            const notificationData = localStorage.getItem(`new_chat_notification_${userId}`);
+
+            addLog(`Флаг нового чата для ${userId}: ${hasFlag ? 'Установлен' : 'Отсутствует'}`);
+
+            if (notificationData) {
+                try {
+                    const notification = JSON.parse(notificationData);
+                    addLog(`Уведомление: chatId=${notification.chatId}, isRead=${notification.isRead}`);
+
+                    // Проверяем существование чата
+                    const chat = getChatById(notification.chatId);
+                    if (chat) {
+                        addLog('Чат существует!');
+                    } else {
+                        addLog('Чат не найден!');
+                    }
+                } catch (e) {
+                    addLog(`Ошибка при парсинге уведомления: ${e}`);
+                }
+            } else {
+                addLog('Данные уведомления отсутствуют');
+            }
+        } catch (error) {
+            addLog(`Ошибка при проверке уведомлений: ${error}`);
+        }
+    };
+
     return (
         <div className="p-4 max-w-4xl mx-auto">
             <h1 className="text-2xl font-bold mb-4">Страница отладки</h1>
 
-            <div className="flex gap-2 mb-4">
+            <div className="flex flex-wrap gap-2 mb-4">
                 <button
                     onClick={refreshData}
                     className="px-4 py-2 bg-blue-500 text-white rounded"
@@ -130,6 +201,24 @@ export const DebugPage = () => {
                     className="px-4 py-2 bg-red-500 text-white rounded"
                 >
                     Очистить все данные
+                </button>
+                <button
+                    onClick={resetSearchData}
+                    className="px-4 py-2 bg-orange-500 text-white rounded"
+                >
+                    Сбросить данные поиска
+                </button>
+                <button
+                    onClick={resetChatNotifications}
+                    className="px-4 py-2 bg-yellow-500 text-white rounded"
+                >
+                    Очистить уведомления
+                </button>
+                <button
+                    onClick={checkNotifications}
+                    className="px-4 py-2 bg-blue-500 text-white rounded"
+                >
+                    Проверить уведомления
                 </button>
             </div>
 
@@ -176,3 +265,4 @@ export const DebugPage = () => {
 };
 
 export default DebugPage;
+

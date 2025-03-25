@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { router } from './routes'
 import { startMatchmakingService, stopMatchmakingService } from './utils/matchmaking'
-import { validateLocalStorage } from './utils/database';
+import { validateLocalStorage } from './utils/database' // Оставляем только этот импорт
+import { getCurrentUser, saveUser } from './utils/user' // Импортируем из utils/user вместо database
 import WebApp from '@twa-dev/sdk';
 
 // Инициализация глобальных переменных для интервалов и флагов
@@ -19,6 +20,25 @@ export const App = () => {
   // Инициализация глобальных сервисов и установка светлой темы
   useEffect(() => {
     try {
+      // Проверяем, запущено ли приложение локально
+      const isLocalhost =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.');
+
+      // Если это локальная разработка, добавляем маркер в локальное хранилище
+      if (isLocalhost) {
+        console.log('Локальный запуск: предоставляем расширенные возможности отладки');
+        localStorage.setItem('dev_mode', 'true');
+
+        // Проверяем текущего пользователя и делаем его админом если локальная разработка
+        const currentUser = getCurrentUser();
+        if (currentUser) {
+          currentUser.isAdmin = true;
+          saveUser(currentUser);
+        }
+      }
+
       // Принудительно устанавливаем светлую тему для всех пользователей
       document.body.classList.remove('dark');
       document.body.classList.add('light');
@@ -48,7 +68,11 @@ export const App = () => {
       }
 
       // Валидируем данные в localStorage при запуске приложения
-      validateLocalStorage();
+      if (validateLocalStorage) {
+        validateLocalStorage(); // Проверяем наличие функции перед вызовом
+      } else {
+        console.warn('validateLocalStorage не определена, пропускаем проверку');
+      }
 
       // Проверяем структуру основных данных
       const checkAndFixLocalStorage = () => {
