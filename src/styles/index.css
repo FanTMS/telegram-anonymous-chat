@@ -72,7 +72,7 @@
     transition: transform 0.2s ease;
 }
 
-/* Стиль для кнопок навигации */
+/* Стиль для кнопок навигации - унифицированный для всех устройств */
 .nav-button {
     display: flex;
     flex-direction: column;
@@ -80,26 +80,29 @@
     justify-content: center;
     position: relative;
     width: 100%;
-    max-width: 72px;
-    /* Ограничиваем максимальную ширину на мобильных */
-    padding: 6px 4px;
-    /* Уменьшаем горизонтальные отступы */
+    padding: 6px 8px;
     text-decoration: none;
     transition: all 0.2s ease;
 }
 
+/* Иконки унифицированы для десктопной и мобильной версий */
 .nav-button-icon {
-    font-size: 20px;
-    /* Уменьшаем размер иконки для мобильных */
-    margin-bottom: 2px;
-    /* Уменьшаем отступ снизу */
+    font-size: 24px;
+    /* Возвращаем к десктопному размеру */
+    margin-bottom: 4px;
+    /* Стандартный отступ как на десктопе */
     line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    /* Фиксированная высота, чтобы иконки были выровнены */
 }
 
-/* Уменьшаем размер текста для мобильных устройств */
+/* Текст кнопок навигации */
 .nav-button span {
-    font-size: 10px;
-    /* Делаем текст меньше */
+    font-size: 12px;
+    /* Стандартный размер как на десктопе */
     line-height: 1.2;
     max-width: 100%;
     white-space: nowrap;
@@ -125,19 +128,10 @@
     }
 }
 
-/* Адаптивные правила для меню на мобильных */
+/* Удаляем адаптивные правила, которые меняют внешний вид для мобильных */
 @media (max-width: 360px) {
     .nav-button {
-        max-width: 60px;
-        /* Ещё меньше для очень узких экранов */
-        padding: 6px 2px;
-    }
-
-    .nav-button-icon {
-        font-size: 18px;
-    }
-
-    .nav-button span {
-        font-size: 9px;
+        padding: 6px 4px;
+        /* Небольшой отступ для узких экранов, но не меняем сами иконки */
     }
 }

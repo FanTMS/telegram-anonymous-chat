@@ -37,16 +37,15 @@ export const NavButton: React.FC<NavButtonProps> = ({
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"
+            className="nav-notification-badge"
           />
         )}
       </div>
-      <span className="text-xs">{label}</span>
+      <span>{label}</span>
       {isActive && (
         <motion.div
           layoutId="navbar-indicator"
-          className="absolute top-0 left-0 right-0 h-1 bg-blue-500 dark:bg-blue-400 rounded-b"
-          style={{ width: '40%', left: '30%', top: '-1px' }}
+          className="nav-indicator"
           transition={{ type: 'spring', stiffness: 500, damping: 30 }}
         />
       )}
