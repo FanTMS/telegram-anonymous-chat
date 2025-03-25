@@ -1,5 +1,5 @@
 import { User, getCurrentUser, getUserById, saveUser } from './user';
-import { createChat, getChatById } from './chat';
+import { Chat, createChat, getChatById } from './chat';
 
 // Включаем подробное логирование
 const DEBUG = true;
@@ -182,7 +182,14 @@ export const findMatch = async (): Promise<boolean> => {
             return false;
         }
 
-        // Упрощаем поиск - просто берем двух первых пользователей
+        // Важно! Берем разных пользователей, проверяя их ID
+        if (searchingUsers[0].userId === searchingUsers[1].userId) {
+            console.error('Найдены дубликаты пользователей в списке поиска');
+            // Удаляем дубликат и выходим
+            stopSearching(searchingUsers[0].userId);
+            return false;
+        }
+
         const user1 = searchingUsers[0];
         const user2 = searchingUsers[1];
 
@@ -194,6 +201,10 @@ export const findMatch = async (): Promise<boolean> => {
         if (success) {
             console.log(`✅ Успешно создана пара между ${user1.userId} и ${user2.userId}`);
 
+            // Удаляем обоих пользователей из списка поиска
+            stopSearching(user1.userId);
+            stopSearching(user2.userId);
+
             // Формируем событие для каждого пользователя
             for (const userId of [user1.userId, user2.userId]) {
                 const notification = getNewChatNotification(userId);
@@ -202,7 +213,7 @@ export const findMatch = async (): Promise<boolean> => {
 
                     // Генерируем глобальное событие для информирования о новом чате
                     const chatFoundEvent = new CustomEvent('chatFound', {
-                        detail: { chatId: notification.chatId }
+                        detail: { chatId: notification.chatId, userId: userId }
                     });
                     window.dispatchEvent(chatFoundEvent);
                 }
@@ -305,6 +316,12 @@ export const markChatNotificationAsRead = (userId: string): void => {
 // Улучшенная версия создания чата между пользователями
 async function createChatBetweenUsers(userId1: string, userId2: string): Promise<boolean> {
     try {
+        // Защита от создания чата с самим собой
+        if (userId1 === userId2) {
+            console.error('Попытка создать чат пользователя с самим собой');
+            return false;
+        }
+
         console.log(`Создание чата между пользователями ${userId1} и ${userId2}`);
 
         // Получаем данные пользователей
@@ -318,9 +335,25 @@ async function createChatBetweenUsers(userId1: string, userId2: string): Promise
 
         console.log(`Пользователи найдены: ${user1.name} и ${user2.name}`);
 
-        // Создаем структуру чата
+        // Проверяем, нет ли уже активного чата между этими пользователями
+        const existingChats = getAllUserChats();
+        const chatExists = existingChats.some(chat => {
+            return chat.isActive &&
+                chat.participants &&
+                chat.participants.length === 2 &&
+                chat.participants.includes(userId1) &&
+                chat.participants.includes(userId2);
+        });
+
+        if (chatExists) {
+            console.log(`Чат между ${user1.name} и ${user2.name} уже существует`);
+            return false;
+        }
+
+        // Создаем структуру чата с корректным набором участников
+        const chatId = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const newChat = {
-            id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            id: chatId,
             participants: [userId1, userId2],
             messages: [],
             createdAt: new Date(),
@@ -362,14 +395,26 @@ async function createChatBetweenUsers(userId1: string, userId2: string): Promise
         localStorage.setItem(`new_chat_flag_${userId1}`, 'true');
         localStorage.setItem(`new_chat_flag_${userId2}`, 'true');
 
-        // Удаляем пользователей из списка поиска
-        stopSearching(userId1);
-        stopSearching(userId2);
-
         return true;
     } catch (error) {
         console.error('Ошибка при создании чата между пользователями:', error);
         return false;
+    }
+}
+
+// Функция для получения всех чатов (вспомогательная)
+function getAllUserChats(): Chat[] {
+    try {
+        const chatsData = localStorage.getItem('chats');
+        if (!chatsData) return [];
+
+        const chats = JSON.parse(chatsData);
+        if (!Array.isArray(chats)) return [];
+
+        return chats;
+    } catch (error) {
+        console.error('Ошибка при получении всех чатов:', error);
+        return [];
     }
 }
 
@@ -435,3 +480,5 @@ export const triggerMatchmaking = async (): Promise<boolean> => {
     console.log('🔄 Ручной запуск поиска совпадения');
     return await findMatch();
 };
+export { getChatById };
+

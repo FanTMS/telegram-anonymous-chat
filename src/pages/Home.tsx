@@ -3,13 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import WebApp from '@twa-dev/sdk'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
-import { NavButton } from '../components/NavButton'
 import { isAdmin, getCurrentUser, User } from '../utils/user'
 import { getUserCurrency } from '../utils/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UserRegistration } from '../components/UserRegistration'
 import { InterestsSelector } from '../components/InterestsSelector'
-import { startSearching, stopSearching, isUserSearching, startMatchmakingService, stopMatchmakingService, markChatNotificationAsRead, hasNewChat, getNewChatNotification, triggerMatchmaking } from '../utils/matchmaking'
+import { startSearching, stopSearching, isUserSearching, startMatchmakingService, stopMatchmakingService, markChatNotificationAsRead, hasNewChat, getNewChatNotification, triggerMatchmaking, getChatById } from '../utils/matchmaking'
 
 // Интерфейс для режима поиска
 type SearchMode = 'interests' | 'random';
@@ -505,8 +504,34 @@ export const Home = () => {
   }
 
   const goToChat = (chatId: string) => {
-    markChatNotificationAsRead(getCurrentUser()?.id || '');
-    navigate(`/chat/${chatId}`);
+    try {
+      const user = getCurrentUser();
+      if (user) {
+        markChatNotificationAsRead(user.id);
+      }
+
+      // Проверяем валидность чата перед переходом
+      const chat = getChatById(chatId);
+      if (chat && user) {
+        // Проверяем, что текущий пользователь действительно участник чата
+        if (chat.participants.includes(user.id)) {
+          navigate(`/chat/${chatId}`);
+        } else {
+          console.error('Пользователь не является участником чата');
+          // Очищаем неверную информацию
+          setFoundChatId(null);
+          // Показываем сообщение пользователю
+          WebApp.showAlert('Ошибка при подключении к чату. Попробуйте найти собеседника снова.');
+        }
+      } else {
+        console.error('Невалидный чат или пользователь не авторизован');
+        setFoundChatId(null);
+        WebApp.showAlert('Ошибка при подключении к чату. Попробуйте найти собеседника снова.');
+      }
+    } catch (error) {
+      console.error('Ошибка при переходе в чат:', error);
+      WebApp.showAlert('Произошла ошибка. Попробуйте позже.');
+    }
   };
 
   // Обновленное отображение поиска
@@ -798,11 +823,10 @@ export const Home = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
-              >
-                <Card className="p-4 rounded-xl bg-white dark:bg-gray-800 bg-opacity-95 backdrop-blur-sm border-0 shadow-lg">
-                  {renderSearchBlock()}
-                </Card>
-              </motion.div>
+              />
+              <Card className="p-4 rounded-xl bg-white dark:bg-gray-800 bg-opacity-95 backdrop-blur-sm border-0 shadow-lg">
+                {renderSearchBlock()}
+              </Card>
             </div>
           </motion.div>
         )}
