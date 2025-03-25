@@ -94,6 +94,85 @@ const RecommendedUsers: React.FC<RecommendedUsersProps> = ({
   );
 };
 
+// Вспомогательный компонент для карточки с действием
+interface ActionCardProps {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  buttonText: string;
+  onClick: () => void;
+  accentColor: string;
+  badgeContent?: string | number;
+  animationDelay: number;
+  buttonAnimation?: 'pulse' | 'scale' | 'bounce';
+  rightContent?: React.ReactNode;
+  disableGradient?: boolean; // Новое свойство для отключения градиента
+}
+
+const ActionCard: React.FC<ActionCardProps> = ({
+  icon,
+  title,
+  description,
+  buttonText,
+  onClick,
+  accentColor,
+  badgeContent,
+  animationDelay,
+  buttonAnimation = 'pulse',
+  rightContent,
+  disableGradient = false // Значение по умолчанию
+}) => {
+  // Формируем класс для кнопки в зависимости от того, нужен ли градиент
+  const buttonClassName = disableGradient
+    ? `bg-green-600 hover:bg-green-700 text-white font-extrabold shadow-md tracking-wide`
+    : `bg-gradient-to-r from-${accentColor}-500 to-${accentColor}-600 hover:from-${accentColor}-600 hover:to-${accentColor}-700 text-white font-extrabold shadow-md tracking-wide`;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: animationDelay }}
+    >
+      <Card className={`overflow-hidden border-l-4 border-${accentColor}-500 shadow-lg bg-white bg-opacity-95 backdrop-blur-sm dark:bg-gray-800/95`}>
+        <div className="p-5">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className={`w-10 h-10 flex items-center justify-center bg-${accentColor}-100 text-${accentColor}-600 rounded-full mr-3 dark:bg-${accentColor}-900 dark:text-${accentColor}-300`}>
+                  {icon}
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg dark:text-white">{title}</h3>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">{description}</p>
+                </div>
+              </div>
+              {rightContent && (
+                <div className="text-right">
+                  {rightContent}
+                </div>
+              )}
+            </div>
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <AnimatedButton
+                onClick={onClick}
+                fullWidth
+                className={buttonClassName}
+                animation={buttonAnimation}
+              >
+                <span className="mr-2 drop-shadow-sm text-white">{buttonText.split(' ')[0]}</span>
+                <span className="drop-shadow-sm text-white">{buttonText.substr(buttonText.indexOf(' ') + 1)}</span>
+              </AnimatedButton>
+            </motion.div>
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+  );
+};
+
 export const Home = () => {
   const navigate = useNavigate()
   const [isAdminUser, setIsAdminUser] = useState(false)
@@ -364,7 +443,7 @@ export const Home = () => {
     navigate(`/chat/${chatId}`);
   };
 
-  // Удаляем блоки, связанные с демо-режимом и рекомендациями
+  // Обновленное отображение поиска
   const renderSearchBlock = () => {
     if (foundChatId) {
       return (
@@ -374,7 +453,7 @@ export const Home = () => {
             transition={{ duration: 0.3 }}
             className="mb-4"
           >
-            <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
+            <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center shadow-lg">
               <span className="text-green-500 text-3xl">✓</span>
             </div>
           </motion.div>
@@ -387,14 +466,19 @@ export const Home = () => {
             </p>
           </div>
 
-          <Button
-            onClick={() => goToChat(foundChatId)}
-            variant="primary"
-            size="large"
-            className="bg-green-500 hover:bg-green-600 text-white"
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
           >
-            Начать общение
-          </Button>
+            <Button
+              onClick={() => goToChat(foundChatId)}
+              variant="primary"
+              size="large"
+              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold rounded-lg shadow-lg"
+            >
+              Начать общение
+            </Button>
+          </motion.div>
         </div>
       );
     }
@@ -406,123 +490,196 @@ export const Home = () => {
           transition={{ repeat: Infinity, duration: 1.5 }}
           className="mb-4"
         >
-          <div className="w-20 h-20 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+          <div className="w-20 h-20 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center shadow-lg">
             <span className="text-blue-500 text-3xl">🔍</span>
           </div>
         </motion.div>
 
         <h2 className="text-xl font-bold mb-2">Поиск собеседника</h2>
 
-        <div className="text-center mb-4">
+        <div className="text-center mb-6">
           <p className="text-gray-600 dark:text-gray-300 mb-2">
             {searchMode === 'random'
               ? 'Ищем случайного собеседника онлайн...'
               : 'Ищем собеседника с похожими интересами...'}
           </p>
-          <div className="font-mono text-lg">{formatSearchTime(searchDuration)}</div>
+          <div className="font-mono text-lg tracking-wider bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-1 inline-block">{formatSearchTime(searchDuration)}</div>
         </div>
 
-        <Button
-          onClick={handleCancelSearch}
-          variant="outline"
-          size="medium"
-          className="border-red-400 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+        <motion.div
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
-          Отменить поиск
-        </Button>
+          <Button
+            onClick={handleCancelSearch}
+            variant="outline"
+            size="medium"
+            className="border-red-400 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 shadow-sm rounded-lg font-bold"
+          >
+            Отменить поиск
+          </Button>
+        </motion.div>
       </div>
     ) : (
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
             {currentUser ? `Привет, ${currentUser.name}!` : 'Добро пожаловать!'}
           </h2>
-          <Button
-            variant="outline"
-            onClick={handleGoToSettings}
-            className="text-sm px-3 py-1"
-          >
-            <span className="mr-1">⚙️</span> Настройки
-          </Button>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              variant="outline"
+              onClick={handleGoToSettings}
+              className="text-sm px-3 py-1 flex items-center shadow-sm rounded-lg font-bold"
+            >
+              <span className="mr-1">⚙️</span> Настройки
+            </Button>
+          </motion.div>
         </div>
 
-        <div className="flex justify-center mb-4">
-          <div className="bg-gray-100 dark:bg-gray-700 rounded-full p-1 flex w-full max-w-xs">
-            <button
+        <div className="flex justify-center mb-5">
+          <div className="bg-gray-100 dark:bg-gray-700 rounded-full p-1 flex w-full max-w-xs shadow-inner">
+            <motion.button
               onClick={() => setSearchMode('random')}
-              className={`flex-1 px-4 py-2 rounded-full transition-all text-center ${searchMode === 'random'
-                ? 'bg-blue-500 text-white'
+              className={`flex-1 px-4 py-2 rounded-full transition-all text-center font-medium ${searchMode === 'random'
+                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
                 : 'text-gray-700 dark:text-gray-300'
                 }`}
+              whileHover={searchMode !== 'random' ? { scale: 1.03 } : {}}
+              whileTap={{ scale: 0.97 }}
             >
               Случайный
-            </button>
-            <button
+            </motion.button>
+            <motion.button
               onClick={() => setSearchMode('interests')}
-              className={`flex-1 px-4 py-2 rounded-full transition-all text-center ${searchMode === 'interests'
-                ? 'bg-blue-500 text-white'
+              className={`flex-1 px-4 py-2 rounded-full transition-all text-center font-medium ${searchMode === 'interests'
+                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
                 : 'text-gray-700 dark:text-gray-300'
                 }`}
+              whileHover={searchMode !== 'interests' ? { scale: 1.03 } : {}}
+              whileTap={{ scale: 0.97 }}
             >
               По интересам
-            </button>
+            </motion.button>
           </div>
         </div>
 
         {searchMode === 'interests' && (
-          <div className="mb-4">
-            <h3 className="font-medium mb-2">Выберите интересы:</h3>
-            <InterestsSelector
-              selectedInterests={selectedInterests}
-              onChange={handleInterestsChange}
-              maxSelections={5}
-            />
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Выберите до 5 интересов для лучшего подбора собеседника
-            </p>
-          </div>
+          <motion.div
+            className="mb-5"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            <Card className="p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-md">
+              <h3 className="font-medium mb-3">Выберите интересы:</h3>
+              <InterestsSelector
+                selectedInterests={selectedInterests}
+                onChange={handleInterestsChange}
+                maxSelections={5}
+              />
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 italic">
+                Выберите до 5 интересов для лучшего подбора собеседника
+              </p>
+            </Card>
+          </motion.div>
         )}
 
-        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg text-sm mb-4">
-          {searchMode === 'random' ? (
-            <p>
-              <strong>Случайный поиск:</strong> Мы подберем вам случайного собеседника онлайн без учета интересов.
-            </p>
-          ) : (
-            <p>
-              <strong>Поиск по интересам:</strong> Мы подберем собеседника с похожими интересами для более интересного общения.
-            </p>
-          )}
-        </div>
+        <motion.div
+          className="mb-5"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Card className="p-4 bg-opacity-95 backdrop-blur-sm shadow-md bg-white dark:bg-gray-800/95 border-l-4 border-indigo-500">
+            <div className="text-sm mb-4">
+              {searchMode === 'random' ? (
+                <div className="flex items-start">
+                  <span className="text-indigo-500 mr-2">ℹ️</span>
+                  <p>
+                    <strong>Случайный поиск:</strong> Мы подберем вам случайного собеседника онлайн без учета интересов.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-start">
+                  <span className="text-indigo-500 mr-2">ℹ️</span>
+                  <p>
+                    <strong>Поиск по интересам:</strong> Мы подберем собеседника с похожими интересами для более интересного общения.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full"
+            >
+              <AnimatedButton
+                onClick={handleStartSearch}
+                fullWidth
+                className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold shadow-lg"
+              >
+                <span className="mr-2">👤</span> Найти собеседника
+              </AnimatedButton>
+            </motion.div>
+          </Card>
+        </motion.div>
 
         <div className="grid grid-cols-1 gap-3">
-          <Button
-            onClick={handleStartSearch}
-            fullWidth
-            size="large"
-            variant="primary"
-            className="bg-gradient-to-r from-pink-500 to-purple-600 text-white font-medium shadow-lg"
-          >
-            <span className="mr-2">👤</span> Найти собеседника
-          </Button>
+          <ActionCard
+            icon="🤔"
+            title="Новичок в чате?"
+            description="Узнайте, как начать успешное общение"
+            buttonText="💡 Как начать общение"
+            onClick={handleGoToHelp}
+            accentColor="green"
+            animationDelay={0.2}
+            buttonAnimation="pulse"
+            disableGradient={true}
+          />
 
-          <Button
-            onClick={handleGoToProfile}
-            fullWidth
-            variant="secondary"
-            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow-lg"
-          >
-            <span className="mr-2">👤</span> Перейти в профиль
-          </Button>
+          <ActionCard
+            icon="🤖"
+            title="Бот-помощник"
+            description="Получите помощь и ответы на вопросы"
+            buttonText="💬 Написать боту"
+            onClick={handleGoToBot}
+            accentColor="blue"
+            animationDelay={0.35}
+            buttonAnimation="pulse"
+          />
 
-          <Button
-            onClick={handleGoToChats}
-            fullWidth
-            variant="secondary"
-            className="bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium shadow-lg"
+          {isAdminUser && (
+            <ActionCard
+              icon="⚙️"
+              title="Панель администратора"
+              description="Управление базой данных и пользователями"
+              buttonText="⚙️ Панель администратора"
+              onClick={handleGoToAdmin}
+              accentColor="red"
+              animationDelay={0.4}
+              buttonAnimation="pulse"
+            />
+          )}
+
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.45 }}
+            className="mt-2"
           >
-            <span className="mr-2">📩</span> Перейти к чатам
-          </Button>
+            <Button
+              onClick={handleGoToProfile}
+              fullWidth
+              variant="secondary"
+              className="bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white font-bold shadow-md rounded-lg"
+            >
+              <span className="mr-2">👤</span> Мой профиль
+            </Button>
+          </motion.div>
         </div>
       </div>
     );
@@ -530,7 +687,7 @@ export const Home = () => {
 
   // Контейнер для всей страницы с анимацией
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 pb-20">
+    <div className="flex flex-col items-center justify-center min-h-screen px-3 pb-safe">
       <AnimatePresence mode="wait">
         {showRegistration ? (
           <motion.div
@@ -539,7 +696,7 @@ export const Home = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
-            className="w-full"
+            className="w-full max-w-md"
           >
             <motion.h1
               className="text-2xl font-bold mb-6 text-center"
@@ -558,10 +715,10 @@ export const Home = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
-            className="w-full"
+            className="w-full max-w-md"
           >
             <motion.h1
-              className="text-2xl font-bold mb-4 text-center"
+              className="text-2xl font-bold mb-5 text-center bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-600 dark:from-indigo-400 dark:to-purple-500"
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
@@ -569,247 +726,21 @@ export const Home = () => {
               Анонимный чат
             </motion.h1>
 
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-6 mb-10">
               {/* Блок поиска */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
               >
-                <Card className="p-4 rounded-xl bg-white dark:bg-gray-800 border-0 shadow-md">
+                <Card className="p-4 rounded-xl bg-white dark:bg-gray-800 bg-opacity-95 backdrop-blur-sm border-0 shadow-lg">
                   {renderSearchBlock()}
                 </Card>
               </motion.div>
-
-              {/* Блок чатов - НОВЫЙ БЛОК */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.15 }}
-              >
-                <Card className="overflow-hidden border-l-4 border-cyan-500 shadow-lg bg-white bg-opacity-90 backdrop-blur-sm dark:bg-gray-800">
-                  <div className="p-5">
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 flex items-center justify-center bg-cyan-100 text-cyan-600 rounded-full mr-3 dark:bg-cyan-900 dark:text-cyan-300">
-                          💬
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-lg dark:text-white">Мои чаты</h3>
-                          <p className="text-sm text-gray-700 dark:text-gray-300">Все ваши активные и недавние беседы</p>
-                        </div>
-                      </div>
-                      <motion.div
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <AnimatedButton
-                          onClick={handleGoToChats}
-                          fullWidth
-                          className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white shadow-md"
-                          animation="pulse"
-                        >
-                          <span className="mr-2">📩</span> Перейти к чатам
-                        </AnimatedButton>
-                      </motion.div>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-
-              {/* Блок для новичков */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-              >
-                <Card className="overflow-hidden border-l-4 border-green-500 shadow-lg bg-white bg-opacity-90 backdrop-blur-sm dark:bg-gray-800">
-                  <div className="p-5">
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 flex items-center justify-center bg-green-100 text-green-600 rounded-full mr-3 dark:bg-green-900 dark:text-green-300">
-                          🤔
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-lg dark:text-white">Новичок в чате?</h3>
-                          <p className="text-sm text-gray-700 dark:text-gray-300">Узнайте, как начать успешное общение</p>
-                        </div>
-                      </div>
-                      <motion.div
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <AnimatedButton
-                          onClick={handleGoToHelp}
-                          fullWidth
-                          className="bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white shadow-md"
-                          animation="pulse"
-                        >
-                          <span className="mr-2">💡</span> Как начать общение
-                        </AnimatedButton>
-                      </motion.div>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-
-              {/* Блок групповых чатов */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-              >
-                <Card className="overflow-hidden border-l-4 border-purple-500 shadow-lg bg-white bg-opacity-90 backdrop-blur-sm dark:bg-gray-800">
-                  <div className="p-5">
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 flex items-center justify-center bg-purple-100 text-purple-600 rounded-full mr-3 dark:bg-purple-900 dark:text-purple-300">
-                          👥
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-lg dark:text-white">Групповые чаты</h3>
-                          <p className="text-sm text-gray-700 dark:text-gray-300">Присоединяйтесь к группам по интересам</p>
-                        </div>
-                      </div>
-                      <motion.div
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <AnimatedButton
-                          onClick={handleFindRandomGroup}
-                          fullWidth
-                          className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white shadow-md"
-                          animation="bounce"
-                        >
-                          <span className="mr-2">🔍</span> Найти анонимную группу
-                        </AnimatedButton>
-                      </motion.div>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-
-              {/* Блок магазина */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
-              >
-                <Card className="overflow-hidden border-l-4 border-yellow-500 shadow-lg bg-white bg-opacity-90 backdrop-blur-sm dark:bg-gray-800">
-                  <div className="p-5">
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <div className="w-10 h-10 flex items-center justify-center bg-yellow-100 text-yellow-600 rounded-full mr-3 dark:bg-yellow-900 dark:text-yellow-300">
-                            🛒
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-lg dark:text-white">Магазин</h3>
-                            <p className="text-sm text-gray-700 dark:text-gray-300">Улучшите свой опыт общения</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Баланс</p>
-                          <p className="font-bold dark:text-white">
-                            {userBalance} <span className="text-yellow-500">⭐</span>
-                          </p>
-                        </div>
-                      </div>
-                      <motion.div
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <AnimatedButton
-                          onClick={() => navigate('/direct/store')}
-                          fullWidth
-                          className="bg-gradient-to-r from-yellow-400 to-yellow-600 hover:from-yellow-500 hover:to-yellow-700 text-white shadow-md"
-                          animation="scale"
-                        >
-                          <span className="mr-2">🛒</span> Перейти в магазин
-                        </AnimatedButton>
-                      </motion.div>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-
-              {/* Блок с ботом-помощником */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.35 }}
-              >
-                <Card className="overflow-hidden border-l-4 border-blue-500 shadow-lg bg-white bg-opacity-90 backdrop-blur-sm dark:bg-gray-800">
-                  <div className="p-5">
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full mr-3 dark:bg-blue-900 dark:text-blue-300">
-                          🤖
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-lg dark:text-white">Бот-помощник</h3>
-                          <p className="text-sm text-gray-700 dark:text-gray-300">Получите помощь и ответы на вопросы</p>
-                        </div>
-                      </div>
-                      <motion.div
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <AnimatedButton
-                          onClick={handleGoToBot}
-                          fullWidth
-                          className="bg-gradient-to-r from-blue-400 to-blue-600 hover:from-blue-500 hover:to-blue-700 text-white shadow-md"
-                          animation="pulse"
-                        >
-                          <span className="mr-2">💬</span> Написать боту
-                        </AnimatedButton>
-                      </motion.div>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-
-              {/* Админ-панель (только для администраторов) */}
-              {isAdminUser && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.5 }}
-                >
-                  <Card className="overflow-hidden border-l-4 border-red-500 shadow-lg bg-white bg-opacity-90 backdrop-blur-sm dark:bg-gray-800">
-                    <div className="p-5">
-                      <div className="flex flex-col gap-4">
-                        <div className="flex items-center">
-                          <div className="w-10 h-10 flex items-center justify-center bg-red-100 text-red-600 rounded-full mr-3 dark:bg-red-900 dark:text-red-300">
-                            ⚙️
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-lg dark:text-white">Панель администратора</h3>
-                            <p className="text-sm text-gray-700 dark:text-gray-300">Управление базой данных и пользователями</p>
-                          </div>
-                        </div>
-                        <motion.div
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <AnimatedButton
-                            onClick={handleGoToAdmin}
-                            fullWidth
-                            className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white shadow-md"
-                            animation="pulse"
-                          >
-                            <span className="mr-2">⚙️</span> Панель администратора
-                          </AnimatedButton>
-                        </motion.div>
-                      </div>
-                    </div>
-                  </Card>
-                </motion.div>
-              )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
-  )
-}
+  );
+};
