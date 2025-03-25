@@ -85,24 +85,29 @@
     transition: all 0.2s ease;
 }
 
-/* Иконки унифицированы для десктопной и мобильной версий */
+/* Иконки унифицированы для всех устройств */
 .nav-button-icon {
     font-size: 24px;
-    /* Возвращаем к десктопному размеру */
-    margin-bottom: 4px;
-    /* Стандартный отступ как на десктопе */
     line-height: 1;
+    margin-bottom: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
     height: 28px;
-    /* Фиксированная высота, чтобы иконки были выровнены */
+}
+
+/* Специальные правила для эмодзи в навигации */
+.nav-button-icon {
+    /* Для лучшего отображения эмодзи */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
 }
 
 /* Текст кнопок навигации */
 .nav-button span {
     font-size: 12px;
-    /* Стандартный размер как на десктопе */
+    font-weight: 500;
     line-height: 1.2;
     max-width: 100%;
     white-space: nowrap;

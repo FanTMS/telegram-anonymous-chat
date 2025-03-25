@@ -32,7 +32,10 @@ export const NavButton: React.FC<NavButtonProps> = ({
       aria-label={label}
     >
       <div className="relative">
-        <div className="nav-button-icon">{icon}</div>
+        {/* Оптимизируем для эмодзи */}
+        <div className="nav-button-icon" role="img" aria-label={`${label} icon`}>
+          {icon}
+        </div>
         {hasNotification && (
           <motion.div
             initial={{ scale: 0 }}
