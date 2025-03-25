@@ -80,14 +80,32 @@
     justify-content: center;
     position: relative;
     width: 100%;
-    padding: 6px 8px;
+    max-width: 72px;
+    /* Ограничиваем максимальную ширину на мобильных */
+    padding: 6px 4px;
+    /* Уменьшаем горизонтальные отступы */
     text-decoration: none;
     transition: all 0.2s ease;
 }
 
 .nav-button-icon {
-    font-size: 24px;
-    margin-bottom: 4px;
+    font-size: 20px;
+    /* Уменьшаем размер иконки для мобильных */
+    margin-bottom: 2px;
+    /* Уменьшаем отступ снизу */
+    line-height: 1;
+}
+
+/* Уменьшаем размер текста для мобильных устройств */
+.nav-button span {
+    font-size: 10px;
+    /* Делаем текст меньше */
+    line-height: 1.2;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
 }
 
 /* Безопасная область для устройств с "челкой" */
@@ -104,5 +122,22 @@
 
     .pt-2.pb-20 {
         padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0));
+    }
+}
+
+/* Адаптивные правила для меню на мобильных */
+@media (max-width: 360px) {
+    .nav-button {
+        max-width: 60px;
+        /* Ещё меньше для очень узких экранов */
+        padding: 6px 2px;
+    }
+
+    .nav-button-icon {
+        font-size: 18px;
+    }
+
+    .nav-button span {
+        font-size: 9px;
     }
 }

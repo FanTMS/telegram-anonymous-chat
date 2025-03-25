@@ -297,7 +297,7 @@ export const Layout = () => {
         animate={{ y: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       >
-        <div className="flex justify-around items-center w-full max-w-lg mx-auto">
+        <div className="flex justify-around items-center w-full max-w-md mx-auto">
           <NavButton
             to="/"
             icon="🏠"

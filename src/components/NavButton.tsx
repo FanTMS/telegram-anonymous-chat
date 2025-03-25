@@ -29,6 +29,7 @@ export const NavButton: React.FC<NavButtonProps> = ({
       to={to}
       onClick={onClick}
       className={`nav-button ${activeClasses}`}
+      aria-label={label}
     >
       <div className="relative">
         <div className="nav-button-icon">{icon}</div>
@@ -36,7 +37,7 @@ export const NavButton: React.FC<NavButtonProps> = ({
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="nav-notification-badge"
+            className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"
           />
         )}
       </div>
@@ -45,7 +46,7 @@ export const NavButton: React.FC<NavButtonProps> = ({
         <motion.div
           layoutId="navbar-indicator"
           className="absolute top-0 left-0 right-0 h-1 bg-blue-500 dark:bg-blue-400 rounded-b"
-          style={{ width: '50%', left: '25%', top: '-1px' }}
+          style={{ width: '40%', left: '30%', top: '-1px' }}
           transition={{ type: 'spring', stiffness: 500, damping: 30 }}
         />
       )}
