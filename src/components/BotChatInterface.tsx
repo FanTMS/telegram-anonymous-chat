@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { Button } from './Button'
-import { Card } from './Card'
-import { Input } from './Input'
+import { motion, AnimatePresence } from 'framer-motion'
 import WebApp from '@twa-dev/sdk'
+import '../styles/bot-chat.css'
 
 // Типы сообщений в чате
 type MessageType = 'user' | 'bot' | 'system'
@@ -35,46 +34,18 @@ export const BotChatInterface = ({
   const [newMessage, setNewMessage] = useState('')
   const [isTyping, setIsTyping] = useState(showTypingIndicator)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const [expandedInput, setExpandedInput] = useState(false)
   const isDarkTheme = WebApp.colorScheme === 'dark'
 
   // Прокрутка вниз при добавлении новых сообщений
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages, isTyping])
 
   // Прокрутка к последнему сообщению
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
-  // Симуляция ответа бота
-  const simulateBotResponse = (userMessage: string) => {
-    // Индикатор набора текста
-    setIsTyping(true)
-
-    // Имитируем задержку ответа
-    setTimeout(() => {
-      setIsTyping(false)
-
-      // Простая логика ответов
-      let botReply = ''
-      const lowerMessage = userMessage.toLowerCase()
-
-      if (lowerMessage.includes('привет')) {
-        botReply = 'Привет! Чем я могу помочь?'
-      } else if (lowerMessage.includes('помощь')) {
-        botReply = 'Вот команды, которые я понимаю: /start - начать чат, /help - помощь, /find - найти собеседника, /profile - просмотреть профиль.'
-      } else if (lowerMessage.includes('собеседник') || lowerMessage.includes('найти')) {
-        botReply = 'Ищу подходящего собеседника... Пожалуйста, подождите.'
-      } else if (lowerMessage.includes('профиль')) {
-        botReply = 'Ваш профиль: Имя - Демо Пользователь, Рейтинг - 4.5⭐'
-      } else {
-        botReply = 'Извините, я не понимаю. Напишите "помощь" для получения списка команд.'
-      }
-
-      // Добавляем ответ бота
-      addMessage('bot', botReply)
-    }, 1000)
   }
 
   // Добавление нового сообщения
@@ -88,9 +59,24 @@ export const BotChatInterface = ({
     setMessages(prev => [...prev, newMsg])
   }
 
+  // Обработка авторесайза текстового поля
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto'
+      const scrollHeight = inputRef.current.scrollHeight
+      inputRef.current.style.height =
+        scrollHeight > 120 ? '120px' : `${scrollHeight}px`
+    }
+  }, [newMessage])
+
   // Обработчик отправки сообщения
   const handleSendMessage = () => {
     if (newMessage.trim() === '') return
+
+    // Обеспечиваем тактильную обратную связь при отправке
+    if (WebApp && WebApp.isExpanded && WebApp.HapticFeedback) {
+      WebApp.HapticFeedback.impactOccurred('light')
+    }
 
     // Добавляем сообщение пользователя
     addMessage('user', newMessage)
@@ -98,143 +84,147 @@ export const BotChatInterface = ({
     // Вызываем внешний обработчик, если он есть
     if (onSendMessage) {
       onSendMessage(newMessage)
-    } else {
-      // Иначе используем внутреннюю логику
-      simulateBotResponse(newMessage)
     }
 
     // Очищаем поле ввода
     setNewMessage('')
-  }
 
-  // Обработчик выбора предложенной команды
-  const handleSuggestedCommand = (command: string) => {
-    setNewMessage(command)
-  }
-
-  // Обработчик нажатия Enter в поле ввода
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSendMessage()
+    // Сбрасываем размер поля ввода
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto'
+      setExpandedInput(false)
     }
   }
 
-  // Форматирование времени
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp)
-    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+  // Обработчик нажатия на команду
+  const handleCommandClick = (command: string) => {
+    setNewMessage(command)
+    if (inputRef.current) {
+      inputRef.current.focus()
+    }
+
+    // Тактильная обратная связь
+    if (WebApp && WebApp.isExpanded && WebApp.HapticFeedback) {
+      WebApp.HapticFeedback.impactOccurred('light')
+    }
   }
 
   return (
-    <div className={`flex flex-col ${className}`}>
-      {/* Заголовок чата */}
-      <div className="bg-blue-500 text-white p-3 rounded-t-lg flex justify-between items-center">
-        <div className="flex items-center">
-          <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-500 mr-2">
-            🤖
-          </div>
-          <div>
-            <h3 className="font-medium">Чат-бот</h3>
-            <p className="text-xs opacity-80">{isTyping ? 'печатает...' : 'онлайн'}</p>
-          </div>
+    <div className={`bot-chat-container ${className}`}>
+      {/* Сообщения */}
+      <div className="bot-messages-container">
+        <AnimatePresence>
+          {messages.map(message => (
+            <motion.div
+              key={message.id}
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3, type: 'spring', stiffness: 350, damping: 25 }}
+              className={`bot-message ${message.type}-message`}
+            >
+              {message.type === 'bot' && (
+                <div className="bot-avatar">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    strokeLinecap="round" strokeLinejoin="round" className="bot-avatar-icon">
+                    <path d="M12 2a2 2 0 0 1 2 2v8a2 2 0 1 1-4 0V4a2 2 0 0 1 2-2z"></path>
+                    <path d="M18.59 10.59 20 9.17a2 2 0 1 0-2.83-2.83l-1.41 1.41"></path>
+                    <path d="m5.41 10.59-1.41-1.42a2 2 0 0 0-2.83 2.83L2.59 13.4"></path>
+                    <rect x="8" y="14" width="8" height="6" rx="1"></rect>
+                  </svg>
+                </div>
+              )}
+              <div className="bot-message-content">
+                <div className="bot-message-text">{message.text}</div>
+                <div className="bot-message-time">
+                  {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
+        {/* Индикатор печати */}
+        <AnimatePresence>
+          {isTyping && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="bot-typing-indicator"
+            >
+              <div className="bot-avatar">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                  strokeLinecap="round" strokeLinejoin="round" className="bot-avatar-icon">
+                  <path d="M12 2a2 2 0 0 1 2 2v8a2 2 0 1 1-4 0V4a2 2 0 0 1 2-2z"></path>
+                  <path d="M18.59 10.59 20 9.17a2 2 0 1 0-2.83-2.83l-1.41 1.41"></path>
+                  <path d="m5.41 10.59-1.41-1.42a2 2 0 0 0-2.83 2.83L2.59 13.4"></path>
+                  <rect x="8" y="14" width="8" height="6" rx="1"></rect>
+                </svg>
+              </div>
+              <div className="typing-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Референс для автоскролла */}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Подсказки с командами */}
+      <div className="bot-commands-container">
+        <div className="bot-commands-scroll">
+          <AnimatePresence>
+            {suggestedCommands.map((command, index) => (
+              <motion.button
+                key={command}
+                onClick={() => handleCommandClick(command)}
+                className="bot-command-chip"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.1, duration: 0.3 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                {command}
+              </motion.button>
+            ))}
+          </AnimatePresence>
         </div>
       </div>
 
-      {/* Область сообщений */}
-      <Card className="flex-grow overflow-y-auto p-0 max-h-96">
-        <div className="flex flex-col p-3 overflow-y-auto h-full">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full py-10 text-gray-500">
-              <div className="text-3xl mb-3">👋</div>
-              <p>Напишите что-нибудь, чтобы начать диалог</p>
-            </div>
-          ) : (
-            messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`mb-3 ${
-                  msg.type === 'user' ? 'self-end' : 'self-start'
-                } max-w-[80%]`}
-              >
-                <div
-                  className={`p-3 rounded-lg ${
-                    msg.type === 'user'
-                      ? 'bg-blue-500 text-white'
-                      : msg.type === 'system'
-                      ? 'bg-gray-200 text-gray-800'
-                      : isDarkTheme
-                      ? 'bg-gray-700 text-white'
-                      : 'bg-gray-200 text-gray-800'
-                  }`}
-                >
-                  <p>{msg.text}</p>
-                  <div
-                    className={`text-xs mt-1 ${
-                      msg.type === 'user' ? 'text-blue-100' : 'text-gray-500'
-                    }`}
-                  >
-                    {formatTime(msg.timestamp)}
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-
-          {isTyping && (
-            <div className="self-start max-w-[80%] mb-3">
-              <div className={`p-3 rounded-lg ${isDarkTheme ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-      </Card>
-
-      {/* Предложенные команды */}
-      {suggestedCommands.length > 0 && (
-        <div className="flex overflow-x-auto py-2 space-x-2">
-          {suggestedCommands.map((command, index) => (
-            <Button
-              key={index}
-              variant="outline"
-              onClick={() => handleSuggestedCommand(command)}
-              className="whitespace-nowrap"
-            >
-              {command}
-            </Button>
-          ))}
-        </div>
-      )}
-
-      {/* Поле ввода и кнопка отправки */}
-      <div className="flex gap-2 mt-3">
-        <Input
+      {/* Поле ввода сообщения */}
+      <div className="bot-input-container">
+        <textarea
+          ref={inputRef}
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
+          onFocus={() => setExpandedInput(true)}
+          onBlur={() => setExpandedInput(newMessage.length > 0)}
           placeholder="Введите сообщение..."
-          fullWidth
+          className={`bot-input ${expandedInput ? 'expanded' : ''}`}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              handleSendMessage()
+            }
+          }}
         />
-        <Button
+        <button
           onClick={handleSendMessage}
-          disabled={newMessage.trim() === ''}
-          className="bg-blue-500 hover:bg-blue-600"
+          disabled={!newMessage.trim()}
+          className={`bot-send-button ${!newMessage.trim() ? 'disabled' : ''}`}
+          aria-label="Отправить сообщение"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            className="w-5 h-5"
-          >
-            <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round" className="send-icon">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
           </svg>
-        </Button>
+        </button>
       </div>
     </div>
   )

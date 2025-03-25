@@ -1,128 +1,60 @@
-import React, { createContext, useState, useEffect } from 'react'
+import React from 'react'
 import ReactDOM from 'react-dom/client'
-import './index.css'
-import WebApp from '@twa-dev/sdk'
-import { isAdmin, getUsers } from './utils/user'
-import { db, telegramApi } from './utils/database'
-import { prepareForProduction } from './utils/cleanup'
-import App from './App'
+import { RouterProvider, createBrowserRouter } from 'react-router-dom'
+import { routes } from './routes'
 import { NotificationProvider } from './components/NotificationProvider'
+import WebApp from '@twa-dev/sdk'
+import './index.css'
+import './styles/index.css'
+import './styles/chat.css'  // Добавляем импорт стилей для чата
+import './styles/bot-chat.css'  // Добавляем импорт стилей для чат-бота
 
-// Типы тем
-export type Theme = 'light' | 'dark' | 'system'
-
-// Функция для получения системной темы
-export const getSystemTheme = (): 'light' | 'dark' => {
-  try {
-    if (WebApp && WebApp.colorScheme) {
-      return WebApp.colorScheme as 'light' | 'dark'
-    }
-  } catch (error) {
-    console.error('Error accessing WebApp:', error)
-  }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
-
-// Создаем контекст для темы
-export const ThemeContext = createContext<{
-  theme: Theme;
-  currentTheme: 'light' | 'dark';
-  changeTheme: (theme: Theme) => void;
-}>({
-  theme: 'system',
-  currentTheme: 'light',
-  changeTheme: () => { }
-})
-
-// Компонент-провайдер для темы
-const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Получаем сохраненную тему или используем системную
-  const getSavedTheme = (): Theme => {
-    try {
-      const saved = localStorage.getItem('app_theme')
-      return (saved as Theme) || 'system'
-    } catch (e) {
-      return 'system'
-    }
-  }
-
-  const [theme, setTheme] = useState<Theme>(getSavedTheme())
-  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>(
-    theme === 'system' ? getSystemTheme() : theme as 'light' | 'dark'
-  )
-
-  // Применяет тему к документу
-  const applyTheme = (newTheme: 'light' | 'dark') => {
-    if (newTheme === 'dark') {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
-    setCurrentTheme(newTheme)
-  }
-
-  // Обновляет тему и сохраняет выбор пользователя
-  const changeTheme = (newTheme: Theme) => {
-    setTheme(newTheme)
-    try {
-      localStorage.setItem('app_theme', newTheme)
-    } catch (e) {
-      console.error('Failed to save theme setting', e)
-    }
-
-    if (newTheme === 'system') {
-      applyTheme(getSystemTheme())
-    } else {
-      applyTheme(newTheme as 'light' | 'dark')
-    }
-  }
-
-  // Применяем тему при загрузке компонента и слушаем изменения системной темы
-  useEffect(() => {
-    // При инициализации применяем текущую тему
-    if (theme === 'system') {
-      applyTheme(getSystemTheme())
-    } else {
-      applyTheme(theme as 'light' | 'dark')
-    }
-
-    // Добавляем слушатель изменения системной темы
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-
-    const handleChange = () => {
-      if (theme === 'system') {
-        applyTheme(getSystemTheme())
-      }
-    }
-
-    // Современный метод (для новых браузеров)
-    mediaQuery.addEventListener('change', handleChange)
-
-    // Убираем слушатель при размонтировании
-    return () => mediaQuery.removeEventListener('change', handleChange)
-  }, [theme])
-
-  return (
-    <ThemeContext.Provider value={{ theme, currentTheme, changeTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  )
-}
-
-// Инициализация Telegram API в тихом режиме
+// Инициализация WebApp и адаптация цветовой схемы
 try {
-  telegramApi.initialize().catch(err => {
-    console.error('Telegram API initialization error (non-critical)', err)
-  })
-} catch (error) {
-  console.error('Failed to initialize Telegram API', error)
+  WebApp.ready();
+
+  // Установка цветовой схемы
+  if (WebApp.colorScheme === 'dark') {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+} catch (e) {
+  console.warn('Cannot initialize Telegram WebApp:', e);
+
+  // Если не в Telegram, определяем цветовую схему системы
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
 }
 
-// Рендерим приложение с обоими провайдерами
+// Устанавливаем переменные RGB для корректной работы прозрачности
+document.documentElement.style.setProperty(
+  '--tg-theme-bg-color-rgb',
+  WebApp.themeParams?.bg_color
+    ? hexToRgb(WebApp.themeParams.bg_color)
+    : '255, 255, 255'
+);
+
+// Функция преобразования hex цвета в RGB строку
+function hexToRgb(hex: string): string {
+  const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+  const longHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
+
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(longHex);
+  if (!result) return '255, 255, 255';
+
+  return `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`;
+}
+
+const router = createBrowserRouter(routes);
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <ThemeProvider>
+  <React.StrictMode>
     <NotificationProvider>
-      <App />
+      <RouterProvider router={router} />
     </NotificationProvider>
-  </ThemeProvider>
+  </React.StrictMode>
 )

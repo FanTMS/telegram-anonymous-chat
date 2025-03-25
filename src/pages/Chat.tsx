@@ -10,6 +10,7 @@ import { markChatNotificationAsRead } from '../utils/matchmaking'
 import { sendFriendRequest } from '../utils/friends'
 import { sendGameRequest, acceptGameRequest, rejectGameRequest, getGameRequestForChat, makeGameChoice, getActiveGameForChat, GameChoice } from '../utils/games'
 import { useNotifications } from '../utils/notifications'
+import WebApp from '@twa-dev/sdk'
 
 export const Chat = () => {
   const { id: chatId } = useParams<{ id: string }>()
@@ -30,6 +31,8 @@ export const Chat = () => {
   const [partnerId, setPartnerId] = useState<string | null>(null)
   const [gameResult, setGameResult] = useState<any>(null)
   const [friendRequestSent, setFriendRequestSent] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false) // Индикатор печати
 
   // Функция для загрузки данных чата
   const loadChatData = async () => {
@@ -80,21 +83,11 @@ export const Chat = () => {
       const gameRequest = getGameRequestForChat(targetChatId);
       const game = getActiveGameForChat(targetChatId);
 
-      // Определяем, является ли запрос входящим или исходящим
-      if (gameRequest && gameRequest.status === 'pending') {
-        if (gameRequest.toUserId === currentUser.id) {
-          setHasIncomingGameRequest(true);
-        } else if (gameRequest.fromUserId === currentUser.id) {
-          setHasOutgoingGameRequest(true);
-        }
-      }
-
-      // Если есть активная игра, показываем интерфейс игры
       if (game && !game.isCompleted) {
         setActiveGame(game);
         setShowGameInterface(true);
 
-        // Проверяем, сделал ли уже пользователь выбор
+        // Проверяем, выбрал ли уже пользователь свой ход
         if (game.player1Id === currentUser.id && game.player1Choice) {
           setGameChoice(game.player1Choice);
         } else if (game.player2Id === currentUser.id && game.player2Choice) {
@@ -164,6 +157,32 @@ export const Chat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Настройка WebApp
+  useEffect(() => {
+    try {
+      if (WebApp && WebApp.isExpanded) {
+        WebApp.BackButton.show();
+        WebApp.BackButton.onClick(() => navigate(-1));
+
+        // Отключаем MainButton, так как у нас собственная кнопка отправки
+        WebApp.MainButton.hide();
+      }
+    } catch (error) {
+      console.error('Ошибка при настройке Telegram WebApp:', error);
+    }
+
+    return () => {
+      try {
+        if (WebApp && WebApp.isExpanded) {
+          WebApp.BackButton.offClick(() => navigate(-1));
+          WebApp.BackButton.hide();
+        }
+      } catch (error) {
+        console.error('Ошибка при очистке Telegram WebApp:', error);
+      }
+    };
+  }, [navigate]);
+
   // Отправка сообщения
   const handleSendMessage = () => {
     if (!currentMessage.trim() || !chat) return
@@ -171,411 +190,334 @@ export const Chat = () => {
     const currentUser = getCurrentUser()
     if (!currentUser) return
 
-    // Отправляем реальное сообщение
-    const sentMessage = sendMessage(chat.id, currentUser.id, currentMessage)
-    if (sentMessage) {
-      // Обновляем список сообщений
-      setMessages(prev => [...prev, sentMessage])
-    }
+    try {
+      // Обеспечиваем тактильную обратную связь
+      if (WebApp && WebApp.isExpanded && WebApp.HapticFeedback) {
+        WebApp.HapticFeedback.impactOccurred('light');
+      }
 
-    // Очищаем поле ввода
-    setCurrentMessage('')
+      // Отправляем реальное сообщение
+      const sentMessage = sendMessage(chat.id, currentUser.id, currentMessage)
+      if (sentMessage) {
+        // Обновляем список сообщений
+        setMessages(prev => [...prev, sentMessage])
+
+        // Очищаем поле ввода
+        setCurrentMessage('')
+
+        // Прокручиваем к новому сообщению
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }, 100)
+      }
+    } catch (error) {
+      console.error('Ошибка при отправке сообщения:', error)
+      showError('Не удалось отправить сообщение')
+    }
   }
 
   // Завершение чата
   const handleEndChat = () => {
-    if (!chat) {
-      navigate('/');
-      return;
-    }
+    if (!chat || !chat.id) return
 
     try {
-      console.log(`Завершаем чат ${chat.id}...`);
-      const result = endChat(chat.id);
+      // Показываем подтверждение
+      WebApp.showConfirm(
+        'Вы уверены, что хотите завершить чат?',
+        (confirmed) => {
+          if (confirmed) {
+            const success = endChat(chat.id)
+            if (success) {
+              showSuccess('Чат завершен')
 
-      if (result) {
-        console.log(`Чат ${chat.id} успешно завершен`);
-        showSuccess('Чат успешно завершен');
+              // Обеспечиваем тактильную обратную связь
+              if (WebApp && WebApp.isExpanded && WebApp.HapticFeedback) {
+                WebApp.HapticFeedback.notificationOccurred('success');
+              }
 
-        // Обновляем локальное состояние
-        setChat({ ...chat, isActive: false, endedAt: Date.now() });
-      } else {
-        console.error(`Не удалось завершить чат ${chat.id}`);
-        showError('Не удалось завершить чат');
-      }
-    } catch (error) {
-      console.error('Ошибка при завершении чата:', error);
-      showError('Произошла ошибка при завершении чата');
-    }
-  };
-
-  // Добавление собеседника в друзья
-  const handleAddFriend = () => {
-    if (!partnerId || !chat) return;
-
-    try {
-      const result = sendFriendRequest(partnerId, chat.id);
-
-      if (result) {
-        showSuccess('Запрос на добавление в друзья отправлен');
-        setFriendRequestSent(true);
-      } else {
-        showError('Не удалось отправить запрос на добавление в друзья');
-      }
-    } catch (error) {
-      console.error('Ошибка при отправке запроса на добавление в друзья:', error);
-      showError('Произошла ошибка при отправке запроса на добавление в друзья');
-    }
-  };
-
-  // Предложение сыграть в игру
-  const handleGameRequest = () => {
-    if (!partnerId || !chat) return;
-
-    try {
-      const result = sendGameRequest(partnerId, chat.id);
-
-      if (result) {
-        showSuccess('Приглашение в игру отправлено');
-        setHasOutgoingGameRequest(true);
-      } else {
-        showError('Не удалось отправить приглашение в игру');
-      }
-    } catch (error) {
-      console.error('Ошибка при отправке приглашения в игру:', error);
-      showError('Произошла ошибка при отправке приглашения в игру');
-    }
-  };
-
-  // Принятие запроса на игру
-  const handleAcceptGame = () => {
-    if (!chat) return;
-
-    const gameRequest = getGameRequestForChat(chat.id);
-    if (!gameRequest) return;
-
-    try {
-      const result = acceptGameRequest(gameRequest.id);
-
-      if (result) {
-        showSuccess('Вы приняли приглашение в игру');
-        setHasIncomingGameRequest(false);
-        setShowGameInterface(true);
-
-        // Загружаем активную игру
-        const game = getActiveGameForChat(chat.id);
-        if (game) {
-          setActiveGame(game);
+              navigate('/chats')
+            } else {
+              showError('Не удалось завершить чат')
+            }
+          }
         }
-      } else {
-        showError('Не удалось принять приглашение в игру');
-      }
+      );
     } catch (error) {
-      console.error('Ошибка при принятии приглашения в игру:', error);
-      showError('Произошла ошибка при принятии приглашения в игру');
-    }
-  };
-
-  // Отклонение запроса на игру
-  const handleRejectGame = () => {
-    if (!chat) return;
-
-    const gameRequest = getGameRequestForChat(chat.id);
-    if (!gameRequest) return;
-
-    try {
-      const result = rejectGameRequest(gameRequest.id);
-
-      if (result) {
-        showInfo('Вы отклонили приглашение в игру');
-        setHasIncomingGameRequest(false);
-      } else {
-        showError('Не удалось отклонить приглашение в игру');
+      // Если WebApp.showConfirm не поддерживается, используем стандартное подтверждение
+      if (window.confirm('Вы уверены, что хотите завершить чат?')) {
+        const success = endChat(chat.id)
+        if (success) {
+          showSuccess('Чат завершен')
+          navigate('/chats')
+        } else {
+          showError('Не удалось завершить чат')
+        }
       }
-    } catch (error) {
-      console.error('Ошибка при отклонении приглашения в игру:', error);
-      showError('Произошла ошибка при отклонении приглашения в игру');
-    }
-  };
-
-  // Выбор в игре (камень, ножницы или бумага)
-  const handleGameChoice = (choice: GameChoice) => {
-    if (!chat || !activeGame) return;
-
-    const currentUser = getCurrentUser();
-    if (!currentUser) return;
-
-    try {
-      const result = makeGameChoice(chat.id, currentUser.id, choice);
-
-      if (result) {
-        setGameChoice(choice);
-        showInfo(`Вы выбрали: ${choiceToRussian(choice)}`);
-      } else {
-        showError('Не удалось сделать выбор в игре');
-      }
-    } catch (error) {
-      console.error('Ошибка при выборе в игре:', error);
-      showError('Произошла ошибка при выборе в игре');
-    }
-  };
-
-  // Перевод выбора на русский
-  const choiceToRussian = (choice: GameChoice): string => {
-    switch (choice) {
-      case 'rock': return 'Камень';
-      case 'paper': return 'Бумага';
-      case 'scissors': return 'Ножницы';
-    }
-  };
-
-  // Обработчик нажатия Enter для отправки сообщения
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
     }
   }
 
-  // Рендеринг интерфейса игры
-  const renderGameInterface = () => {
-    if (!showGameInterface) return null;
+  // Отправка запроса в друзья
+  const handleAddFriend = () => {
+    if (!partnerId || friendRequestSent || !chat || !chat.id) return
 
-    const currentUser = getCurrentUser();
-    if (!currentUser || !activeGame) return null;
+    const currentUser = getCurrentUser()
+    if (!currentUser) return
 
-    // Определяем, сделал ли уже пользователь выбор
-    const hasChosen = gameChoice !== null;
+    try {
+      // Обеспечиваем тактильную обратную связь
+      if (WebApp && WebApp.isExpanded && WebApp.HapticFeedback) {
+        WebApp.HapticFeedback.impactOccurred('medium');
+      }
 
-    // Определяем, сделал ли выбор оппонент
-    const isUserPlayer1 = currentUser.id === activeGame.player1Id;
-    const opponentChoice = isUserPlayer1 ? activeGame.player2Choice : activeGame.player1Choice;
-    const opponentHasChosen = opponentChoice !== undefined;
+      // Обновляем состояние чата с флагом friendRequestSent
+      const updatedChat = { ...chat, friendRequestSent: true };
 
-    return (
-      <Card className="p-4 mb-4">
-        <h3 className="text-lg font-semibold mb-2">Игра "Камень-ножницы-бумага"</h3>
-        {hasChosen ? (
-          <div className="text-center mb-3">
-            <p>Ваш выбор: <strong>{choiceToRussian(gameChoice)}</strong></p>
-            {opponentHasChosen ? (
-              <p>Ожидаем результаты...</p>
-            ) : (
-              <p>Ожидаем выбор соперника...</p>
-            )}
-          </div>
-        ) : (
-          <div>
-            <p className="mb-3">Сделайте ваш выбор:</p>
-            <div className="flex justify-center gap-3">
-              <Button onClick={() => handleGameChoice('rock')}>Камень 🪨</Button>
-              <Button onClick={() => handleGameChoice('scissors')}>Ножницы ✂️</Button>
-              <Button onClick={() => handleGameChoice('paper')}>Бумага 📄</Button>
-            </div>
-          </div>
-        )}
-      </Card>
-    );
-  };
+      // Добавляем системное сообщение
+      const systemMessage = addSystemMessage(chat.id, `${currentUser.name} отправил запрос в друзья.`);
 
-  // Рендеринг запросов на игру
-  const renderGameRequests = () => {
-    if (hasIncomingGameRequest) {
-      return (
-        <Card className="p-4 mb-4 border-l-4 border-blue-500">
-          <div className="flex flex-col items-center">
-            <p className="mb-3">{partnerName} приглашает вас сыграть в "Камень-ножницы-бумага"</p>
-            <div className="flex gap-3">
-              <Button onClick={handleAcceptGame} variant="primary">Принять</Button>
-              <Button onClick={handleRejectGame} variant="outline">Отклонить</Button>
-            </div>
-          </div>
-        </Card>
-      );
+      // Создаем или обновляем запрос в друзья в локальном хранилище
+      const friendRequests = JSON.parse(localStorage.getItem('friend_requests') || '[]');
+      friendRequests.push({
+        id: `fr_${Date.now()}`,
+        fromUserId: currentUser.id,
+        toUserId: partnerId,
+        chatId: chat.id,
+        status: 'pending',
+        timestamp: Date.now()
+      });
+
+      localStorage.setItem('friend_requests', JSON.stringify(friendRequests));
+
+      // Обновляем состояние в localStorage
+      const allChats = JSON.parse(localStorage.getItem('chats') || '[]');
+      const chatIndex = allChats.findIndex((c: any) => c.id === chat.id);
+
+      if (chatIndex !== -1) {
+        allChats[chatIndex].friendRequestSent = true;
+        localStorage.setItem('chats', JSON.stringify(allChats));
+
+        // Обновляем состояние в компоненте
+        setChat(updatedChat);
+        setFriendRequestSent(true);
+
+        // Обновляем список сообщений, если было добавлено системное сообщение
+        if (systemMessage) {
+          setMessages(prev => [...prev, systemMessage]);
+        }
+
+        showSuccess('Запрос в друзья отправлен');
+      } else {
+        showError('Не удалось найти чат в хранилище');
+      }
+    } catch (error) {
+      console.error('Ошибка при отправке запроса в друзья:', error);
+      showError('Произошла ошибка при отправке запроса в друзья');
     }
+  }
 
-    if (hasOutgoingGameRequest) {
-      return (
-        <Card className="p-4 mb-4 border-l-4 border-yellow-500">
-          <p className="text-center">Вы отправили приглашение в игру. Ожидаем ответ...</p>
-        </Card>
-      );
-    }
+  // Обработчик выбора эмодзи
+  const handleEmojiSelect = (emoji: string) => {
+    setCurrentMessage(prev => prev + emoji);
+    setShowEmojiPicker(false);
+  }
 
-    return null;
-  };
-
-  // Статусный бар чата
-  const renderChatStatus = () => {
-    const statusClassName = chat?.isActive
-      ? "bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200"
-      : "bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200";
-
+  // Показываем индикатор загрузки
+  if (isLoading) {
     return (
-      <div className={`text-center p-2 mb-4 rounded ${statusClassName}`}>
-        {chat?.isActive ? (
-          <p>Чат активен</p>
-        ) : (
-          <p>Чат завершен {chat?.endedAt ? new Date(chat.endedAt).toLocaleString() : ''}</p>
-        )}
+      <div className="h-screen flex items-center justify-center">
+        <div className="loading-spinner"></div>
       </div>
-    );
-  };
+    )
+  }
+
+  // Показываем сообщение об ошибке
+  if (error) {
+    return (
+      <Card className="p-4 m-2">
+        <div className="text-center text-red-500 my-4">{error}</div>
+        <Button onClick={() => navigate(-1)} className="w-full">Вернуться назад</Button>
+      </Card>
+    )
+  }
+
+  // Если чат не найден
+  if (!chat) {
+    return (
+      <Card className="p-4 m-2">
+        <div className="text-center my-4">Чат не найден</div>
+        <Button onClick={() => navigate(-1)} className="w-full">Вернуться назад</Button>
+      </Card>
+    )
+  }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)]">
-      {/* Заголовок чата */}
-      <div className="flex justify-between items-center mb-4 sticky top-0 bg-white dark:bg-gray-900 p-3 rounded-lg shadow-sm z-10">
+    <div className="chat-container flex flex-col h-[calc(100vh-80px)]">
+      {/* Header чата */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="chat-header bg-white dark:bg-gray-900 border-b dark:border-gray-800 p-3 flex items-center justify-between sticky top-0 z-10 backdrop-blur-md bg-opacity-80 dark:bg-opacity-80"
+      >
         <div className="flex items-center">
           <button
-            onClick={() => navigate('/chats')}
-            className="mr-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            onClick={() => navigate(-1)}
+            className="mr-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
           >
-            ←
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
           </button>
-          <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold mr-3">
-            {partnerName.charAt(0).toUpperCase()}
-          </div>
           <div>
-            <h2 className="font-semibold">{partnerName}</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {chat?.isActive ? 'В сети' : 'Не в сети'}
-            </p>
+            <div className="font-medium text-base">{partnerName}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              {chat.isActive ? 'В сети' : 'Был(а) недавно'}
+            </div>
           </div>
         </div>
-
-        <div className="flex gap-2">
-          {!friendRequestSent && chat?.isActive && (
-            <Button
-              variant="outline"
+        <div className="flex space-x-2">
+          {!friendRequestSent && (
+            <button
               onClick={handleAddFriend}
-              className="text-blue-500 border-blue-300"
-              size="small"
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+              title="Добавить в друзья"
             >
-              <span className="mr-1">👥</span> В друзья
-            </Button>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+            </button>
           )}
-
-          {chat?.isActive && !hasOutgoingGameRequest && !hasIncomingGameRequest && !showGameInterface && (
-            <Button
-              variant="outline"
-              onClick={handleGameRequest}
-              className="text-purple-500 border-purple-300"
-              size="small"
-            >
-              <span className="mr-1">🎮</span> Игра
-            </Button>
-          )}
-
-          {chat?.isActive && (
-            <Button
-              variant="outline"
-              onClick={handleEndChat}
-              className="text-red-500 border-red-300"
-              size="small"
-            >
-              Завершить
-            </Button>
-          )}
+          <button
+            onClick={handleEndChat}
+            className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+            title="Завершить чат"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-      </div>
+      </motion.div>
 
-      {isLoading ? (
-        <Card className="flex-1 flex items-center justify-center">
-          <div className="animate-spin mr-2">⏳</div>
-          <p>Загрузка чата...</p>
-        </Card>
-      ) : error ? (
-        <Card className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <p className="text-red-500 mb-3">{error}</p>
-            <Button onClick={() => navigate('/')}>Вернуться на главную</Button>
-          </div>
-        </Card>
-      ) : (
-        <>
-          {/* Статус чата */}
-          {renderChatStatus()}
+      {/* Сообщения чата */}
+      <motion.div
+        className="messages-container flex-1 overflow-y-auto p-3 pb-16 bg-gray-50 dark:bg-gray-900"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+      >
+        <AnimatePresence initial={false}>
+          {messages.map((message, index) => (
+            <MessageItem
+              key={message.id}
+              message={message}
+              isCurrentUser={message.senderId === getCurrentUser()?.id}
+              isSystemMessage={message.isSystem}
+              showAvatar={
+                index === 0 ||
+                (messages[index - 1] && messages[index - 1].senderId !== message.senderId)
+              }
+              animate={true}
+            />
+          ))}
+        </AnimatePresence>
 
-          {/* Запросы на игру */}
-          {renderGameRequests()}
+        {/* Индикатор "Печатает..." */}
+        {isPartnerTyping && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="typing-indicator text-xs text-gray-500 dark:text-gray-400 ml-12 mb-2"
+          >
+            {partnerName} печатает...
+          </motion.div>
+        )}
 
-          {/* Интерфейс игры */}
-          {renderGameInterface()}
-
-          {/* Область сообщений */}
-          <div className="flex-1 overflow-y-auto mb-4 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            {messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
-                <p className="text-center">Начните общение прямо сейчас!</p>
-              </div>
-            ) : (
-              <AnimatePresence>
-                {messages.map(message => {
-                  const currentUser = getCurrentUser()
-                  const isOutgoing = currentUser && message.senderId === currentUser.id
-
-                  // Проверяем, является ли сообщение системным
-                  if (message.isSystem) {
-                    return (
-                      <div key={message.id} className="text-center my-2">
-                        <span className="inline-block bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-3 py-1 rounded-full text-xs">
-                          {message.text}
-                        </span>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <MessageItem
-                      key={message.id}
-                      text={message.text}
-                      timestamp={message.timestamp}
-                      isOutgoing={isOutgoing}
-                      isRead={message.isRead}
-                    />
-                  );
-                })}
-              </AnimatePresence>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Форма отправки сообщений (только для активных чатов) */}
-          {chat?.isActive ? (
-            <div className="p-2 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-              <div className="flex gap-2">
-                <textarea
-                  className="flex-1 p-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Введите сообщение..."
-                  value={currentMessage}
-                  onChange={e => setCurrentMessage(e.target.value)}
-                  onKeyDown={handleKeyPress}
-                  rows={2}
-                />
-                <Button
-                  onClick={handleSendMessage}
-                  disabled={!currentMessage.trim()}
-                  className="self-end"
+        {/* Игровой интерфейс */}
+        {showGameInterface && activeGame && (
+          <div className="game-interface bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md my-4">
+            <h3 className="text-center font-medium mb-2">Игра "Камень-ножницы-бумага"</h3>
+            <div className="flex justify-center space-x-4 my-3">
+              {['rock', 'paper', 'scissors'].map((choice) => (
+                <button
+                  key={choice}
+                  onClick={() => makeGameChoice(activeGame.chatId, getCurrentUser()?.id || '', choice as GameChoice)}
+                  disabled={!!gameChoice}
+                  className={`game-choice-btn ${gameChoice === choice ? 'active' : ''}`}
                 >
-                  Отправить
-                </Button>
-              </div>
+                  {choice === 'rock' ? '🪨' : choice === 'paper' ? '📄' : '✂️'}
+                </button>
+              ))}
             </div>
-          ) : (
-            <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg text-center">
-              <p className="text-gray-500 dark:text-gray-400">Чат завершен. Вы не можете отправлять сообщения.</p>
-              <Button
-                onClick={() => navigate('/chats')}
-                variant="secondary"
-                className="mt-2"
-              >
-                Вернуться к списку чатов
-              </Button>
+            {gameChoice && <p className="text-center text-sm text-gray-600 dark:text-gray-400">Ожидаем выбор соперника...</p>}
+          </div>
+        )}
+
+        {/* Референс для прокрутки к последнему сообщению */}
+        <div ref={messagesEndRef}></div>
+      </motion.div>
+
+      {/* Интерфейс ввода сообщения */}
+      <motion.div
+        className="message-input-container sticky bottom-0 bg-white dark:bg-gray-900 border-t dark:border-gray-800 p-3 backdrop-blur-md bg-opacity-90 dark:bg-opacity-90 z-10"
+        initial={{ opacity: 0, y: 50 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        {showEmojiPicker && (
+          <div className="emoji-picker p-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg mb-2">
+            <div className="grid grid-cols-8 gap-2">
+              {['😊', '😂', '❤️', '👍', '🎉', '🔥', '👋', '😎', '🤔', '😢', '😍', '🙏', '👏', '🌟', '💪', '🤗'].map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => handleEmojiSelect(emoji)}
+                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                >
+                  {emoji}
+                </button>
+              ))}
             </div>
-          )}
-        </>
-      )}
+          </div>
+        )}
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            className="p-2 rounded-full text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+          <div className="relative flex-1">
+            <textarea
+              value={currentMessage}
+              onChange={(e) => setCurrentMessage(e.target.value)}
+              placeholder="Введите сообщение..."
+              className="w-full border dark:border-gray-700 rounded-full py-2 pl-4 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white resize-none leading-tight"
+              style={{ maxHeight: '120px', minHeight: '40px' }}
+              rows={1}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+            />
+          </div>
+          <button
+            onClick={handleSendMessage}
+            disabled={!currentMessage.trim()}
+            className={`p-2 rounded-full ${currentMessage.trim()
+              ? 'bg-blue-500 text-white hover:bg-blue-600'
+              : 'bg-gray-200 text-gray-400 dark:bg-gray-700'
+              } transition-colors`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </button>
+        </div>
+      </motion.div>
     </div>
   )
 }

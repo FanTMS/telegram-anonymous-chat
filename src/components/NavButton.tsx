@@ -1,15 +1,49 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import {
+  HomeIcon,
+  FriendsIcon,
+  GroupsIcon,
+  ChatsIcon,
+  StoreIcon,
+  ProfileIcon,
+  AdminIcon
+} from './NavIcons';
 
 interface NavButtonProps {
   to: string;
   label: string;
-  icon: React.ReactNode;
+  icon: string; // Теперь это строковый идентификатор иконки
   isActive?: boolean;
   hasNotification?: boolean;
   onClick?: () => void;
 }
+
+// Функция для получения компонента иконки по идентификатору
+const getIconComponent = (iconName: string, isActive: boolean) => {
+  const iconClass = `w-6 h-6 ${isActive ? 'nav-icon-active' : ''}`;
+
+  switch (iconName) {
+    case '🏠':
+      return <HomeIcon className={iconClass} />;
+    case '👥':
+      return <FriendsIcon className={iconClass} />;
+    case '👨‍👩‍👧‍👦':
+      return <GroupsIcon className={iconClass} />;
+    case '💬':
+      return <ChatsIcon className={iconClass} />;
+    case '🛒':
+      return <StoreIcon className={iconClass} />;
+    case '👤':
+      return <ProfileIcon className={iconClass} />;
+    case '⚙️':
+      return <AdminIcon className={iconClass} />;
+    default:
+      // Возвращаем исходную эмодзи-иконку если не нашли соответствия
+      return <span className="text-2xl">{iconName}</span>;
+  }
+};
 
 export const NavButton: React.FC<NavButtonProps> = ({
   to,
@@ -32,9 +66,8 @@ export const NavButton: React.FC<NavButtonProps> = ({
       aria-label={label}
     >
       <div className="relative">
-        {/* Оптимизируем для эмодзи */}
-        <div className="nav-button-icon" role="img" aria-label={`${label} icon`}>
-          {icon}
+        <div className="nav-button-icon">
+          {getIconComponent(icon, isActive)}
         </div>
         {hasNotification && (
           <motion.div
