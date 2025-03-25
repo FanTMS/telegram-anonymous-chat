@@ -59,16 +59,35 @@ export const getUserChats = (userId: string): Chat[] => {
   }
 }
 
-// Получить конкретный чат по ID
+// Получить конкретный чат по ID - убедимся, что функция корректно находит чат
 export const getChatById = (chatId: string): Chat | null => {
   try {
-    const chatsData = localStorage.getItem('chats')
-    const chats: Chat[] = chatsData ? JSON.parse(chatsData) : []
+    const chatsData = localStorage.getItem('chats');
+    if (!chatsData) {
+      console.log('Нет сохраненных чатов');
+      return null;
+    }
 
-    return chats.find(chat => chat.id === chatId) || null
+    const chats: Chat[] = JSON.parse(chatsData);
+
+    // Проверяем, что chats - это массив
+    if (!Array.isArray(chats)) {
+      console.error('Данные чатов повреждены');
+      return null;
+    }
+
+    const chat = chats.find(c => c.id === chatId);
+
+    if (!chat) {
+      console.log(`Чат с ID ${chatId} не найден`);
+      return null;
+    }
+
+    console.log(`Найден чат: ${chat.id}`);
+    return chat;
   } catch (error) {
-    console.error('Ошибка при получении чата:', error)
-    return null
+    console.error('Ошибка при получении чата по ID:', error);
+    return null;
   }
 }
 
@@ -109,49 +128,52 @@ export const sendMessage = (chatId: string, senderId: string, text: string): Mes
   }
 }
 
-// Создать чат (улучшенная версия)
+// Создание нового чата - убедимся, что функция надежно сохраняет чат
 export const createChat = (participants: string[]): Chat | null => {
   try {
-    if (participants.length !== 2) {
-      console.error(`Для создания чата требуется ровно 2 участника. Получено: ${participants.length}`);
+    if (!participants || participants.length < 2) {
+      console.error('Недостаточно участников для создания чата');
       return null;
     }
 
-    console.log(`Попытка создать чат между ${participants[0]} и ${participants[1]}`);
-
-    // Получаем или инициализируем список чатов
-    let chats: Chat[] = [];
+    // Получаем текущие чаты
     const chatsData = localStorage.getItem('chats');
+    let chats: Chat[] = [];
 
     if (chatsData) {
       try {
         chats = JSON.parse(chatsData);
+        // Убедимся, что chats - это массив
+        if (!Array.isArray(chats)) {
+          console.error('Данные чатов повреждены, создаем новый массив');
+          chats = [];
+        }
       } catch (e) {
-        console.error('Ошибка при парсинге списка чатов:', e);
-        // Инициализируем новый список, если произошла ошибка парсинга
+        console.error('Ошибка при чтении данных чатов:', e);
         chats = [];
       }
     }
 
-    const chatId = `chat_${Date.now()}`;
-    const now = new Date();
-
+    // Создаем новый чат
     const newChat: Chat = {
-      id: chatId,
-      participants,
+      id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      participants: participants,
       messages: [],
+      createdAt: new Date(),
       isActive: true,
       startedAt: Date.now(),
       userId: participants[0],
       partnerId: participants[1],
-      createdAt: now,
-      lastActivity: now
+      lastActivity: new Date()
     };
 
+    console.log(`Создаем новый чат с ID: ${newChat.id}`);
+
+    // Добавляем новый чат в список и сохраняем
     chats.push(newChat);
     localStorage.setItem('chats', JSON.stringify(chats));
 
-    console.log(`Создан новый чат ${chatId} между ${participants[0]} и ${participants[1]}`);
+    console.log(`Чат успешно создан и сохранен: ${newChat.id}`);
 
     return newChat;
   } catch (error) {

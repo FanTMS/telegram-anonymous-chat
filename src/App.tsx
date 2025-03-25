@@ -15,11 +15,15 @@ export const App = () => {
   const [matchmakingServiceId, setMatchmakingServiceId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // Инициализация глобальных сервисов
+  // Инициализация глобальных сервисов и установка светлой темы
   useEffect(() => {
     try {
       // Валидируем данные в localStorage при запуске приложения
       validateLocalStorage();
+
+      // Принудительно устанавливаем светлую тему для всех пользователей
+      document.body.classList.remove('dark');
+      document.body.classList.add('light');
 
       // Проверяем структуру основных данных
       const checkAndFixLocalStorage = () => {

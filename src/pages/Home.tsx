@@ -180,7 +180,8 @@ export const Home = () => {
   const [userBalance, setUserBalance] = useState(0)
   const [showRegistration, setShowRegistration] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const isDarkTheme = WebApp.colorScheme === 'dark'
+  // Принудительно устанавливаем светлую тему, игнорируя WebApp.colorScheme
+  const isDarkTheme = false
   const [isRegistered, setIsRegistered] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [selectedInterests, setSelectedInterests] = useState<string[]>([])
@@ -248,6 +249,29 @@ export const Home = () => {
       }
     }
   }, []);
+
+  // Добавляем слушатель событий для обнаружения новых чатов
+  useEffect(() => {
+    const handleChatFound = (event: CustomEvent) => {
+      console.log('Получено событие о новом чате:', event.detail.chatId);
+      setFoundChatId(event.detail.chatId);
+
+      // Останавливаем поиск, если он был активен
+      if (isSearching) {
+        stopSearchTimer();
+        setIsSearching(false);
+        stopSearching();
+      }
+    };
+
+    // Добавляем обработчик события
+    window.addEventListener('chatFound', handleChatFound as EventListener);
+
+    // Очистка при размонтировании
+    return () => {
+      window.removeEventListener('chatFound', handleChatFound as EventListener);
+    };
+  }, [isSearching]);
 
   const handleGoToProfile = () => {
     navigate('/direct/profile')

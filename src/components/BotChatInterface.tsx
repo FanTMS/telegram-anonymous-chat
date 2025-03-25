@@ -43,7 +43,8 @@ export const BotChatInterface = forwardRef<BotChatMethods, BotChatInterfaceProps
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const commandsRef = useRef<HTMLDivElement>(null)
   const [expandedInput, setExpandedInput] = useState(false)
-  const isDarkTheme = WebApp.colorScheme === 'dark'
+  // Принудительно устанавливаем светлую тему
+  const isDarkTheme = false
 
   // Прокрутка вниз при добавлении новых сообщений
   useEffect(() => {
