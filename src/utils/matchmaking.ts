@@ -213,8 +213,11 @@ export const findMatch = async (): Promise<boolean> => {
             return false;
         }
 
-        // УПРОЩАЕМ ЛОГИКУ - берем первых двух разных пользователей
+        // Выбираем первых двух РАЗНЫХ пользователей
+        // Это критически важно - убедиться, что мы не пытаемся соединить пользователя с самим собой
         const user1 = searchingUsers[0];
+
+        // Важно! Ищем именно другого пользователя, не того же самого
         const availablePartners = searchingUsers.filter(u => u.userId !== user1.userId);
 
         if (availablePartners.length === 0) {
@@ -306,7 +309,7 @@ export const findMatch = async (): Promise<boolean> => {
             return false;
         }
 
-        // Удаляем пользователей из поиска
+        // ВАЖНО! Удаляем пользователей из поиска
         stopSearching(user1.userId);
         stopSearching(user2.userId);
 

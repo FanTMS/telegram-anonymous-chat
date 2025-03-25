@@ -23,6 +23,7 @@ import { ChatsList } from './pages/ChatsList'
 import GroupsPage from './pages/GroupsPage'
 import { ProfileEdit } from './pages/ProfileEdit' // Добавляем импорт нашего нового компонента
 import DebugPage from './pages/Debug' // Добавьте импорт страницы отладки
+import TestChat from './pages/TestChat' // Добавленный импорт для тестирования чата
 
 // Защита для авторизованных пользователей
 // Теперь не перенаправляем на регистрацию, т.к. она будет на главной странице
@@ -72,6 +73,7 @@ export const routes: RouteObject[] = [
       { path: 'chats', element: <AuthGuard><ChatsList /></AuthGuard> },
       { path: 'direct/chats', element: <AuthGuard><Navigate to="/chats" replace /></AuthGuard> },
       { path: 'debug', element: <DebugPage /> }, // Добавьте маршрут для отладки
+      { path: 'test-chat', element: <TestChat /> }, // Добавленный маршрут для тестирования чата
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

@@ -531,6 +531,9 @@ export const Home = () => {
     console.log(`Начинаем поиск собеседника... Режим: ${searchMode}`);
     console.log(`Текущий пользователь: ${user.id}`);
 
+    // Очищаем любой старый поиск перед началом нового
+    stopSearching(user.id);
+
     // Запускаем поиск с выбранными параметрами
     const success = startSearching(
       searchMode === 'random', // true если режим случайного поиска
@@ -544,10 +547,24 @@ export const Home = () => {
       startSearchTimer();
       startMatchmaking(); // Запускаем сервис подбора
 
-      // Принудительно запускаем поиск совпадения
+      // Принудительно запускаем поиск совпадения несколько раз с интервалом
+      // Это помогает решить проблему когда два пользователя начинают поиск почти одновременно
       triggerMatchmaking().then(result => {
         if (result) {
           console.log('Найдено совпадение сразу после запуска поиска!');
+        } else {
+          // Если не нашли сразу, попробуем еще несколько раз с интервалом
+          const retryIntervals = [1000, 3000, 5000];
+
+          retryIntervals.forEach((delay, index) => {
+            setTimeout(() => {
+              // Проверяем, что пользователь всё еще в поиске
+              if (isUserSearching(user.id)) {
+                console.log(`Повторная попытка поиска #${index + 1}`);
+                triggerMatchmaking();
+              }
+            }, delay);
+          });
         }
       });
 
@@ -564,15 +581,18 @@ export const Home = () => {
 
   // Отмена поиска
   const handleCancelSearch = () => {
-    stopSearching()
-    setIsSearching(false)
-    stopSearchTimer()
+    const user = getCurrentUser();
+    if (user) {
+      stopSearching(user.id);
+    }
+    setIsSearching(false);
+    stopSearchTimer();
 
     // Скрываем кнопку Telegram (в реальном приложении)
     if (WebApp.MainButton) {
-      WebApp.MainButton.hide()
+      WebApp.MainButton.hide();
     }
-  }
+  };
 
   // Переключение режима поиска
   const toggleSearchMode = () => {
