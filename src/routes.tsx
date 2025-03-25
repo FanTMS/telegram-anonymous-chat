@@ -22,6 +22,7 @@ import { Registration } from './pages/Registration'
 import { ChatsList } from './pages/ChatsList'
 import GroupsPage from './pages/GroupsPage'
 import { ProfileEdit } from './pages/ProfileEdit' // Добавляем импорт нашего нового компонента
+import DebugPage from './pages/Debug' // Добавьте импорт страницы отладки
 
 // Защита для авторизованных пользователей
 // Теперь не перенаправляем на регистрацию, т.к. она будет на главной странице
@@ -70,6 +71,7 @@ export const routes: RouteObject[] = [
       { path: 'verify-telegram-mock', element: <TelegramVerifyMock /> },
       { path: 'chats', element: <AuthGuard><ChatsList /></AuthGuard> },
       { path: 'direct/chats', element: <AuthGuard><Navigate to="/chats" replace /></AuthGuard> },
+      { path: 'debug', element: <DebugPage /> }, // Добавьте маршрут для отладки
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

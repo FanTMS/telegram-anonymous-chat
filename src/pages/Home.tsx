@@ -324,6 +324,89 @@ export const Home = () => {
     };
   }, [isSearching]);
 
+  // Обработчик событий для обнаружения новых чатов - Улучшенная версия
+  useEffect(() => {
+    // Функция проверки наличия новых чатов
+    const checkNewChats = () => {
+      const user = getCurrentUser();
+      if (!user) return;
+
+      // console.log('Проверка наличия новых чатов для', user.id);
+      if (hasNewChat(user.id)) {
+        console.log('🎉 Найден новый чат для пользователя', user.id);
+        const notification = getNewChatNotification(user.id);
+        if (notification) {
+          // Проверка валидности чата
+          const chat = getChatById(notification.chatId);
+          if (chat && chat.participants.includes(user.id)) {
+            console.log('Чат валиден, устанавливаем ID:', notification.chatId);
+            setFoundChatId(notification.chatId);
+
+            // Останавливаем поиск если он был активен
+            if (isSearching) {
+              console.log('Останавливаем активный поиск...');
+              stopSearchTimer();
+              setIsSearching(false);
+              stopSearching(user.id);
+            }
+          } else {
+            console.error('Чат не валиден или пользователь не является участником', notification.chatId);
+            // Удаляем невалидное уведомление
+            localStorage.removeItem(`new_chat_flag_${user.id}`);
+            localStorage.removeItem(`new_chat_notification_${user.id}`);
+          }
+        }
+      }
+    };
+
+    // Проверяем при монтировании компонента
+    checkNewChats();
+
+    // Также обрабатываем событие chatFound
+    const handleChatFound = (event: CustomEvent) => {
+      console.log('Получено событие о новом чате:', event.detail);
+
+      // Проверяем, что событие относится к текущему пользователю
+      const user = getCurrentUser();
+      if (!user) return;
+
+      // Проверка userId указанного в событии (если есть)
+      if (event.detail.userId && event.detail.userId !== user.id) {
+        console.log('Событие не относится к текущему пользователю');
+        return;
+      }
+
+      // Обновляем UI, только если чат действительно существует
+      const chat = getChatById(event.detail.chatId);
+      if (chat && chat.participants.includes(user.id)) {
+        console.log('Устанавливаем ID найденного чата:', event.detail.chatId);
+        setFoundChatId(event.detail.chatId);
+
+        // Останавливаем поиск, если он был активен
+        if (isSearching) {
+          console.log('Останавливаем активный поиск из-за события chatFound');
+          stopSearchTimer();
+          setIsSearching(false);
+          stopSearching(user.id);
+        }
+      } else {
+        console.error('Полученный в событии чат не найден или некорректен');
+      }
+    };
+
+    // Добавляем обработчик события chatFound
+    window.addEventListener('chatFound', handleChatFound as EventListener);
+
+    // Запускаем периодическую проверку каждые 2 секунды
+    const checkInterval = setInterval(checkNewChats, 2000);
+
+    // Очистка при размонтировании компонента
+    return () => {
+      window.removeEventListener('chatFound', handleChatFound as EventListener);
+      clearInterval(checkInterval);
+    };
+  }, [isSearching]); // Зависимость от isSearching
+
   const handleGoToProfile = () => {
     navigate('/direct/profile')
   }
@@ -503,34 +586,45 @@ export const Home = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
+  // Улучшенная функция перехода к чату с дополнительными проверками
   const goToChat = (chatId: string) => {
     try {
       const user = getCurrentUser();
-      if (user) {
-        markChatNotificationAsRead(user.id);
+      if (!user) {
+        console.error('Пользователь не авторизован');
+        WebApp.showAlert('Необходимо авторизоваться для доступа к чату');
+        return;
       }
 
-      // Проверяем валидность чата перед переходом
+      console.log(`Попытка перехода в чат ${chatId} пользователя ${user.id}`);
+
+      // Получаем информацию о чате
       const chat = getChatById(chatId);
-      if (chat && user) {
-        // Проверяем, что текущий пользователь действительно участник чата
-        if (chat.participants.includes(user.id)) {
+      console.log('Найден чат:', chat);
+
+      if (chat) {
+        // Проверяем, что текущий пользователь участник чата
+        if (Array.isArray(chat.participants) && chat.participants.includes(user.id)) {
+          console.log('Переходим в чат', chatId);
+
+          // Отмечаем уведомление как прочитанное перед переходом
+          markChatNotificationAsRead(user.id);
+
+          // Переходим к чату
           navigate(`/chat/${chatId}`);
         } else {
           console.error('Пользователь не является участником чата');
-          // Очищаем неверную информацию
           setFoundChatId(null);
-          // Показываем сообщение пользователю
           WebApp.showAlert('Ошибка при подключении к чату. Попробуйте найти собеседника снова.');
         }
       } else {
-        console.error('Невалидный чат или пользователь не авторизован');
+        console.error('Чат не найден');
         setFoundChatId(null);
-        WebApp.showAlert('Ошибка при подключении к чату. Попробуйте найти собеседника снова.');
+        WebApp.showAlert('Чат не найден. Попробуйте найти собеседника снова.');
       }
     } catch (error) {
       console.error('Ошибка при переходе в чат:', error);
-      WebApp.showAlert('Произошла ошибка. Попробуйте позже.');
+      WebApp.showAlert('Произошла ошибка. Пожалуйста, попробуйте позже.');
     }
   };
 

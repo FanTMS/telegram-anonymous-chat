@@ -61,6 +61,21 @@ export const App = () => {
               if (!Array.isArray(chats)) {
                 console.warn('Исправляем данные чатов - не массив');
                 localStorage.setItem('chats', JSON.stringify([]));
+              } else {
+                // Проверяем валидность каждого чата
+                const validChats = chats.filter(chat =>
+                  chat &&
+                  typeof chat === 'object' &&
+                  chat.id &&
+                  Array.isArray(chat.participants) &&
+                  chat.participants.length === 2
+                );
+
+                // Если есть невалидные чаты, сохраняем только валидные
+                if (validChats.length !== chats.length) {
+                  console.warn(`Обнаружены невалидные чаты (${chats.length - validChats.length}), исправляем`);
+                  localStorage.setItem('chats', JSON.stringify(validChats));
+                }
               }
             } catch (e) {
               console.warn('Исправляем данные чатов - ошибка парсинга');
@@ -94,6 +109,15 @@ export const App = () => {
           }
         } catch (error) {
           console.error('Ошибка при проверке пользователей:', error);
+        }
+
+        // Также очищаем устаревшие данные поиска при старте приложения
+        try {
+          // Очищаем данные поиска
+          localStorage.setItem('searching_users', JSON.stringify([]));
+          console.log('Данные поиска сброшены при старте');
+        } catch (error) {
+          console.error('Ошибка при сбросе данных поиска:', error);
         }
       };
 

@@ -126,62 +126,47 @@ export const getUsers = (): User[] => {
   }
 }
 
-// Получение пользователя по ID - синхронная версия для более быстрой работы
-export const getUserById = async (userId: string): Promise<User | null> => {
+// Получение пользователя по ID - улучшенная версия с дополнительными проверками
+export const getUserById = (id: string): User | null => {
   try {
-    if (!userId) {
-      console.error('getUserById: ID пользователя не указан');
+    console.log(`Поиск пользователя с ID ${id}`);
+    if (!id) {
+      console.error('getUserById получил пустой ID');
       return null;
     }
 
-    const key = `${USER_KEY_PREFIX}${userId}`;
-    const userData = localStorage.getItem(key);
-
-    if (!userData) {
-      console.log(`getUserById: Пользователь с ID ${userId} не найден в localStorage`);
-      // Создаем заглушку пользователя для предотвращения ошибок
-      return {
-        id: userId,
-        name: 'Собеседник',
-        isAnonymous: true,
-        createdAt: Date.now(),
-        lastActive: Date.now()
-      };
+    const usersData = localStorage.getItem('users');
+    if (!usersData) {
+      console.log('Список пользователей пуст');
+      return null;
     }
 
+    let users: User[];
     try {
-      const user = JSON.parse(userData);
-      if (!user || typeof user !== 'object') {
-        console.error(`getUserById: Невалидный формат данных пользователя ${userId}`);
-        return {
-          id: userId,
-          name: 'Собеседник',
-          isAnonymous: true,
-          createdAt: Date.now(),
-          lastActive: Date.now()
-        };
+      users = JSON.parse(usersData);
+
+      if (!Array.isArray(users)) {
+        console.error('Данные пользователей повреждены (не массив)');
+        return null;
       }
-      return user;
-    } catch (parseError) {
-      console.error(`getUserById: Ошибка при парсинге данных пользователя ${userId}:`, parseError);
-      return {
-        id: userId,
-        name: 'Собеседник',
-        isAnonymous: true,
-        createdAt: Date.now(),
-        lastActive: Date.now()
-      };
+    } catch (e) {
+      console.error('Ошибка при парсинге данных пользователей', e);
+      return null;
     }
+
+    // Ищем пользователя по ID
+    const user = users.find(u => u && u.id === id);
+
+    if (!user) {
+      console.log(`Пользователь с ID ${id} не найден`);
+      return null;
+    }
+
+    console.log(`Пользователь найден: ${user.name} (${user.id})`);
+    return user;
   } catch (error) {
-    console.error(`Failed to get user ${userId}`, error);
-    // Возвращаем заглушку вместо null для предотвращения ошибок
-    return {
-      id: userId,
-      name: 'Собеседник',
-      isAnonymous: true,
-      createdAt: Date.now(),
-      lastActive: Date.now()
-    };
+    console.error(`Ошибка при получении пользователя по ID (${id}):`, error);
+    return null;
   }
 }
 
@@ -656,5 +641,33 @@ export const updateUserSettings = async (userId: string, settings: Partial<UserS
   } catch (error) {
     console.error('Failed to update user settings:', error);
     return false;
+  }
+}
+
+// Функция для создания тестового пользователя (для отладки)
+export const createTestUser = (name: string = "Тест"): User | null => {
+  try {
+    const id = `test_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const newUser: User = {
+      id,
+      name,
+      interests: ['Тестирование', 'Отладка'],
+      isAnonymous: true,
+      rating: 5,
+      createdAt: Date.now(),
+      lastActive: Date.now()
+    };
+
+    // Сохраняем пользователя
+    const usersData = localStorage.getItem('users');
+    const users = usersData ? JSON.parse(usersData) : [];
+    users.push(newUser);
+    localStorage.setItem('users', JSON.stringify(users));
+
+    console.log(`Создан тестовый пользователь: ${name} (${id})`);
+    return newUser;
+  } catch (error) {
+    console.error('Ошибка при создании тестового пользователя:', error);
+    return null;
   }
 }

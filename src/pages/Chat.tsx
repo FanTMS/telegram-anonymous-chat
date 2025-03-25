@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { getCurrentUser, getUserById } from '../utils/user'
-import { getChatById, sendMessage, endChat, Message, addSystemMessage } from '../utils/chat'
+import { getChatById, sendMessage, endChat, Message, addSystemMessage, Chat as ChatType } from '../utils/chat'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MessageItem } from '../components/MessageItem'
 import { markChatNotificationAsRead } from '../utils/matchmaking'
@@ -17,7 +17,7 @@ export const Chat = () => {
   const navigate = useNavigate()
   const { showSuccess, showError, showInfo } = useNotifications()
   const [currentMessage, setCurrentMessage] = useState('')
-  const [chat, setChat] = useState<any>(null)
+  const [chat, setChat] = useState<ChatType | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [partnerName, setPartnerName] = useState<string>('Собеседник')
   const [isLoading, setIsLoading] = useState(true)
@@ -115,15 +115,15 @@ export const Chat = () => {
 
   // Загружаем данные чата при загрузке компонента
   useEffect(() => {
-    loadChatData()
+    loadChatData();
 
     // Запускаем периодическое обновление чата
     const intervalId = setInterval(() => {
       if (chatId) {
-        const updatedChat = getChatById(chatId)
+        const updatedChat = getChatById(chatId);
         if (updatedChat) {
-          setChat(updatedChat)
-          setMessages(updatedChat.messages || [])
+          setChat(updatedChat);
+          setMessages(updatedChat.messages || []);
 
           // Проверяем статус игры
           const gameRequest = getGameRequestForChat(chatId);
@@ -147,15 +147,15 @@ export const Chat = () => {
           }
         }
       }
-    }, 3000)
+    }, 3000);
 
-    return () => clearInterval(intervalId)
-  }, [chatId])
+    return () => clearInterval(intervalId);
+  }, [chatId]);
 
   // Прокручиваем к последнему сообщению при обновлении списка
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   // Настройка WebApp
   useEffect(() => {
@@ -185,10 +185,10 @@ export const Chat = () => {
 
   // Отправка сообщения
   const handleSendMessage = () => {
-    if (!currentMessage.trim() || !chat) return
+    if (!currentMessage.trim() || !chat) return;
 
-    const currentUser = getCurrentUser()
-    if (!currentUser) return
+    const currentUser = getCurrentUser();
+    if (!currentUser) return;
 
     try {
       // Обеспечиваем тактильную обратную связь
@@ -197,28 +197,28 @@ export const Chat = () => {
       }
 
       // Отправляем реальное сообщение
-      const sentMessage = sendMessage(chat.id, currentUser.id, currentMessage)
+      const sentMessage = sendMessage(chat.id, currentUser.id, currentMessage);
       if (sentMessage) {
         // Обновляем список сообщений
-        setMessages(prev => [...prev, sentMessage])
+        setMessages(prev => [...prev, sentMessage]);
 
         // Очищаем поле ввода
-        setCurrentMessage('')
+        setCurrentMessage('');
 
         // Прокручиваем к новому сообщению
         setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-        }, 100)
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
       }
     } catch (error) {
-      console.error('Ошибка при отправке сообщения:', error)
-      showError('Не удалось отправить сообщение')
+      console.error('Ошибка при отправке сообщения:', error);
+      showError('Не удалось отправить сообщение');
     }
-  }
+  };
 
   // Завершение чата
   const handleEndChat = () => {
-    if (!chat || !chat.id) return
+    if (!chat || !chat.id) return;
 
     try {
       // Показываем подтверждение
@@ -226,18 +226,18 @@ export const Chat = () => {
         'Вы уверены, что хотите завершить чат?',
         (confirmed) => {
           if (confirmed) {
-            const success = endChat(chat.id)
+            const success = endChat(chat.id);
             if (success) {
-              showSuccess('Чат завершен')
+              showSuccess('Чат завершен');
 
               // Обеспечиваем тактильную обратную связь
               if (WebApp && WebApp.isExpanded && WebApp.HapticFeedback) {
                 WebApp.HapticFeedback.notificationOccurred('success');
               }
 
-              navigate('/chats')
+              navigate('/chats');
             } else {
-              showError('Не удалось завершить чат')
+              showError('Не удалось завершить чат');
             }
           }
         }
@@ -245,23 +245,23 @@ export const Chat = () => {
     } catch (error) {
       // Если WebApp.showConfirm не поддерживается, используем стандартное подтверждение
       if (window.confirm('Вы уверены, что хотите завершить чат?')) {
-        const success = endChat(chat.id)
+        const success = endChat(chat.id);
         if (success) {
-          showSuccess('Чат завершен')
-          navigate('/chats')
+          showSuccess('Чат завершен');
+          navigate('/chats');
         } else {
-          showError('Не удалось завершить чат')
+          showError('Не удалось завершить чат');
         }
       }
     }
-  }
+  };
 
   // Отправка запроса в друзья
   const handleAddFriend = () => {
-    if (!partnerId || friendRequestSent || !chat || !chat.id) return
+    if (!partnerId || friendRequestSent || !chat || !chat.id) return;
 
-    const currentUser = getCurrentUser()
-    if (!currentUser) return
+    const currentUser = getCurrentUser();
+    if (!currentUser) return;
 
     try {
       // Обеспечиваем тактильную обратную связь
@@ -313,13 +313,13 @@ export const Chat = () => {
       console.error('Ошибка при отправке запроса в друзья:', error);
       showError('Произошла ошибка при отправке запроса в друзья');
     }
-  }
+  };
 
   // Обработчик выбора эмодзи
   const handleEmojiSelect = (emoji: string) => {
     setCurrentMessage(prev => prev + emoji);
     setShowEmojiPicker(false);
-  }
+  };
 
   // Показываем индикатор загрузки
   if (isLoading) {
@@ -327,7 +327,7 @@ export const Chat = () => {
       <div className="h-screen flex items-center justify-center">
         <div className="loading-spinner"></div>
       </div>
-    )
+    );
   }
 
   // Показываем сообщение об ошибке
@@ -337,7 +337,7 @@ export const Chat = () => {
         <div className="text-center text-red-500 my-4">{error}</div>
         <Button onClick={() => navigate(-1)} className="w-full">Вернуться назад</Button>
       </Card>
-    )
+    );
   }
 
   // Если чат не найден
@@ -347,7 +347,7 @@ export const Chat = () => {
         <div className="text-center my-4">Чат не найден</div>
         <Button onClick={() => navigate(-1)} className="w-full">Вернуться назад</Button>
       </Card>
-    )
+    );
   }
 
   return (
@@ -519,5 +519,6 @@ export const Chat = () => {
         </div>
       </motion.div>
     </div>
-  )
-}
+  );
+};
+
