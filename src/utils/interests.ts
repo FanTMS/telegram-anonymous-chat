@@ -42,6 +42,23 @@ export const getUserInterests = (userInterestIds: string[]): Interest[] => {
     .filter((interest): interest is Interest => interest !== undefined);
 }
 
+// Расчет показателя схожести интересов
+export const getInterestScore = (userInterests1: string[], userInterests2: string[]): number => {
+  if (!userInterests1?.length || !userInterests2?.length) {
+    return 0;
+  }
+
+  // Находим пересечение интересов
+  const commonInterests = userInterests1.filter(interest => userInterests2.includes(interest));
+
+  // Расчет базового показателя схожести
+  const totalUniqueInterests = new Set([...userInterests1, ...userInterests2]).size;
+  const score = commonInterests.length / Math.min(userInterests1.length, userInterests2.length);
+
+  // Возвращаем значение от 0 до 1
+  return Math.max(0, Math.min(1, score));
+}
+
 // Генерировать случайный псевдоним
 export const generateRandomNickname = (): string => {
   const adjectives = ['Тайный', 'Загадочный', 'Скрытный', 'Неизвестный', 'Анонимный', 'Таинственный'];

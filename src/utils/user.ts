@@ -49,6 +49,7 @@ export interface UserSettings {
 export interface User {
   id: string
   name?: string
+  username?: string  // Добавляем поле username для совместимости
   bio?: string
   avatar?: string | null
   rating?: number
@@ -660,22 +661,43 @@ export const updateUserSettings = async (userId: string, settings: Partial<UserS
 // Функция для создания тестового пользователя (для отладки)
 export const createTestUser = (name: string = "Тест"): User | null => {
   try {
-    const id = `test_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const id = `test-user-${uuidv4().substring(0, 8)}`;
     const newUser: User = {
       id,
       name,
       interests: ['Тестирование', 'Отладка'],
       isAnonymous: true,
       rating: 5,
+      chatCount: 0,
       createdAt: Date.now(),
-      lastActive: Date.now()
+      lastActive: Date.now(),
+      settings: {
+        privacyLevel: 'low',
+        showOnlineStatus: true,
+        showLastSeen: true,
+        allowProfileSearch: true,
+        matchingPreference: 'random',
+        notifications: {
+          newMessages: true,
+          chatRequests: true,
+          systemUpdates: true,
+          sounds: true
+        },
+        theme: 'system'
+      }
     };
 
-    // Сохраняем пользователя
+    // Сохраняем пользователя напрямую в localStorage для надежности
+    const key = `${USER_KEY_PREFIX}${id}`;
+    localStorage.setItem(key, JSON.stringify(newUser));
+
+    // Добавляем в общий список пользователей
     const usersData = localStorage.getItem('users');
     const users = usersData ? JSON.parse(usersData) : [];
-    users.push(newUser);
-    localStorage.setItem('users', JSON.stringify(users));
+    if (!users.some((u: User) => u.id === id)) {
+      users.push(newUser);
+      localStorage.setItem('users', JSON.stringify(users));
+    }
 
     console.log(`Создан тестовый пользователь: ${name} (${id})`);
     return newUser;
@@ -684,3 +706,53 @@ export const createTestUser = (name: string = "Тест"): User | null => {
     return null;
   }
 }
+
+// Добавляем функцию createUser, которая используется в TestChat.tsx
+export const createUser = (id: string, name: string): User => {
+  try {
+    // Создаем базовую структуру пользователя
+    const user: User = {
+      id,
+      name,
+      interests: [],
+      isAnonymous: false,
+      createdAt: Date.now(),
+      lastActive: Date.now()
+    };
+
+    // Сохраняем пользователя
+    const key = `${USER_KEY_PREFIX}${id}`;
+    localStorage.setItem(key, JSON.stringify(user));
+
+    // Добавляем также в общий список пользователей
+    const usersData = localStorage.getItem('users');
+    const users = usersData ? JSON.parse(usersData) : [];
+
+    // Проверяем, что пользователь с таким ID не существует в списке
+    if (!users.some((u: User) => u.id === id)) {
+      users.push(user);
+      localStorage.setItem('users', JSON.stringify(users));
+    }
+
+    console.log(`Создан пользователь: ${name} (${id})`);
+    return user;
+  } catch (error) {
+    console.error('Ошибка при создании пользователя:', error);
+    // Возвращаем минимальный объект в случае ошибки
+    return {
+      id,
+      name,
+      isAnonymous: true,
+      createdAt: Date.now(),
+      lastActive: Date.now()
+    };
+  }
+};
+function uuidv4(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+

@@ -23,7 +23,7 @@ import { ChatsList } from './pages/ChatsList'
 import GroupsPage from './pages/GroupsPage'
 import { ProfileEdit } from './pages/ProfileEdit' // Добавляем импорт нашего нового компонента
 import DebugPage from './pages/Debug' // Добавьте импорт страницы отладки
-import TestChat from './pages/TestChat' // Добавленный импорт для тестирования чата
+import { TestChat } from './pages/TestChat' // Исправленный импорт на именованный экспорт
 
 // Защита для авторизованных пользователей
 // Теперь не перенаправляем на регистрацию, т.к. она будет на главной странице
