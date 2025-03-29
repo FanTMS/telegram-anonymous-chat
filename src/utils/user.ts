@@ -3,6 +3,7 @@ import { MatchingStrategy } from './recommendations'
 
 // Тип для данных Telegram
 export interface TelegramData {
+  authDate: number
   telegramId: string
   username?: string
   firstName?: string
@@ -47,6 +48,9 @@ export interface UserSettings {
 
 // Тип для пользователя
 export interface User {
+  currentUser: {}
+  existingUserByTelegramId: {}
+  verified: boolean
   id: string
   name?: string
   bio?: string
@@ -184,7 +188,10 @@ export const getUserByIdSync = (userId: string): User | null => {
         name: 'Собеседник',
         isAnonymous: true,
         createdAt: Date.now(),
-        lastActive: Date.now()
+        lastActive: Date.now(),
+        currentUser: {},
+        existingUserByTelegramId: {},
+        verified: false
       };
     }
 
@@ -196,19 +203,70 @@ export const getUserByIdSync = (userId: string): User | null => {
       name: 'Собеседник',
       isAnonymous: true,
       createdAt: Date.now(),
-      lastActive: Date.now()
+      lastActive: Date.now(),
+      currentUser: {},
+      existingUserByTelegramId: {},
+      verified: false
     };
   }
 }
 
-// Получение пользователя по Telegram ID
+// Функция поиска пользователя по Telegram ID с улучшенной поддержкой многопользовательского режима
 export const getUserByTelegramId = (telegramId: string): User | null => {
   try {
-    const users = getUsers()
-    return users.find(user => user.telegramData?.telegramId === telegramId) || null
+    if (!telegramId) {
+      console.warn('getUserByTelegramId: telegramId не предоставлен');
+      return null;
+    }
+
+    // Сначала пробуем найти пользователя в индивидуальных записях пользователей (более быстрый поиск)
+    const telegramUserKey = `telegram_user_${telegramId}`;
+    const linkedUserData = localStorage.getItem(telegramUserKey);
+
+    if (linkedUserData) {
+      try {
+        // Если найдена ссылка на пользователя по Telegram ID, получаем пользователя по его ID
+        const userId = JSON.parse(linkedUserData).userId;
+        if (userId) {
+          const userKey = `${USER_KEY_PREFIX}${userId}`;
+          const userData = localStorage.getItem(userKey);
+          if (userData) {
+            return JSON.parse(userData);
+          }
+        }
+      } catch (e) {
+        console.error('Ошибка при обработке связи Telegram-пользователь:', e);
+      }
+    }
+
+    // Если не нашли в индивидуальных записях, ищем в общем списке пользователей
+    const users = getUsers();
+
+    // Ищем пользователя с заданным Telegram ID
+    const user = users.find(user =>
+      user.telegramData &&
+      user.telegramData.telegramId &&
+      user.telegramData.telegramId === telegramId
+    );
+
+    if (user) {
+      console.log(`Найден пользователь с Telegram ID ${telegramId}: ${user.name} (ID: ${user.id})`);
+
+      // Создаем ссылку в localStorage для ускорения будущих поисков
+      try {
+        localStorage.setItem(telegramUserKey, JSON.stringify({ userId: user.id, timestamp: Date.now() }));
+      } catch (e) {
+        console.warn('Не удалось создать ссылку Telegram ID -> User ID:', e);
+      }
+
+      return user;
+    } else {
+      console.log(`Пользователь с Telegram ID ${telegramId} не найден`);
+      return null;
+    }
   } catch (error) {
-    console.error(`Failed to get user by Telegram ID ${telegramId}`, error)
-    return null
+    console.error('Ошибка при поиске пользователя по Telegram ID:', error);
+    return null;
   }
 }
 
@@ -285,68 +343,115 @@ export const getCurrentUser = (): User | null => {
   }
 }
 
-// Создание пользователя из данных Telegram
-export const createUserFromTelegram = async (telegramId: string, customName?: string): Promise<User | null> => {
+// Функция создания пользователя из Telegram с улучшенной поддержкой множества пользователей
+export const createUserFromTelegram = async (telegramId: string, preferredName?: string): Promise<User | null> => {
   try {
-    // Инициализируем API если еще не сделано
-    if (!telegramApi.isReady()) {
-      await telegramApi.initialize()
+    // Получаем данные пользователя из Telegram API
+    const telegramData = await telegramApi.getUserData();
+
+    if (!telegramData) {
+      console.error('Не удалось получить данные пользователя из Telegram');
+      return null;
     }
 
-    // Получаем данные пользователя
-    const telegramData = telegramApi.getUserData()
-    const userId = `user_${Date.now()}`
+    // Проверяем, существует ли уже пользователь с таким Telegram ID
+    const existingUser = getUserByTelegramId(telegramId);
 
-    // Формируем имя из данных Telegram или используем переданное имя
-    const name = customName || (telegramData.firstName || 'Пользователь')
+    if (existingUser) {
+      console.log(`Пользователь с Telegram ID ${telegramId} уже существует, обновляем последнюю активность`);
 
+      // Обновляем последнюю активность
+      existingUser.lastActive = Date.now();
+      saveUser(existingUser);
+
+      // Устанавливаем текущего пользователя
+      setCurrentUser(existingUser.id);
+
+      return existingUser;
+    }
+
+    // Создаем уникальный ID для нового пользователя
+    const userId = `user_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+
+    // Формируем имя пользователя
+    const userName = preferredName ||
+      telegramData.first_name ||
+      `Пользователь ${telegramId.substring(0, 4)}`;
+
+    // Создаем нового пользователя
     const newUser: User = {
       id: userId,
-      name,
-      rating: 5.0,
-      interests: [],
+      name: userName,
+      age: 0, // По умолчанию возраст не указан
       isAnonymous: false,
+      interests: [],
+      rating: 0,
       createdAt: Date.now(),
       lastActive: Date.now(),
+      verified: true, // Пользователь верифицирован через Telegram
       telegramData: {
-        telegramId,
-        username: telegramData.username,
-        firstName: telegramData.firstName,
-        lastName: telegramData.lastName,
-        languageCode: telegramData.languageCode
+        authDate: Math.floor(Date.now() / 1000), // Current timestamp in seconds
+        telegramId: telegramId,
+        username: telegramData.username || '',
+        firstName: telegramData.first_name || '',
+        lastName: telegramData.last_name || '',
+        photoUrl: telegramData.photo_url || ''
       },
-      // Добавляем базовые настройки
-      settings: {
-        privacyLevel: 'medium',
-        showOnlineStatus: true,
-        showLastSeen: false,
-        allowProfileSearch: true,
-        matchingPreference: 'similar',
-        notifications: {
-          newMessages: true,
-          chatRequests: true,
-          systemUpdates: true,
-          sounds: true
-        },
-        theme: 'system'
+      currentUser: {},
+      existingUserByTelegramId: {}
+    };
+
+    // Проверяем, является ли пользователь администратором
+    const adminTelegramIds = localStorage.getItem('admin_telegram_ids');
+    if (adminTelegramIds) {
+      try {
+        const adminIds = JSON.parse(adminTelegramIds);
+        if (Array.isArray(adminIds) && adminIds.includes(telegramId)) {
+          console.log(`Пользователь с Telegram ID ${telegramId} получает права администратора`);
+          newUser.isAdmin = true;
+
+          // Добавляем в список администраторов
+          addAdmin(userId);
+        }
+      } catch (e) {
+        console.error('Ошибка при проверке прав администратора:', e);
       }
     }
 
-    // Сохраняем нового пользователя
-    const saved = await saveUser(newUser)
+    // Сохраняем пользователя в индивидуальной записи
+    await saveUser(newUser);
 
-    if (saved) {
-      // Устанавливаем как текущего пользователя
-      setCurrentUser(userId)
-      return newUser
+    // Создаем ссылку в localStorage для ускорения будущих поисков
+    try {
+      localStorage.setItem(`telegram_user_${telegramId}`, JSON.stringify({
+        userId: newUser.id,
+        timestamp: Date.now()
+      }));
+    } catch (e) {
+      console.warn('Не удалось создать ссылку Telegram ID -> User ID:', e);
     }
 
-    return null
+    // Добавляем в общий список пользователей
+    try {
+      const usersData = localStorage.getItem('users');
+      const users = usersData ? JSON.parse(usersData) : [];
+      users.push(newUser);
+      localStorage.setItem('users', JSON.stringify(users));
+    } catch (e) {
+      console.error('Ошибка при добавлении пользователя в общий список:', e);
+    }
+
+    // Устанавливаем текущего пользователя
+    setCurrentUser(userId);
+
+    console.log(`Создан новый пользователь с Telegram ID ${telegramId}: ${newUser.name} (ID: ${userId})`);
+
+    return newUser;
   } catch (error) {
-    console.error('Failed to create user from Telegram', error)
-    return null
+    console.error('Ошибка при создании пользователя из Telegram:', error);
+    return null;
   }
-}
+};
 
 // Создание демо-пользователя с опциональным именем
 export const createDemoUser = (customName?: string): User => {
@@ -373,6 +478,9 @@ export const createDemoUser = (customName?: string): User => {
     isAnonymous: false,
     createdAt: Date.now(),
     lastActive: Date.now(),
+    currentUser: {},
+    existingUserByTelegramId: {},
+    verified: false,
     // Добавляем базовые настройки
     bio: 'Привет! Я демо-пользователь для тестирования системы. Люблю общаться и находить новых друзей.',
     settings: {
@@ -426,8 +534,11 @@ export const createAdminUserFromTelegram = (telegramId: string, adminName: strin
         isAnonymous: false,
         createdAt: Date.now(),
         lastActive: Date.now(),
-        isAdmin: true,
+        currentUser: {},
+        existingUserByTelegramId: {},
+        verified: true,
         telegramData: {
+          authDate: Math.floor(Date.now() / 1000), // Current timestamp in seconds
           telegramId
         },
         settings: {
@@ -713,7 +824,10 @@ export const createTestUser = (name: string = "Тест"): User | null => {
       isAnonymous: true,
       rating: 5,
       createdAt: Date.now(),
-      lastActive: Date.now()
+      lastActive: Date.now(),
+      currentUser: {},
+      existingUserByTelegramId: {},
+      verified: false
     };
 
     // Сохраняем пользователя

@@ -5,7 +5,7 @@ import { Card } from './Card'
 import { Input } from './Input'
 import { InterestsSelector } from './InterestsSelector'
 import { generateRandomNickname } from '../utils/interests'
-import { createUserFromTelegram, createDemoUser, saveUser, User } from '../utils/user'
+import { createUserFromTelegram, createDemoUser, saveUser, User, addAdmin } from '../utils/user'
 import { telegramApi } from '../utils/database'
 import { motion } from 'framer-motion'
 import WebApp from '@twa-dev/sdk'
@@ -111,6 +111,50 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onComplete }
     return isValid
   }
 
+  // Проверка, является ли текущий пользователь администратором по Telegram ID
+  const checkAdminStatus = (telegramId: string): boolean => {
+    try {
+      // Проверяем специально сохраненный список Telegram ID администраторов
+      const adminTelegramIds = localStorage.getItem('admin_telegram_ids');
+      if (adminTelegramIds) {
+        const adminIds = JSON.parse(adminTelegramIds);
+        if (Array.isArray(adminIds) && adminIds.includes(telegramId)) {
+          console.log(`Пользователь с Telegram ID ${telegramId} найден в списке администраторов`);
+          return true;
+        }
+      }
+
+      // Проверяем значение во временном хранилище
+      const tempAdminId = localStorage.getItem('temp_current_admin');
+      if (tempAdminId && tempAdminId === telegramId) {
+        console.log(`Пользователь с Telegram ID ${telegramId} найден в временном хранилище администраторов`);
+        return true;
+      }
+
+      // Проверяем основной список администраторов
+      const admins = localStorage.getItem('admin_users');
+      if (admins) {
+        const adminList = JSON.parse(admins);
+        if (Array.isArray(adminList) && adminList.includes(telegramId)) {
+          console.log(`Пользователь с Telegram ID ${telegramId} найден в основном списке администраторов`);
+          return true;
+        }
+      }
+
+      // Проверка на целевого администратора
+      const targetAdminId = '5394381166';
+      if (telegramId === targetAdminId) {
+        console.log(`Обнаружен целевой администратор с Telegram ID: ${telegramId}`);
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Ошибка при проверке статуса администратора:', error);
+      return false;
+    }
+  }
+
   // Обработчик завершения регистрации
   const handleCompleteRegistration = async () => {
     // Проверка валидации формы
@@ -124,12 +168,27 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onComplete }
     try {
       let user: User | null = null
       const telegramId = telegramApi.getUserId();
+      let isAdminUser = false;
 
       // Проверяем, есть ли данные Telegram
       if (telegramId) {
         console.log('Создание пользователя с Telegram ID:', telegramId);
+
+        // Проверяем, является ли пользователь администратором
+        isAdminUser = checkAdminStatus(telegramId);
+        console.log(`Пользователь ${telegramId} администратор: ${isAdminUser}`);
+
         // Создаем пользователя из данных Telegram с уникальным ID
         user = await createUserFromTelegram(telegramId, name || randomName);
+
+        // Если пользователь найден в списке администраторов, устанавливаем флаг
+        if (user && isAdminUser) {
+          user.isAdmin = true;
+          console.log(`Установлен флаг isAdmin для пользователя ${user.name} (${user.id})`);
+
+          // Также добавляем в общий список администраторов
+          addAdmin(telegramId);
+        }
       } else {
         // Создаем демо-пользователя только если не в Telegram
         console.log('Создание демо пользователя (не в Telegram)');
@@ -151,7 +210,9 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onComplete }
       if (WebApp.isExpanded) {
         WebApp.showPopup({
           title: 'Регистрация успешна!',
-          message: 'Ваш профиль создан. Теперь вы можете начать общение.',
+          message: isAdminUser
+            ? 'Профиль администратора создан. Теперь вы можете использовать все функции приложения.'
+            : 'Ваш профиль создан. Теперь вы можете начать общение.',
           buttons: [{ type: 'ok' }]
         });
       }

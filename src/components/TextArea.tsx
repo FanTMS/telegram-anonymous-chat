@@ -1,31 +1,56 @@
 import React from 'react';
 
-interface TextAreaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-    fullWidth?: boolean;
+export interface TextAreaProps {
     label?: string;
     error?: string;
+    fullWidth?: boolean;
+    value?: string;
+    onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
+    placeholder?: string;
+    className?: string;
+    rows?: number;
+    required?: boolean;
+    name?: string;
+    id?: string;
+    disabled?: boolean;
+    maxLength?: number;
+    [key: string]: any; // Для любых других пропсов, которые могут понадобиться
 }
 
 export const TextArea: React.FC<TextAreaProps> = ({
-    fullWidth = false,
     label,
     error,
+    fullWidth = false,
     className = '',
+    rows = 3,
     ...props
 }) => {
+    const baseClass = 'tg-textarea block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-blue-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:ring-blue-500';
+    const errorClass = error ? 'border-red-500 ring-1 ring-red-500' : '';
+    const widthClass = fullWidth ? 'w-full' : '';
+    const fullClass = `${baseClass} ${errorClass} ${widthClass} ${className}`;
+
     return (
-        <div className={`${fullWidth ? 'w-full' : ''}`}>
+        <div className={`mb-3 ${fullWidth ? 'w-full' : ''}`}>
             {label && (
                 <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
                     {label}
                 </label>
             )}
-            <textarea
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 ${error ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                    } ${className}`}
-                {...props}
-            />
-            {error && <p className="mt-1 text-sm text-red-500">{error}</p>}
+
+            <div className="relative">
+                <textarea
+                    className={fullClass}
+                    rows={rows}
+                    {...props}
+                />
+            </div>
+
+            {error && (
+                <p className="mt-1 text-sm text-red-500">{error}</p>
+            )}
         </div>
     );
 };
+
+export default TextArea;

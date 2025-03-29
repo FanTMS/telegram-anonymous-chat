@@ -1,5 +1,5 @@
 import WebApp from '@twa-dev/sdk'
-import { User, saveUser, getCurrentUser } from './user'
+import { User, saveUser, getCurrentUser, getUserByTelegramId, setCurrentUser } from './user'
 
 // Интерфейс для пользователя Telegram
 interface TelegramUser {
@@ -45,62 +45,113 @@ export const initializeUserFromTelegram = (): User | null => {
   try {
     // Получаем данные пользователя из Telegram
     const telegramUser = getTelegramUser()
-
     if (!telegramUser) {
       console.log('Не удалось получить данные пользователя из Telegram')
       return null
     }
 
-    // Ищем пользователя по Telegram ID в локальном хранилище
-    const existingUsers = Object.keys(localStorage)
-      .filter(key => key.startsWith('user_'))
-      .map(key => {
-        try {
-          return JSON.parse(localStorage.getItem(key) || '{}') as User
-        } catch {
-          return null
-        }
-      })
-      .filter(user => user !== null && user.telegramData?.telegramId === telegramUser.id.toString()) as User[]
+    const telegramId = telegramUser.id.toString();
+    console.log(`Инициализация пользователя из Telegram с ID: ${telegramId}`);
 
-    if (existingUsers.length > 0) {
+    // Ищем пользователя по Telegram ID в локальном хранилище более эффективно
+    const existingUser = getUserByTelegramId(telegramId);
+
+    if (existingUser) {
       // Пользователь существует, обновляем время последней активности
-      const user = existingUsers[0]
-      user.lastActive = Date.now()
+      console.log(`Найден существующий пользователь: ${existingUser.name} (ID: ${existingUser.id})`);
+      existingUser.lastActive = Date.now();
 
-      // Обновляем локальное хранилище
-      saveUser(user)
-      console.log(`Пользователь с Telegram ID ${telegramUser.id} найден и обновлен`)
-      return user
+      // Проверяем, нужно ли обновить какие-либо данные
+      if (!existingUser.telegramData) {
+        existingUser.telegramData = {
+          telegramId: telegramId,
+          authDate: Date.now()
+        };
+      }
+
+      // Обновляем данные Telegram, только если они изменились
+      let dataChanged = false;
+
+      if (existingUser.telegramData.username !== telegramUser.username) {
+        existingUser.telegramData.username = telegramUser.username;
+        dataChanged = true;
+      }
+
+      if (existingUser.telegramData.firstName !== telegramUser.first_name) {
+        existingUser.telegramData.firstName = telegramUser.first_name;
+        dataChanged = true;
+      }
+
+      if (existingUser.telegramData.lastName !== telegramUser.last_name) {
+        existingUser.telegramData.lastName = telegramUser.last_name;
+        dataChanged = true;
+      }
+
+      if (existingUser.telegramData.photoUrl !== telegramUser.photo_url) {
+        existingUser.telegramData.photoUrl = telegramUser.photo_url;
+        dataChanged = true;
+      }
+
+      // Обновляем локальное хранилище только если данные изменились или прошло время
+      if (dataChanged || Date.now() - existingUser.lastActive > 3600000) { // 1 час
+        saveUser(existingUser);
+        console.log(`Данные пользователя с Telegram ID ${telegramId} обновлены`);
+      }
+
+      // Устанавливаем как текущего пользователя
+      setCurrentUser(existingUser.id);
+
+      return existingUser;
     } else {
-      // Создаем нового пользователя
-      const userId = `user_${Date.now()}`
+      // Создаем нового пользователя с более уникальным ID
+      const userId = `user_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+
       const newUser: User = {
         id: userId,
         name: telegramUser.first_name + (telegramUser.last_name ? ' ' + telegramUser.last_name : ''),
-        age: 25, // Значение по умолчанию, пользователь сможет изменить позже
+        age: null, // Пользователь сможет установить позже
         isAnonymous: false,
         interests: [],
         rating: 0,
         createdAt: Date.now(),
         lastActive: Date.now(),
+        verified: true, // Пользователь верифицирован через Telegram
         telegramData: {
-          telegramId: telegramUser.id.toString(),
+          telegramId: telegramId,
           username: telegramUser.username,
           firstName: telegramUser.first_name,
           lastName: telegramUser.last_name,
-          photoUrl: telegramUser.photo_url
-        }
-      }
+          photoUrl: telegramUser.photo_url,
+          languageCode: telegramUser.language_code,
+          authDate: Date.now()
+        },
+        currentUser: null,
+        existingUserByTelegramId: null
+      };
 
       // Сохраняем нового пользователя
-      saveUser(newUser)
-      console.log(`Создан новый пользователь с Telegram ID ${telegramUser.id}`)
-      return newUser
+      saveUser(newUser);
+
+      // Устанавливаем как текущего пользователя
+      setCurrentUser(userId);
+
+      console.log(`Создан новый пользователь с Telegram ID ${telegramId}: ${newUser.name} (ID: ${userId})`);
+
+      // Также добавляем в список пользователей для быстрого поиска
+      try {
+        const usersData = localStorage.getItem('users');
+        const users = usersData ? JSON.parse(usersData) : [];
+        users.push(newUser);
+        localStorage.setItem('users', JSON.stringify(users));
+      } catch (err) {
+        console.error('Ошибка при добавлении пользователя в общий список:', err);
+      }
+
+      return newUser;
     }
   } catch (error) {
-    console.error('Ошибка при инициализации пользователя из Telegram:', error)
-    return null
+    console.error('Ошибка при инициализации пользователя из Telegram:', error);
+    return null;
   }
 }
 
