@@ -1,48 +1,82 @@
-import { getUsers, saveUser, User } from './user';
-import { getChatsByUserId, endChat } from './chat';
-import { isTestUser } from './friends';
+import { resetApplication } from './reset';
+import WebApp from '@twa-dev/sdk';
 
-// Удаление всех тестовых пользователей
-export const removeTestUsers = (): boolean => {
+/**
+ * Функция для перехода в production режим с очисткой тестовых данных
+ * при сохранении важных настроек, таких как права администратора
+ */
+export const prepareForProduction = async () => {
     try {
-        const users = getUsers();
-        const testUsers = users.filter(user => isTestUser(user));
+        console.log('Подготовка приложения к production режиму...');
 
-        // Завершаем все чаты с тестовыми пользователями
-        testUsers.forEach(user => {
-            const userChats = getChatsByUserId(user.id);
-            userChats.forEach(chat => {
-                endChat(chat.id);
-            });
-        });
+        // Очищаем базу данных, но сохраняем список администраторов
+        const result = await resetApplication(true);
 
-        // Удаляем тестовых пользователей из списков друзей у реальных пользователей
-        const realUsers = users.filter(user => !isTestUser(user));
-        realUsers.forEach(user => {
-            if (user.favorites) {
-                user.favorites = user.favorites.filter(
-                    friendId => !testUsers.some(testUser => testUser.id === friendId)
-                );
-                saveUser(user);
+        if (result) {
+            console.log('Приложение успешно подготовлено к production режиму!');
+
+            // Показываем уведомление, если приложение запущено в Telegram
+            if (WebApp.isExpanded) {
+                WebApp.showPopup({
+                    title: 'Готово к работе',
+                    message: 'Приложение очищено и готово к production использованию. Теперь все Telegram ID пользователей будут уникальными.',
+                    buttons: [{ type: 'ok' }]
+                });
             }
-        });
 
-        return true;
+            return true;
+        } else {
+            console.error('Произошла ошибка при подготовке приложения к production режиму');
+            return false;
+        }
     } catch (error) {
-        console.error('Failed to remove test users:', error);
+        console.error('Произошла ошибка при подготовке приложения:', error);
         return false;
     }
 };
 
-// Очистка всей системы для производственного использования
-export const prepareForProduction = (): boolean => {
+/**
+ * Функция для полного удаления всех данных и выхода из приложения
+ * Может использоваться для "выхода из аккаунта"
+ */
+export const clearAllAndExit = async () => {
     try {
-        // Удаляем тестовых пользователей
-        removeTestUsers();
+        console.log('Полная очистка данных перед выходом...');
+
+        // Полная очистка без сохранения администраторов
+        await resetApplication(false);
+
+        // Очищаем сессию Telegram
+        localStorage.removeItem('telegram_user_id');
+        localStorage.removeItem('telegram_user_data');
+        localStorage.removeItem('current_user_id');
+
+        console.log('Данные очищены, выход из приложения...');
+
+        // Если в Telegram, закрываем WebApp
+        if (WebApp.isExpanded) {
+            // Показываем сообщение перед закрытием
+            WebApp.showPopup({
+                title: 'Выход выполнен',
+                message: 'Все данные очищены. До свидания!',
+                buttons: [
+                    {
+                        type: 'ok',
+                        id: 'close'
+                    }
+                ]
+            }, () => {
+                // После закрытия сообщения закрываем WebApp
+                setTimeout(() => WebApp.close(), 500);
+            });
+        } else {
+            // Если не в Telegram, перезагружаем страницу
+            window.location.reload();
+        }
 
         return true;
     } catch (error) {
-        console.error('Failed to prepare for production:', error);
+        console.error('Произошла ошибка при очистке и выходе:', error);
         return false;
     }
 };
