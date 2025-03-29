@@ -1,5 +1,4 @@
 import WebApp from '@twa-dev/sdk'
-import axios from 'axios'
 
 // Перечисление типов хранилищ данных
 export enum StorageType {
@@ -23,12 +22,7 @@ export class UserDatabase {
   private config: DatabaseConfig
   private syncTimer: ReturnType<typeof setInterval> | null = null
   private isSyncing = false
-  private pendingChanges = new Map<string, { action: 'save' | 'delete', data?: any }>()
-  private apiBaseUrl: string
-  private lastSyncTime = 0
-  private syncRetryCount = 0
-  private syncError: Error | null = null
-  private isOnline = true
+  private pendingChanges = new Set<string>()
 
   constructor(config: DatabaseConfig) {
     this.config = {
@@ -38,27 +32,9 @@ export class UserDatabase {
       maxRetries: config.maxRetries ?? 3
     }
 
-    this.apiBaseUrl = this.config.apiBaseUrl || '/.netlify/functions/database-api'
-
-    // Слушаем изменения состояния сети
-    window.addEventListener('online', this.handleNetworkChange.bind(this))
-    window.addEventListener('offline', this.handleNetworkChange.bind(this))
-    this.isOnline = navigator.onLine
-
     // Если используем remote API, запускаем периодическую синхронизацию
     if (this.config.storageType === StorageType.REMOTE_API && this.config.syncInterval) {
       this.startSync()
-    }
-  }
-
-  // Обработка изменений состояния сети
-  private handleNetworkChange(event: Event): void {
-    this.isOnline = navigator.onLine
-    console.log(`Network status changed: ${this.isOnline ? 'online' : 'offline'}`)
-
-    if (this.isOnline && this.pendingChanges.size > 0) {
-      // Если снова онлайн, и есть несинхронизированные изменения, запускаем синхронизацию
-      this.syncWithRemote()
     }
   }
 
@@ -69,71 +45,24 @@ export class UserDatabase {
     }
 
     this.syncTimer = setInterval(() => {
-      if (this.isOnline && this.pendingChanges.size > 0) {
-        this.syncWithRemote()
-      }
+      this.syncWithRemote()
     }, this.config.syncInterval)
   }
 
   // Синхронизация данных с удаленным сервером
   private async syncWithRemote(): Promise<void> {
-    if (this.isSyncing || this.pendingChanges.size === 0 || !this.isOnline) return
+    if (this.isSyncing || this.pendingChanges.size === 0) return
 
     this.isSyncing = true
-    this.syncError = null
 
     try {
-      console.log(`Синхронизация с сервером, ${this.pendingChanges.size} изменений`)
+      // Здесь будет код для синхронизации с API
+      console.log('Syncing with remote:', Array.from(this.pendingChanges))
 
-      for (const [key, changeData] of this.pendingChanges.entries()) {
-        try {
-          if (key === 'clearAll') {
-            // Обработка полной очистки данных
-            console.log('Выполняем полную очистку данных на сервере')
-            // TODO: Добавить код для полной очистки данных на сервере
-            continue
-          }
-
-          // Проверяем, удаление это или сохранение
-          if (changeData.action === 'delete') {
-            // Удаление данных
-            const collection = key.split('_')[0] || 'users' // Определяем коллекцию
-            const itemKey = key
-
-            await axios.delete(`${this.apiBaseUrl}/${collection}/${itemKey}`)
-            console.log(`Удалены данные: ${key}`)
-          } else {
-            // Сохранение данных
-            const collection = key.split('_')[0] || 'users' // Определяем коллекцию
-            const itemKey = key
-
-            await axios.post(
-              `${this.apiBaseUrl}/${collection}/${itemKey}`,
-              changeData.data || localStorage.getItem(key)
-            )
-            console.log(`Синхронизированы данные: ${key}`)
-          }
-
-          // После успешной синхронизации удаляем из списка ожидающих
-          this.pendingChanges.delete(key)
-        } catch (error) {
-          console.error(`Ошибка при синхронизации ${key}:`, error)
-          this.syncRetryCount++
-
-          if (this.syncRetryCount > this.config.maxRetries) {
-            console.error(`Превышено количество попыток синхронизации для ${key}, пропускаем`)
-            this.pendingChanges.delete(key) // Удаляем из списка, чтобы не блокировать остальные
-          }
-        }
-      }
-
-      this.lastSyncTime = Date.now()
-      this.syncRetryCount = 0
-      console.log('Синхронизация завершена')
-
+      // Очищаем список изменений после успешной синхронизации
+      this.pendingChanges.clear()
     } catch (error) {
-      console.error('Ошибка при синхронизации с сервером:', error)
-      this.syncError = error as Error
+      console.error('Failed to sync with remote:', error)
     } finally {
       this.isSyncing = false
     }
@@ -158,17 +87,8 @@ export class UserDatabase {
         case StorageType.REMOTE_API:
           // Сохраняем локально
           localStorage.setItem(key, serializedData)
-
-          // Добавляем в очередь синхронизации
-          this.pendingChanges.set(key, {
-            action: 'save',
-            data: data
-          })
-
-          // Если онлайн и первое изменение, запускаем синхронизацию немедленно
-          if (this.isOnline && this.pendingChanges.size === 1) {
-            this.syncWithRemote()
-          }
+          // Отмечаем для последующей синхронизации
+          this.pendingChanges.add(key)
           break
       }
 
@@ -182,50 +102,22 @@ export class UserDatabase {
   // Получение данных
   async getData<T>(key: string, defaultValue?: T): Promise<T | null> {
     try {
-      let data: T | null = null
       let serializedData: string | null = null
 
       switch (this.config.storageType) {
         case StorageType.LOCAL_STORAGE:
         case StorageType.INDEXED_DB:
-          serializedData = localStorage.getItem(key)
-          if (serializedData) {
-            data = JSON.parse(serializedData) as T
-          }
-          break
-
         case StorageType.REMOTE_API:
-          // Сначала проверяем локальный кэш
+          // Для всех типов хранилищ пробуем получить данные из localStorage
           serializedData = localStorage.getItem(key)
-
-          if (serializedData) {
-            data = JSON.parse(serializedData) as T
-          }
-
-          // Если мы онлайн, пытаемся получить актуальные данные с сервера
-          if (this.isOnline) {
-            try {
-              const collection = key.split('_')[0] || 'users'
-              const response = await axios.get(`${this.apiBaseUrl}/${collection}/${key}`)
-
-              if (response.data && response.status === 200) {
-                data = response.data as T
-                // Обновляем локальный кэш
-                localStorage.setItem(key, JSON.stringify(data))
-              }
-            } catch (error) {
-              // Если данные не найдены на сервере, используем локальные
-              if (axios.isAxiosError(error) && error.response?.status === 404) {
-                console.log(`Данные ${key} не найдены на сервере, используем локальные`)
-              } else {
-                console.error(`Ошибка при получении данных с сервера для ${key}:`, error)
-              }
-            }
-          }
           break
       }
 
-      return data !== null ? data : (defaultValue !== undefined ? defaultValue : null)
+      if (serializedData) {
+        return JSON.parse(serializedData) as T
+      }
+
+      return defaultValue !== undefined ? defaultValue : null
     } catch (error) {
       console.error(`Error getting data for key ${key}:`, error)
       return defaultValue !== undefined ? defaultValue : null
@@ -248,14 +140,8 @@ export class UserDatabase {
         case StorageType.REMOTE_API:
           // Удаляем локально
           localStorage.removeItem(key)
-
-          // Добавляем в очередь на удаление
-          this.pendingChanges.set(key, { action: 'delete' })
-
-          // Если онлайн, запускаем синхронизацию сразу
-          if (this.isOnline) {
-            this.syncWithRemote()
-          }
+          // Отмечаем для синхронизации (для удаления на сервере)
+          this.pendingChanges.add(`delete:${key}`)
           break
       }
 
@@ -269,26 +155,14 @@ export class UserDatabase {
   // Проверка наличия данных
   async hasData(key: string): Promise<boolean> {
     try {
-      // Сначала проверяем локально
-      const hasLocal = localStorage.getItem(key) !== null
-
-      if (this.config.storageType !== StorageType.REMOTE_API || !this.isOnline) {
-        return hasLocal
+      switch (this.config.storageType) {
+        case StorageType.LOCAL_STORAGE:
+        case StorageType.INDEXED_DB:
+        case StorageType.REMOTE_API:
+          return localStorage.getItem(key) !== null
       }
 
-      // Если удаленное хранилище и мы онлайн, проверяем на сервере
-      try {
-        const collection = key.split('_')[0] || 'users'
-        const response = await axios.get(`${this.apiBaseUrl}/${collection}/${key}`)
-        return response.status === 200
-      } catch (error) {
-        // Если получили 404, данных нет
-        if (axios.isAxiosError(error) && error.response?.status === 404) {
-          return false
-        }
-        // При других ошибках полагаемся на локальные данные
-        return hasLocal
-      }
+      return false
     } catch (error) {
       console.error(`Error checking data for key ${key}:`, error)
       return false
@@ -298,13 +172,22 @@ export class UserDatabase {
   // Полная очистка базы данных
   async clearAllData(): Promise<boolean> {
     try {
-      // Очищаем локальное хранилище во всех случаях
-      localStorage.clear()
+      switch (this.config.storageType) {
+        case StorageType.LOCAL_STORAGE:
+          localStorage.clear()
+          break
 
-      if (this.config.storageType === StorageType.REMOTE_API && this.isOnline) {
-        // Добавляем задачу на полную очистку
-        this.pendingChanges.set('clearAll', { action: 'delete' })
-        this.syncWithRemote()
+        case StorageType.INDEXED_DB:
+          // Здесь будет реализация для IndexedDB
+          localStorage.clear()
+          break
+
+        case StorageType.REMOTE_API:
+          // Очищаем локальное хранилище
+          localStorage.clear()
+          // Отмечаем для синхронизации (полная очистка на сервере)
+          this.pendingChanges.add('clearAll')
+          break
       }
 
       return true
@@ -316,7 +199,7 @@ export class UserDatabase {
 
   // Принудительная синхронизация с удаленным сервером
   async forceSyncWithRemote(): Promise<boolean> {
-    if (this.config.storageType !== StorageType.REMOTE_API || !this.isOnline) {
+    if (this.config.storageType !== StorageType.REMOTE_API) {
       return false
     }
 
@@ -326,17 +209,6 @@ export class UserDatabase {
     } catch (error) {
       console.error('Error forcing sync with remote:', error)
       return false
-    }
-  }
-
-  // Получить статус синхронизации
-  getSyncStatus() {
-    return {
-      pending: this.pendingChanges.size,
-      isSyncing: this.isSyncing,
-      lastSync: this.lastSyncTime,
-      error: this.syncError?.message,
-      isOnline: this.isOnline
     }
   }
 }
@@ -461,49 +333,6 @@ export class TelegramIntegration {
   }
 }
 
-// Простой интерфейс для работы с данными
-const dbInstance = new UserDatabase({
-  storageType: StorageType.REMOTE_API,
-  apiBaseUrl: '/.netlify/functions/database-api',
-  syncInterval: 10000, // Синхронизация каждые 10 секунд
-  useCompression: false,
-  maxRetries: 3
-})
-
-// Обновляем экспортируемый объект db
-export const db = {
-  async getData(key: string): Promise<any> {
-    return dbInstance.getData(key)
-  },
-
-  async saveData(key: string, data: any): Promise<boolean> {
-    return dbInstance.saveData(key, data)
-  },
-
-  async removeData(key: string): Promise<boolean> {
-    return dbInstance.removeData(key)
-  },
-
-  async hasData(key: string): Promise<boolean> {
-    return dbInstance.hasData(key)
-  },
-
-  async clearAllData(): Promise<boolean> {
-    return dbInstance.clearAllData()
-  },
-
-  async forceSyncWithRemote(): Promise<boolean> {
-    return dbInstance.forceSyncWithRemote()
-  },
-
-  getSyncStatus() {
-    return dbInstance.getSyncStatus()
-  }
-}
-
-// Интеграция с Telegram API
-export const telegramApi = TelegramIntegration.getInstance();
-
 // Базовый модуль для работы с локальным хранилищем
 
 /**
@@ -569,5 +398,82 @@ export const validateLocalStorage = (): boolean => {
   } catch (error) {
     console.error('Ошибка при проверке структуры данных:', error);
     return false;
+  }
+};
+
+// Простой интерфейс для работы с данными
+export const db = {
+  async getData(key: string): Promise<any> {
+    try {
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error(`Ошибка при получении данных для ${key}:`, error);
+      return null;
+    }
+  },
+
+  async saveData(key: string, data: any): Promise<boolean> {
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+      return true;
+    } catch (error) {
+      console.error(`Ошибка при сохранении данных для ${key}:`, error);
+      return false;
+    }
+  },
+
+  async removeData(key: string): Promise<boolean> {
+    try {
+      localStorage.removeItem(key);
+      return true;
+    } catch (error) {
+      console.error(`Ошибка при удалении данных для ${key}:`, error);
+      return false;
+    }
+  },
+
+  async clearAllData(): Promise<boolean> {
+    try {
+      localStorage.clear();
+      return true;
+    } catch (error) {
+      console.error('Ошибка при очистке всех данных:', error);
+      return false;
+    }
+  }
+};
+
+// Интеграция с Telegram API
+export const telegramApi = {
+  isInitialized: false,
+
+  isReady(): boolean {
+    return this.isInitialized;
+  },
+
+  async initialize(): Promise<boolean> {
+    try {
+      this.isInitialized = true;
+      return true;
+    } catch (error) {
+      console.error('Failed to initialize Telegram API:', error);
+      return false;
+    }
+  },
+
+  getUserId(): string | null {
+    // Заглушка для локального тестирования
+    return '12345678';
+  },
+
+  getUserData(): any {
+    // Заглушка для локального тестирования
+    return {
+      id: '12345678',
+      first_name: 'TestUser',
+      username: 'test_user',
+      language_code: 'ru'
+    };
   }
 };

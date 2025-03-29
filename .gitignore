@@ -1,4 +1,4 @@
-# Node
+# Зависимости
 node_modules
 npm-debug.log*
 yarn-debug.log*
@@ -8,17 +8,36 @@ lerna-debug.log*
 package-lock.json
 yarn.lock
 
-# Build
+# Сборка
 dist
 dist-ssr
 build
 .netlify
-/.cache
 
-# Editor directories and files
+# Среда разработки
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.local
+.env.production
+
+# Кэш и временные файлы
+.cache
+.DS_Store
+.parcel-cache
+.rts2_cache_*
+.history
+
+# Логи
+logs
+*.log
+
+# IDE и редакторы
+.idea/
 .vscode/*
 !.vscode/extensions.json
-.idea/
 *.sublime-project
 *.sublime-workspace
 .project
@@ -31,28 +50,15 @@ build
 *.sln
 *.sw?
 
-# Environment
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-*.local
-.env.production
-
-# Logs
-logs
-*.log
-
-# Testing
+# Тестирование
 /coverage
 
-# OS
+# ОС
 .DS_Store
 Thumbs.db
 
-# Nested project copy (if not needed)
+# Вложенная копия проекта (если это не нужные файлы)
 /telegram-anonymous-chat/
 
-# Generated files
+# Сгенерированные файлы
 tsconfig.tsbuildinfo
