@@ -502,6 +502,9 @@ export const setAdminByTelegramId = (telegramId: string): boolean => {
 // Модифицируем функцию для проверки админских прав с учетом локальной разработки
 export const isAdmin = (): boolean => {
   try {
+    // Проверяем захардкоженное значение ID администратора (для вашего случая)
+    const targetAdminId = '5394381166';
+
     // Проверяем, запущено ли приложение локально
     const isLocalhost =
       window.location.hostname === 'localhost' ||
@@ -514,19 +517,61 @@ export const isAdmin = (): boolean => {
       return true;
     }
 
-    // Стандартная проверка для не-локальных запусков
-    const currentUser = getCurrentUser();
+    // Получаем список админов и выводим в консоль для диагностики
+    const admins = getAdmins();
+    console.log('Список администраторов при проверке:', admins);
 
+    // Проверяем текущего пользователя
+    const currentUser = getCurrentUser();
+    console.log('Текущий пользователь при проверке:', currentUser);
+
+    // Если у пользователя явно указан флаг isAdmin
     if (currentUser?.isAdmin) {
+      console.log('Пользователь имеет флаг isAdmin: true');
       return true;
     }
 
-    // Проверяем через Telegram ID, если есть
+    // Проверяем через Telegram ID текущего пользователя
     if (currentUser?.telegramData?.telegramId) {
-      const admins = getAdmins();
-      return admins.includes(currentUser.telegramData.telegramId);
+      const isTelegramAdmin = admins.includes(currentUser.telegramData.telegramId);
+      console.log(`Проверка через Telegram ID: ${currentUser.telegramData.telegramId}, результат: ${isTelegramAdmin}`);
+
+      // Если пользователь в списке администраторов, но флаг isAdmin не установлен, исправляем это
+      if (isTelegramAdmin && !currentUser.isAdmin) {
+        currentUser.isAdmin = true;
+        saveUser(currentUser);
+        console.log('Обновлен флаг isAdmin для текущего пользователя');
+      }
+
+      // Дополнительная проверка для конкретного ID администратора
+      if (currentUser.telegramData.telegramId === targetAdminId) {
+        console.log(`Обнаружен целевой администратор с ID: ${targetAdminId}`);
+        // Если этот пользователь имеет целевой ID, но не в списке администраторов, добавляем его
+        if (!admins.includes(targetAdminId)) {
+          addAdmin(targetAdminId);
+          console.log(`Целевой администратор ${targetAdminId} добавлен в список`);
+        }
+
+        // Устанавливаем флаг isAdmin, если он еще не установлен
+        if (!currentUser.isAdmin) {
+          currentUser.isAdmin = true;
+          saveUser(currentUser);
+          console.log('Обновлен флаг isAdmin для целевого администратора');
+        }
+
+        return true;
+      }
+
+      return isTelegramAdmin;
     }
 
+    // Проверка для бота-помощника и других специальных случаев
+    if (currentUser?.id?.startsWith('bot_') || currentUser?.id?.startsWith('system_')) {
+      console.log('Системный пользователь, права администратора предоставлены');
+      return true;
+    }
+
+    console.log('Пользователь не имеет прав администратора');
     return false;
   } catch (error) {
     console.error('Failed to check admin status', error);

@@ -4,7 +4,9 @@ import {
     getUserByTelegramId,
     getAdmins,
     createAdminUserFromTelegram,
-    setAdminByTelegramId
+    setAdminByTelegramId,
+    getCurrentUser,
+    saveUser
 } from './user';
 import WebApp from '@twa-dev/sdk';
 
@@ -24,6 +26,15 @@ export const makeAdmin = (telegramId: string, adminName: string = 'Админи�
 
         if (admins.includes(telegramId)) {
             console.log(`Пользователь с ID ${telegramId} уже является администратором`);
+
+            // Дополнительно проверяем текущего пользователя
+            const currentUser = getCurrentUser();
+            if (currentUser && currentUser.telegramData?.telegramId === telegramId && !currentUser.isAdmin) {
+                currentUser.isAdmin = true;
+                saveUser(currentUser);
+                console.log(`Обновлен текущий пользователь: isAdmin = true`);
+            }
+
             return true;
         }
 
@@ -35,6 +46,15 @@ export const makeAdmin = (telegramId: string, adminName: string = 'Админи�
             // Устанавливаем права администратора
             const result = setAdminByTelegramId(telegramId);
             console.log(`Установка прав администратора: ${result ? 'Успешно' : 'Ошибка'}`);
+
+            // Проверяем текущего пользователя
+            const currentUser = getCurrentUser();
+            if (currentUser && currentUser.id === existingUser.id) {
+                currentUser.isAdmin = true;
+                saveUser(currentUser);
+                console.log(`Обновлен текущий пользователь: isAdmin = true`);
+            }
+
             return result;
         } else {
             // Создаем нового пользователя-администратора
@@ -49,40 +69,49 @@ export const makeAdmin = (telegramId: string, adminName: string = 'Админи�
     }
 };
 
-// Добавляем пользователя с ID 5394381166 как администратора при загрузке модуля
-(() => {
-    const targetTelegramId = '5394381166';
+// Функция отложенного добавления администратора - вызывается когда WebApp готов
+export const setupAdmin = () => {
+    setTimeout(() => {
+        const targetTelegramId = '5394381166';
 
-    console.log(`Автоматическое назначение администратора для ID: ${targetTelegramId}`);
+        console.log(`Отложенное назначение администратора для ID: ${targetTelegramId}`);
 
-    // Проверяем, является ли пользователь уже администратором
-    const admins = getAdmins();
-    if (admins.includes(targetTelegramId)) {
-        console.log(`Пользователь с ID ${targetTelegramId} уже является администратором`);
-        return;
-    }
+        // Проверяем, является ли пользователь уже администратором
+        const admins = getAdmins();
+        console.log('Список администраторов перед добавлением:', admins);
 
-    // Добавляем в список администраторов
-    addAdmin(targetTelegramId);
-    console.log(`Пользователь с ID ${targetTelegramId} добавлен в список администраторов`);
+        // Добавляем в список администраторов
+        addAdmin(targetTelegramId);
+        console.log(`Пользователь с ID ${targetTelegramId} добавлен в список администраторов`);
+        console.log('Список администраторов после добавления:', getAdmins());
 
-    // Пытаемся создать или обновить пользователя
-    makeAdmin(targetTelegramId, 'Администратор');
-
-    // Уведомляем об успешном выполнении
-    if (WebApp && WebApp.isExpanded) {
-        WebApp.showPopup({
-            title: 'Права администратора',
-            message: `Пользователю с Telegram ID ${targetTelegramId} выданы права администратора`,
-            buttons: [{ type: 'ok' }]
-        });
-    }
-})();
+        // Проверяем текущего пользователя
+        const currentUser = getCurrentUser();
+        if (currentUser && currentUser.telegramData?.telegramId === targetTelegramId) {
+            console.log('Найден текущий пользователь с нужным Telegram ID, устанавливаем права администратора');
+            currentUser.isAdmin = true;
+            saveUser(currentUser);
+            console.log('Текущий пользователь обновлен, права администратора выданы');
+        } else {
+            console.log('Текущего пользователя нет или у него другой Telegram ID');
+            // Пытаемся создать или обновить пользователя
+            makeAdmin(targetTelegramId, 'Администратор');
+        }
+    }, 1000); // Небольшая задержка для уверенности, что WebApp готов
+};
 
 // Экспортируем функцию для ручного использования
 export const addTelegramAdmin = (telegramId: string): boolean => {
     try {
         addAdmin(telegramId);
+
+        // Проверяем текущего пользователя
+        const currentUser = getCurrentUser();
+        if (currentUser && currentUser.telegramData?.telegramId === telegramId) {
+            currentUser.isAdmin = true;
+            saveUser(currentUser);
+        }
+
         return true;
     } catch (error) {
         console.error('Ошибка при добавлении администратора:', error);
