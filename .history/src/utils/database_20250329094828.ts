@@ -55,7 +55,7 @@ export class UserDatabase {
   private handleNetworkChange(event: Event): void {
     this.isOnline = navigator.onLine
     console.log(`Network status changed: ${this.isOnline ? 'online' : 'offline'}`)
-
+    
     if (this.isOnline && this.pendingChanges.size > 0) {
       // Если снова онлайн, и есть несинхронизированные изменения, запускаем синхронизацию
       this.syncWithRemote()
@@ -78,7 +78,7 @@ export class UserDatabase {
   // Синхронизация данных с удаленным сервером
   private async syncWithRemote(): Promise<void> {
     if (this.isSyncing || this.pendingChanges.size === 0 || !this.isOnline) return
-
+    
     this.isSyncing = true
     this.syncError = null
 
@@ -119,7 +119,7 @@ export class UserDatabase {
         } catch (error) {
           console.error(`Ошибка при синхронизации ${key}:`, error)
           this.syncRetryCount++
-
+          
           if (this.syncRetryCount > this.config.maxRetries) {
             console.error(`Превышено количество попыток синхронизации для ${key}, пропускаем`)
             this.pendingChanges.delete(key) // Удаляем из списка, чтобы не блокировать остальные
@@ -158,13 +158,13 @@ export class UserDatabase {
         case StorageType.REMOTE_API:
           // Сохраняем локально
           localStorage.setItem(key, serializedData)
-
+          
           // Добавляем в очередь синхронизации
-          this.pendingChanges.set(key, {
-            action: 'save',
-            data: data
+          this.pendingChanges.set(key, { 
+            action: 'save', 
+            data: data 
           })
-
+          
           // Если онлайн и первое изменение, запускаем синхронизацию немедленно
           if (this.isOnline && this.pendingChanges.size === 1) {
             this.syncWithRemote()
@@ -197,17 +197,17 @@ export class UserDatabase {
         case StorageType.REMOTE_API:
           // Сначала проверяем локальный кэш
           serializedData = localStorage.getItem(key)
-
+          
           if (serializedData) {
             data = JSON.parse(serializedData) as T
           }
-
+          
           // Если мы онлайн, пытаемся получить актуальные данные с сервера
           if (this.isOnline) {
             try {
               const collection = key.split('_')[0] || 'users'
               const response = await axios.get(`${this.apiBaseUrl}/${collection}/${key}`)
-
+              
               if (response.data && response.status === 200) {
                 data = response.data as T
                 // Обновляем локальный кэш
@@ -248,10 +248,10 @@ export class UserDatabase {
         case StorageType.REMOTE_API:
           // Удаляем локально
           localStorage.removeItem(key)
-
+          
           // Добавляем в очередь на удаление
           this.pendingChanges.set(key, { action: 'delete' })
-
+          
           // Если онлайн, запускаем синхронизацию сразу
           if (this.isOnline) {
             this.syncWithRemote()
@@ -275,7 +275,7 @@ export class UserDatabase {
       if (this.config.storageType !== StorageType.REMOTE_API || !this.isOnline) {
         return hasLocal
       }
-
+      
       // Если удаленное хранилище и мы онлайн, проверяем на сервере
       try {
         const collection = key.split('_')[0] || 'users'
@@ -475,27 +475,27 @@ export const db = {
   async getData(key: string): Promise<any> {
     return dbInstance.getData(key)
   },
-
+  
   async saveData(key: string, data: any): Promise<boolean> {
     return dbInstance.saveData(key, data)
   },
-
+  
   async removeData(key: string): Promise<boolean> {
     return dbInstance.removeData(key)
   },
-
+  
   async hasData(key: string): Promise<boolean> {
     return dbInstance.hasData(key)
   },
-
+  
   async clearAllData(): Promise<boolean> {
     return dbInstance.clearAllData()
   },
-
+  
   async forceSyncWithRemote(): Promise<boolean> {
     return dbInstance.forceSyncWithRemote()
   },
-
+  
   getSyncStatus() {
     return dbInstance.getSyncStatus()
   }

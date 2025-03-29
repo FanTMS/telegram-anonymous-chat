@@ -10,7 +10,6 @@ interface SearchingUser {
         interests?: string[];
         ageRange?: [number, number];
     };
-    name?: string; // Добавляем поле имени пользователя
 }
 
 // Ключ для хранения данных поиска
@@ -96,10 +95,6 @@ export const startSearching = (
             return true; // Уже в поиске
         }
 
-        // Генерируем уникальное имя пользователя
-        const userName = `User_${userId}`;
-        if (DEBUG) console.log(`[startSearching] Генерируем уникальное имя для пользователя: ${userName}`);
-
         // Добавляем пользователя в список ищущих
         const newSearchingUser: SearchingUser = {
             userId,
@@ -108,8 +103,7 @@ export const startSearching = (
                 random: isRandom,
                 interests,
                 ageRange
-            },
-            name: userName // Добавляем имя пользователя
+            }
         };
 
         const updatedUsers = [...searchingUsers, newSearchingUser];
@@ -236,11 +230,8 @@ const createChatBetweenUsers = (participants: string[]): any => {
         const newChat = createChat(participants);
 
         if (!newChat) {
-            console.error('[createChatBetweenUsers] Ошибка при создании чата:', participants);
-        } else {
-            if (DEBUG) {
-                console.log(`[createChatBetweenUsers] Чат создан успешно: ${newChat.id}`);
-            }
+            console.error('[createChatBetweenUsers] Не удалось создать чат');
+            return null;
         }
 
         // Устанавливаем активный чат для обоих пользователей
@@ -284,14 +275,10 @@ export const findMatch = async (): Promise<boolean> => {
         const firstUser = sortedUsers[0];
         const firstUserData = getUserById(firstUser.userId);
 
-        // Check if the first user exists
         if (!firstUserData) {
-            console.error(`[findMatch] Пользователь ${firstUser.userId} не найден, но не удаляем из поиска для диагностики`);
-            return false; // Exit the function instead of using continue
-        }
-
-        if (DEBUG) {
-            console.log(`[findMatch] Проверяем пользователя: ${firstUser.userId}, имя: ${firstUserData.name}`);
+            console.error(`[findMatch] Пользователь ${firstUser.userId} не найден, удаляем из поиска`);
+            stopSearching(firstUser.userId);
+            return false;
         }
 
         // Оценка совместимости по интересам (0-100%)
@@ -332,10 +319,6 @@ export const findMatch = async (): Promise<boolean> => {
                 score += Math.min(10, (overlap / totalRange) * 10);
             }
 
-            if (DEBUG) {
-                console.log(`[calculateCompatibility] Совместимость между ${user1.userId} и ${user2.userId}: ${score}%`);
-            }
-
             return score;
         };
 
@@ -348,28 +331,19 @@ export const findMatch = async (): Promise<boolean> => {
 
             // Проверяем существование
             const matchData = getUserById(potentialMatch.userId);
-
-            // If a potential match is not found, do not remove them from the search pool
             if (!matchData) {
-                console.error(`[findMatch] Потенциальный партнер ${potentialMatch.userId} не найден, но не удаляем из поиска для диагностики`);
-                continue; // Skip this user within the loop
-            }
-
-            if (DEBUG) {
-                console.log(`[findMatch] Потенциальный партнер: ${potentialMatch.userId}, имя: ${matchData.name}`);
+                console.error(`[findMatch] Потенциальный партнер ${potentialMatch.userId} не найден, удаляем из поиска`);
+                stopSearching(potentialMatch.userId);
+                continue;
             }
 
             const compatibilityScore = calculateCompatibility(firstUser, potentialMatch);
 
-            if (DEBUG) {
-                console.log(`[findMatch] Совместимость между ${firstUser.userId} и ${potentialMatch.userId}: ${compatibilityScore}%`);
-            }
+            if (DEBUG) console.log(`[findMatch] Совместимость между ${firstUser.userId} и ${potentialMatch.userId}: ${compatibilityScore}%`);
+
             if (compatibilityScore > bestScore) {
                 bestScore = compatibilityScore;
                 bestMatch = potentialMatch;
-            }
-            if (DEBUG) {
-                console.log(`[findMatch] Текущий лучший матч: ${bestMatch?.userId || 'нет'} с совместимостью ${bestScore}%`);
             }
         }
 
@@ -381,11 +355,8 @@ export const findMatch = async (): Promise<boolean> => {
             const newChat = createChatBetweenUsers([firstUser.userId, bestMatch.userId]);
 
             if (!newChat) {
-                console.error('[findMatch] Не удалось создать чат для пары:', firstUser.userId, bestMatch.userId);
+                console.error('[findMatch] Не удалось создать чат для пары');
                 return false;
-            }
-            if (DEBUG) {
-                console.log(`[findMatch] Чат успешно создан: ${newChat.id}`);
             }
 
             // Удаляем пользователей из списка поиска

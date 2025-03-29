@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getCurrentUser } from '../utils/user';
 import { getSearchingUsers, triggerMatchmaking } from '../utils/matchmaking';
-import { getChatById } from '../utils/chat';
+import { getChatById } from '../utils/chat'; // Импортируем getChatById из chat.ts
 import DatabaseStatus from '../components/DatabaseStatus';
 
 // Страница для отладки проблем с чатом
@@ -119,7 +119,7 @@ export const DebugPage = () => {
     const resetChatNotifications = () => {
         try {
             // Находим все ключи, связанные с уведомлениями о чатах
-            const allKeys: string[] = [];
+            const allKeys = [];
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
                 if (key && (key.startsWith('new_chat_notification_') || key.startsWith('new_chat_flag_'))) {
@@ -245,7 +245,7 @@ export const DebugPage = () => {
                 <div className="bg-gray-100 p-4 rounded-lg md:col-span-2">
                     <h2 className="text-xl font-bold mb-2">Логи</h2>
                     <div className="text-xs font-mono bg-white p-2 rounded border max-h-40 overflow-auto">
-                        {logs.map((log: string, index: number) => (
+                        {logs.map((log, index) => (
                             <div key={index} className="mb-1">{log}</div>
                         ))}
                     </div>
