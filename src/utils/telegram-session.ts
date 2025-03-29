@@ -11,6 +11,15 @@ export interface UserSession {
     telegramId: string;
     lastActivity: number;
     isActive: boolean;
+    sessionId: string; // Уникальный идентификатор сессии
+    deviceInfo?: {
+        userAgent?: string;
+        platform?: string;
+        screenSize?: string;
+    };
+    metadata?: {
+        [key: string]: any;
+    };
 }
 
 /**
@@ -20,12 +29,14 @@ export class TelegramSessionManager {
     private static instance: TelegramSessionManager;
     private activeSessions: Map<string, UserSession>; // telegramId -> session
     private sessionTimeout: number; // время в миллисекундах, после которого сессия считается неактивной
+    private sessionIdToTelegramId: Map<string, string>; // для быстрого поиска сессии по sessionId
 
     /**
      * Приватный конструктор (Singleton паттерн)
      */
     private constructor() {
         this.activeSessions = new Map();
+        this.sessionIdToTelegramId = new Map();
         this.sessionTimeout = 30 * 60 * 1000; // 30 минут по умолчанию
 
         // Загружаем сохраненные сессии
@@ -54,11 +65,36 @@ export class TelegramSessionManager {
     }
 
     /**
+     * Генерирует уникальный идентификатор сессии
+     */
+    private generateSessionId(): string {
+        return `session_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+    }
+
+    /**
+     * Получает информацию об устройстве
+     */
+    private getDeviceInfo(): UserSession['deviceInfo'] {
+        try {
+            const userAgent = navigator.userAgent;
+            return {
+                userAgent: userAgent,
+                platform: navigator.platform,
+                screenSize: `${window.screen.width}x${window.screen.height}`
+            };
+        } catch (error) {
+            console.error('Ошибка при получении информации об устройстве:', error);
+            return {};
+        }
+    }
+
+    /**
      * Создать или обновить сессию пользователя
      * @param telegramId - Telegram ID пользователя
+     * @param forceNewSession - Принудительно создать новую сессию
      * @returns Promise с объектом пользователя или null в случае ошибки
      */
-    public async createOrUpdateSession(telegramId: string): Promise<User | null> {
+    public async createOrUpdateSession(telegramId: string, forceNewSession: boolean = false): Promise<User | null> {
         try {
             console.log(`Создание/обновление сессии для Telegram ID: ${telegramId}`);
 
@@ -70,25 +106,64 @@ export class TelegramSessionManager {
                 return null;
             }
 
-            // Создаем или обновляем сессию
-            const session: UserSession = {
-                userId: user.id,
-                telegramId: telegramId,
-                lastActivity: Date.now(),
-                isActive: true
-            };
+            // Проверяем существующую сессию
+            const existingSession = this.activeSessions.get(telegramId);
 
-            this.activeSessions.set(telegramId, session);
+            // Создаем новую сессию или обновляем существующую
+            if (!existingSession || forceNewSession) {
+                // Создаем новую сессию
+                const sessionId = this.generateSessionId();
+                const deviceInfo = this.getDeviceInfo();
+
+                const session: UserSession = {
+                    userId: user.id,
+                    telegramId: telegramId,
+                    lastActivity: Date.now(),
+                    isActive: true,
+                    sessionId: sessionId,
+                    deviceInfo: deviceInfo,
+                    metadata: {
+                        createdAt: Date.now(),
+                        lastIp: this.getClientIp()
+                    }
+                };
+
+                // Если уже есть сессия, и мы принудительно создаем новую, деактивируем старую
+                if (existingSession && forceNewSession) {
+                    existingSession.isActive = false;
+                    console.log(`Деактивирована предыдущая сессия для Telegram ID: ${telegramId}`);
+                }
+
+                this.activeSessions.set(telegramId, session);
+                this.sessionIdToTelegramId.set(sessionId, telegramId);
+
+                console.log(`Создана новая сессия ${sessionId} для пользователя: ${user.name} (${user.id})`);
+            } else {
+                // Обновляем существующую сессию
+                existingSession.lastActivity = Date.now();
+                existingSession.isActive = true;
+                console.log(`Обновлена существующая сессия ${existingSession.sessionId} для пользователя: ${user.name} (${user.id})`);
+            }
 
             // Сохраняем сессии
             this.saveSessions();
 
-            console.log(`Сессия создана/обновлена для пользователя: ${user.name} (${user.id})`);
+            // Обновляем пользователя в хранилище
+            user.lastActive = Date.now();
+            await saveUser(user);
+
             return user;
         } catch (error) {
             console.error(`Ошибка при создании/обновлении сессии для Telegram ID ${telegramId}:`, error);
             return null;
         }
+    }
+
+    /**
+     * Получаем IP адрес клиента (заглушка)
+     */
+    private getClientIp(): string {
+        return "unknown"; // В реальном приложении здесь был бы код для получения IP
     }
 
     /**
@@ -112,6 +187,16 @@ export class TelegramSessionManager {
     }
 
     /**
+     * Получить сессию по её идентификатору
+     * @param sessionId - Идентификатор сессии
+     */
+    public getSessionById(sessionId: string): UserSession | null {
+        const telegramId = this.sessionIdToTelegramId.get(sessionId);
+        if (!telegramId) return null;
+        return this.getSession(telegramId);
+    }
+
+    /**
      * Активировать существующую сессию пользователя
      * @param telegramId - Telegram ID пользователя
      * @returns true если сессия активирована успешно
@@ -122,6 +207,13 @@ export class TelegramSessionManager {
             let session = this.activeSessions.get(telegramId);
 
             if (session) {
+                // Проверяем, не истек ли таймаут
+                if (Date.now() - session.lastActivity > this.sessionTimeout) {
+                    console.log(`Сессия истекла для Telegram ID: ${telegramId}. Создаем новую.`);
+                    const result = await this.createOrUpdateSession(telegramId, true);
+                    return result !== null;
+                }
+
                 // Обновляем время последней активности
                 session.lastActivity = Date.now();
                 session.isActive = true;
@@ -136,7 +228,8 @@ export class TelegramSessionManager {
                     await saveUser(user);
                 }
 
-                console.log(`Сессия активирована для Telegram ID: ${telegramId}`);
+                this.saveSessions(); // Сохраняем изменения
+                console.log(`Сессия активирована для Telegram ID: ${telegramId} (session_id: ${session.sessionId})`);
                 return true;
             } else {
                 // Если сессии нет, создаем новую
@@ -159,7 +252,18 @@ export class TelegramSessionManager {
         if (session) {
             session.isActive = false;
             this.saveSessions();
-            console.log(`Сессия деактивирована для Telegram ID: ${telegramId}`);
+            console.log(`Сессия деактивирована для Telegram ID: ${telegramId} (session_id: ${session.sessionId})`);
+        }
+    }
+
+    /**
+     * Деактивировать сессию по её идентификатору
+     * @param sessionId - Идентификатор сессии
+     */
+    public deactivateSessionById(sessionId: string): void {
+        const telegramId = this.sessionIdToTelegramId.get(sessionId);
+        if (telegramId) {
+            this.deactivateSession(telegramId);
         }
     }
 
@@ -168,9 +272,50 @@ export class TelegramSessionManager {
      * @param telegramId - Telegram ID пользователя
      */
     public removeSession(telegramId: string): void {
+        const session = this.activeSessions.get(telegramId);
+        if (session) {
+            this.sessionIdToTelegramId.delete(session.sessionId);
+        }
         this.activeSessions.delete(telegramId);
         this.saveSessions();
         console.log(`Сессия удалена для Telegram ID: ${telegramId}`);
+    }
+
+    /**
+     * Удалить все сессии кроме текущей
+     * @param currentSessionId - ID текущей сессии, которую нужно сохранить
+     */
+    public removeAllSessionsExcept(currentSessionId: string): number {
+        let removedCount = 0;
+        const currentTelegramId = this.sessionIdToTelegramId.get(currentSessionId);
+
+        if (!currentTelegramId) return 0;
+
+        const sessionsToRemove = [];
+
+        // Собираем сессии для удаления
+        this.activeSessions.forEach((session, telegramId) => {
+            if (telegramId === currentTelegramId && session.sessionId !== currentSessionId) {
+                sessionsToRemove.push(telegramId);
+            }
+        });
+
+        // Удаляем собранные сессии
+        for (const telegramId of sessionsToRemove) {
+            const session = this.activeSessions.get(telegramId);
+            if (session) {
+                this.sessionIdToTelegramId.delete(session.sessionId);
+            }
+            this.activeSessions.delete(telegramId);
+            removedCount++;
+        }
+
+        if (removedCount > 0) {
+            console.log(`Удалено ${removedCount} других сессий для пользователя с Telegram ID: ${currentTelegramId}`);
+            this.saveSessions();
+        }
+
+        return removedCount;
     }
 
     /**
@@ -190,18 +335,44 @@ export class TelegramSessionManager {
     }
 
     /**
+     * Получить все активные сессии конкретного пользователя
+     * @param userId - ID пользователя
+     */
+    public getUserActiveSessions(userId: string): UserSession[] {
+        const userSessions: UserSession[] = [];
+
+        this.activeSessions.forEach((session) => {
+            if (session.userId === userId &&
+                session.isActive &&
+                (Date.now() - session.lastActivity <= this.sessionTimeout)) {
+                userSessions.push(session);
+            }
+        });
+
+        return userSessions;
+    }
+
+    /**
      * Очистка неактивных сессий
      */
     private cleanInactiveSessions(): void {
         const now = Date.now();
         let cleaned = 0;
 
+        const sessionsToRemove: string[] = [];
+
         this.activeSessions.forEach((session, telegramId) => {
             if (!session.isActive || (now - session.lastActivity > this.sessionTimeout)) {
-                this.activeSessions.delete(telegramId);
+                sessionsToRemove.push(telegramId);
+                this.sessionIdToTelegramId.delete(session.sessionId);
                 cleaned++;
             }
         });
+
+        // Удаляем сессии
+        for (const telegramId of sessionsToRemove) {
+            this.activeSessions.delete(telegramId);
+        }
 
         if (cleaned > 0) {
             console.log(`Очищено неактивных сессий: ${cleaned}`);
@@ -221,6 +392,13 @@ export class TelegramSessionManager {
             });
 
             localStorage.setItem('telegram_sessions', JSON.stringify(sessions));
+
+            // Сохраняем также индекс sessionId -> telegramId
+            const sessionIdMap: Record<string, string> = {};
+            this.sessionIdToTelegramId.forEach((telegramId, sessionId) => {
+                sessionIdMap[sessionId] = telegramId;
+            });
+            localStorage.setItem('telegram_session_ids', JSON.stringify(sessionIdMap));
         } catch (error) {
             console.error('Ошибка при сохранении сессий:', error);
         }
@@ -237,7 +415,25 @@ export class TelegramSessionManager {
                 const sessions = JSON.parse(sessionsJson);
 
                 for (const telegramId in sessions) {
+                    // Проверяем, что у сессии есть sessionId
+                    if (!sessions[telegramId].sessionId) {
+                        sessions[telegramId].sessionId = this.generateSessionId();
+                    }
                     this.activeSessions.set(telegramId, sessions[telegramId]);
+                }
+
+                // Восстанавливаем индекс sessionId -> telegramId
+                this.activeSessions.forEach((session, telegramId) => {
+                    this.sessionIdToTelegramId.set(session.sessionId, telegramId);
+                });
+
+                // Для совместимости со старыми версиями проверяем наличие сохраненного индекса
+                const sessionIdMapJson = localStorage.getItem('telegram_session_ids');
+                if (sessionIdMapJson) {
+                    const sessionIdMap = JSON.parse(sessionIdMapJson);
+                    for (const sessionId in sessionIdMap) {
+                        this.sessionIdToTelegramId.set(sessionId, sessionIdMap[sessionId]);
+                    }
                 }
 
                 console.log(`Загружено ${this.activeSessions.size} сессий из хранилища`);
@@ -258,5 +454,36 @@ export const telegramSessionManager = TelegramSessionManager.getInstance();
 export const useActiveTelegramSession = (telegramId: string | null | undefined): void => {
     if (telegramId) {
         telegramSessionManager.activateSession(telegramId);
+    }
+};
+
+/**
+ * Получить идентификатор текущей сессии
+ */
+export const getCurrentSessionId = (): string | null => {
+    try {
+        // Получаем идентификатор из sessionStorage, который уникален для вкладки браузера
+        let sessionId = sessionStorage.getItem('current_session_id');
+
+        // Если идентификатора нет, то создаем новый и сохраняем
+        if (!sessionId) {
+            return null;
+        }
+
+        return sessionId;
+    } catch (error) {
+        console.error('Ошибка при получении идентификатора текущей сессии:', error);
+        return null;
+    }
+};
+
+/**
+ * Установить идентификатор текущей сессии
+ */
+export const setCurrentSessionId = (sessionId: string): void => {
+    try {
+        sessionStorage.setItem('current_session_id', sessionId);
+    } catch (error) {
+        console.error('Ошибка при установке идентификатора текущей сессии:', error);
     }
 };
