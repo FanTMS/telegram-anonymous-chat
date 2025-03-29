@@ -1,6 +1,6 @@
 import React, { useEffect, useState, createContext, useContext } from 'react';
-import { User } from '../utils/user';
-import { telegramSessionManager } from '../utils/telegram-session';
+import { User, getUserById } from '../utils/user';
+import { telegramSessionManager, getCurrentSessionId, getCurrentSessionTelegramId } from '../utils/telegram-session';
 import WebApp from '@twa-dev/sdk';
 
 // Контекст сессии Telegram
@@ -10,6 +10,7 @@ interface TelegramSessionContextType {
     isLoading: boolean;
     error: string | null;
     refreshSession: () => Promise<void>;
+    logout: () => void;
 }
 
 const TelegramSessionContext = createContext<TelegramSessionContextType>({
@@ -17,7 +18,8 @@ const TelegramSessionContext = createContext<TelegramSessionContextType>({
     telegramId: null,
     isLoading: true,
     error: null,
-    refreshSession: async () => { }
+    refreshSession: async () => { },
+    logout: () => { }
 });
 
 // Хук для использования контекста сессии
@@ -58,6 +60,34 @@ export const TelegramSessionProvider: React.FC<TelegramSessionProviderProps> = (
         }
     };
 
+    // Проверка на смену пользователя Telegram
+    const checkTelegramUserChange = (currentId: string | null): boolean => {
+        if (!currentId) return false;
+
+        // Получаем ID из текущей сессии
+        const sessionTelegramId = getCurrentSessionTelegramId();
+
+        // Если ID из сессии существует и отличается от текущего, значит пользователь сменился
+        return sessionTelegramId !== null && sessionTelegramId !== currentId;
+    };
+
+    // Функция выхода из сессии
+    const logout = () => {
+        console.log('Выход из сессии');
+
+        // Очищаем сессию в sessionStorage
+        sessionStorage.removeItem('current_session_id');
+        sessionStorage.removeItem('current_session_telegram_id');
+
+        // Сбрасываем состояние
+        setUser(null);
+        setTelegramId(null);
+        setError(null);
+
+        // Перезагружаем страницу для гарантированного обновления состояния
+        window.location.reload();
+    };
+
     // Функция для обновления сессии
     const refreshSession = async () => {
         setIsLoading(true);
@@ -72,7 +102,26 @@ export const TelegramSessionProvider: React.FC<TelegramSessionProviderProps> = (
                 return;
             }
 
-            // Активируем или создаем сессию
+            // Проверяем, сменился ли пользователь Telegram
+            const userChanged = checkTelegramUserChange(currentTelegramId);
+            if (userChanged) {
+                console.log('Обнаружена смена пользователя Telegram, создаем новую сессию');
+                // Если пользователь сменился, принудительно создаем новую сессию
+                const userFromSession = await telegramSessionManager.createOrUpdateSession(currentTelegramId, true);
+
+                if (userFromSession) {
+                    setUser(userFromSession);
+                    setTelegramId(currentTelegramId);
+                    console.log(`Создана новая сессия для пользователя: ${userFromSession.name}`);
+                } else {
+                    setError('Не удалось создать новую сессию для сменившегося пользователя');
+                }
+
+                setIsLoading(false);
+                return;
+            }
+
+            // Если нет смены пользователя, просто активируем или создаем сессию
             const success = await telegramSessionManager.activateSession(currentTelegramId);
 
             if (!success) {
@@ -86,8 +135,7 @@ export const TelegramSessionProvider: React.FC<TelegramSessionProviderProps> = (
 
             if (session) {
                 // Получаем данные пользователя
-                const userData = await import('../utils/user');
-                const updatedUser = userData.getUserById(session.userId);
+                const updatedUser = getUserById(session.userId);
 
                 if (updatedUser) {
                     setUser(updatedUser);
@@ -111,28 +159,33 @@ export const TelegramSessionProvider: React.FC<TelegramSessionProviderProps> = (
         const initializeSession = async () => {
             const id = getTelegramId();
 
-            if (id) {
-                setTelegramId(id);
-
-                try {
-                    // Создаем или обновляем сессию
-                    const userFromSession = await telegramSessionManager.createOrUpdateSession(id);
-
-                    if (userFromSession) {
-                        setUser(userFromSession);
-                        console.log(`Сессия инициализирована для пользователя: ${userFromSession.name}`);
-                    } else {
-                        setError('Не удалось инициализировать сессию');
-                    }
-                } catch (e) {
-                    console.error('Ошибка при инициализации сессии:', e);
-                    setError('Ошибка при инициализации сессии');
-                }
-            } else {
+            if (!id) {
                 setError('Не удалось получить Telegram ID');
+                setIsLoading(false);
+                return;
             }
 
-            setIsLoading(false);
+            setTelegramId(id);
+
+            // Проверяем, сменился ли пользователь Telegram
+            const userChanged = checkTelegramUserChange(id);
+
+            try {
+                // Создаем или обновляем сессию, принудительно создаем новую если сменился пользователь
+                const userFromSession = await telegramSessionManager.createOrUpdateSession(id, userChanged);
+
+                if (userFromSession) {
+                    setUser(userFromSession);
+                    console.log(`Сессия ${userChanged ? 'создана' : 'обновлена'} для пользователя: ${userFromSession.name}`);
+                } else {
+                    setError('Не удалось инициализировать сессию');
+                }
+            } catch (e) {
+                console.error('Ошибка при инициализации сессии:', e);
+                setError('Ошибка при инициализации сессии');
+            } finally {
+                setIsLoading(false);
+            }
         };
 
         initializeSession();
@@ -141,7 +194,6 @@ export const TelegramSessionProvider: React.FC<TelegramSessionProviderProps> = (
         const handleBeforeUnload = () => {
             if (telegramId) {
                 console.log(`Сохранение состояния сессии для ${telegramId} перед закрытием`);
-                // Тут мы можем выполнить дополнительные действия перед закрытием страницы
             }
         };
 
@@ -150,16 +202,36 @@ export const TelegramSessionProvider: React.FC<TelegramSessionProviderProps> = (
         // Периодическое обновление сессии для поддержания активности
         const sessionRefreshInterval = setInterval(() => {
             if (telegramId) {
-                telegramSessionManager.activateSession(telegramId);
+                // Используем тихое обновление сессии (без обновления состояния компонента)
+                telegramSessionManager.activateSession(telegramId).catch(err =>
+                    console.error('Ошибка при периодическом обновлении сессии:', err)
+                );
             }
         }, 5 * 60 * 1000); // Обновление сессии каждые 5 минут
+
+        // Обработчик для мониторинга изменений в Telegram WebApp
+        const handleVisibilityChange = async () => {
+            if (!document.hidden && telegramId) {
+                // При возвращении на вкладку проверяем, не сменился ли пользователь
+                const currentId = getTelegramId();
+                if (currentId && currentId !== telegramId) {
+                    console.log('Обнаружена смена пользователя при возвращении на вкладку');
+                    // Если пользователь сменился, обновляем сессию
+                    refreshSession();
+                }
+            }
+        };
+
+        // Добавляем обработчик изменения видимости страницы
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         // Очистка при размонтировании
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
             clearInterval(sessionRefreshInterval);
         };
-    }, []);
+    }, [telegramId]); // Добавляем telegramId в массив зависимостей для корректной работы эффекта
 
     // Контекст, предоставляемый компонентом
     const contextValue = {
@@ -167,7 +239,8 @@ export const TelegramSessionProvider: React.FC<TelegramSessionProviderProps> = (
         telegramId,
         isLoading,
         error,
-        refreshSession
+        refreshSession,
+        logout
     };
 
     return (

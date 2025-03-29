@@ -3,6 +3,7 @@ import { useEffect, useState, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser, getUserByTelegramId, setCurrentUser } from '../utils/user';
 import { telegramApi } from '../utils/database';
+import { telegramSessionManager, getCurrentSessionTelegramId } from '../utils/telegram-session';
 import WebApp from '@twa-dev/sdk';
 
 interface InitialRegistrationCheckProps {
@@ -30,8 +31,22 @@ export const InitialRegistrationCheck: React.FC<InitialRegistrationCheckProps> =
                     return;
                 }
 
-                // Получаем текущего пользователя
-                const currentUser = getCurrentUser();
+                // Проверяем, не сменился ли пользователь Telegram
+                const currentSessionTelegramId = getCurrentSessionTelegramId();
+                const userChanged = currentSessionTelegramId !== null && currentSessionTelegramId !== telegramId;
+
+                if (userChanged) {
+                    console.log(`Обнаружена смена пользователя Telegram с ${currentSessionTelegramId} на ${telegramId}`);
+                }
+
+                // Создаем или обновляем сессию, принудительно создавая новую при смене пользователя
+                const userFromSession = await telegramSessionManager.createOrUpdateSession(telegramId, userChanged);
+
+                if (!userFromSession) {
+                    console.log(`Не удалось создать/обновить сессию для Telegram ID ${telegramId}, перенаправляем на регистрацию`);
+                    navigate('/registration', { replace: true });
+                    return;
+                }
 
                 // Проверяем существующего пользователя с таким Telegram ID
                 const existingUser = getUserByTelegramId(telegramId);

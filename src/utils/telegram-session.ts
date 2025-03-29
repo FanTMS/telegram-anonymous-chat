@@ -98,6 +98,16 @@ export class TelegramSessionManager {
         try {
             console.log(`Создание/обновление сессии для Telegram ID: ${telegramId}`);
 
+            // Принудительно создаем новую сессию, если телеграм ID отличается от сохраненного в сессии
+            const currentSessionId = getCurrentSessionId();
+            if (currentSessionId) {
+                const sessionTelegramId = this.sessionIdToTelegramId.get(currentSessionId);
+                if (sessionTelegramId && sessionTelegramId !== telegramId) {
+                    console.log(`Обнаружено несоответствие Telegram ID: сессия содержит ${sessionTelegramId}, но запрошено ${telegramId}`);
+                    forceNewSession = true;
+                }
+            }
+
             // Инициализируем пользователя
             const user = await initializeUserByTelegramId(telegramId);
 
@@ -137,11 +147,18 @@ export class TelegramSessionManager {
                 this.activeSessions.set(telegramId, session);
                 this.sessionIdToTelegramId.set(sessionId, telegramId);
 
+                // Устанавливаем новую сессию как текущую
+                setCurrentSessionId(sessionId, telegramId);
+
                 console.log(`Создана новая сессия ${sessionId} для пользователя: ${user.name} (${user.id})`);
             } else {
                 // Обновляем существующую сессию
                 existingSession.lastActivity = Date.now();
                 existingSession.isActive = true;
+
+                // Устанавливаем существующую сессию как текущую
+                setCurrentSessionId(existingSession.sessionId, telegramId);
+
                 console.log(`Обновлена существующая сессия ${existingSession.sessionId} для пользователя: ${user.name} (${user.id})`);
             }
 
@@ -203,6 +220,20 @@ export class TelegramSessionManager {
      */
     public async activateSession(telegramId: string): Promise<boolean> {
         try {
+            // Проверяем, совпадает ли Telegram ID с ID текущей сессии
+            const currentSessionId = getCurrentSessionId();
+            let currentTelegramId = null;
+            if (currentSessionId) {
+                currentTelegramId = this.sessionIdToTelegramId.get(currentSessionId);
+            }
+
+            // Если текущая сессия принадлежит другому пользователю Telegram, принудительно создаем новую
+            if (currentTelegramId && currentTelegramId !== telegramId) {
+                console.log(`Обнаружено несоответствие Telegram ID: текущая сессия для ${currentTelegramId}, но запрошено ${telegramId}`);
+                const result = await this.createOrUpdateSession(telegramId, true);
+                return result !== null;
+            }
+
             // Проверяем, есть ли сессия
             let session = this.activeSessions.get(telegramId);
 
@@ -221,6 +252,9 @@ export class TelegramSessionManager {
                 // Устанавливаем текущего пользователя
                 setCurrentUser(session.userId);
 
+                // Устанавливаем сессию как текущую
+                setCurrentSessionId(session.sessionId, telegramId);
+
                 // Обновляем пользователя в хранилище
                 const user = getUserByTelegramId(telegramId);
                 if (user) {
@@ -233,7 +267,7 @@ export class TelegramSessionManager {
                 return true;
             } else {
                 // Если сессии нет, создаем новую
-                const result = await this.createOrUpdateSession(telegramId);
+                const result = await this.createOrUpdateSession(telegramId, true);
                 return result !== null;
             }
         } catch (error) {
@@ -478,11 +512,24 @@ export const getCurrentSessionId = (): string | null => {
 };
 
 /**
+ * Получить Telegram ID текущей сессии
+ */
+export const getCurrentSessionTelegramId = (): string | null => {
+    try {
+        return sessionStorage.getItem('current_session_telegram_id');
+    } catch (error) {
+        console.error('Ошибка при получении Telegram ID текущей сессии:', error);
+        return null;
+    }
+};
+
+/**
  * Установить идентификатор текущей сессии
  */
-export const setCurrentSessionId = (sessionId: string): void => {
+export const setCurrentSessionId = (sessionId: string, telegramId: string): void => {
     try {
         sessionStorage.setItem('current_session_id', sessionId);
+        sessionStorage.setItem('current_session_telegram_id', telegramId);
     } catch (error) {
         console.error('Ошибка при установке идентификатора текущей сессии:', error);
     }
