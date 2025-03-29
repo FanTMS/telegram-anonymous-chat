@@ -447,13 +447,28 @@ export const db = {
 // Интеграция с Telegram API
 export const telegramApi = {
   isInitialized: false,
-
   isReady(): boolean {
     return this.isInitialized;
   },
-
   async initialize(): Promise<boolean> {
     try {
+      // Проверяем, работаем ли внутри Telegram WebApp
+      if (WebApp && WebApp.initData && WebApp.initData.length > 0) {
+        console.log('Telegram WebApp environment detected');
+        this.isInitialized = true;
+        return true;
+      }
+
+      // Если не в WebApp, восстанавливаем из localStorage для отладки
+      const savedTelegramId = localStorage.getItem('telegram_user_id');
+      if (savedTelegramId) {
+        console.log('Restored Telegram session from localStorage');
+        this.isInitialized = true;
+        return true;
+      }
+
+      // Для локального тестирования без сохраненных данных
+      console.warn('Not running in Telegram WebApp, using test mode');
       this.isInitialized = true;
       return true;
     } catch (error) {
@@ -461,19 +476,62 @@ export const telegramApi = {
       return false;
     }
   },
-
   getUserId(): string | null {
-    // Заглушка для локального тестирования
-    return '12345678';
-  },
+    try {
+      // Если мы в Telegram WebApp, получаем реальный ID пользователя
+      if (WebApp && WebApp.initData && WebApp.initDataUnsafe?.user?.id) {
+        return WebApp.initDataUnsafe.user.id.toString();
+      }
 
+      // Если нет, пробуем восстановить из localStorage
+      const savedTelegramId = localStorage.getItem('telegram_user_id');
+      if (savedTelegramId) {
+        return savedTelegramId;
+      }
+
+      // Для локальной отладки, генерируем случайный ID чтобы не использовать одинаковый
+      return `test_${Math.floor(Math.random() * 1000000)}`;
+    } catch (error) {
+      console.error('Failed to get Telegram user ID:', error);
+      return null;
+    }
+  },
   getUserData(): any {
-    // Заглушка для локального тестирования
-    return {
-      id: '12345678',
-      first_name: 'TestUser',
-      username: 'test_user',
-      language_code: 'ru'
-    };
+    try {
+      // Если мы в Telegram WebApp, получаем реальные данные пользователя
+      if (WebApp && WebApp.initData && WebApp.initDataUnsafe?.user) {
+        const user = WebApp.initDataUnsafe.user;
+        return {
+          id: user.id.toString(),
+          first_name: user.first_name,
+          last_name: user.last_name,
+          username: user.username,
+          language_code: user.language_code,
+          photo_url: user.photo_url
+        };
+      }
+
+      // Если нет, пробуем восстановить из localStorage
+      const savedUserData = localStorage.getItem('telegram_user_data');
+      if (savedUserData) {
+        try {
+          return JSON.parse(savedUserData);
+        } catch (e) {
+          console.error('Error parsing saved user data', e);
+        }
+      }
+
+      // Тестовые данные для отладки с случайным ID
+      const testId = this.getUserId();
+      return {
+        id: testId,
+        first_name: 'TestUser',
+        username: `test_user_${testId.split('_')[1] || ''}`,
+        language_code: 'ru'
+      };
+    } catch (error) {
+      console.error('Failed to get Telegram user data:', error);
+      return null;
+    }
   }
 };
