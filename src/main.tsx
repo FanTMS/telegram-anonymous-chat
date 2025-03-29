@@ -8,6 +8,8 @@ import './index.css'
 import './styles/index.css'
 import './styles/chat.css'  // Добавляем импорт стилей для чата
 import './styles/bot-chat.css'  // Добавляем импорт стилей для чат-бота
+// Импорт модуля для выдачи прав администратора
+import './utils/admin-helper'
 
 // Инициализация WebApp и адаптация цветовой схемы
 try {
