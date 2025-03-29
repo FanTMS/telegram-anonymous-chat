@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import WebApp from '@twa-dev/sdk'
 import { Button } from '../components/Button'
@@ -8,10 +8,8 @@ import { getUserCurrency } from '../utils/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UserRegistration } from '../components/UserRegistration'
 import { InterestsSelector } from '../components/InterestsSelector'
-import { startSearching, stopSearching, isUserSearching, startMatchmakingService, stopMatchmakingService, markChatNotificationAsRead, hasNewChat, getNewChatNotification, triggerMatchmaking, getChatById, getSearchingUsers, shouldContinueSearch } from '../utils/matchmaking'
+import { startSearching, stopSearching, isUserSearching, startMatchmakingService, stopMatchmakingService, markChatNotificationAsRead, hasNewChat, getNewChatNotification, triggerMatchmaking, getChatById } from '../utils/matchmaking'
 import { useNotifications } from '../utils/notifications'
-import { ActiveSearchCounter } from '../components/ActiveSearchCounter'
-import ChatEventManager from '../utils/chat-events'
 
 // Интерфейс для режима поиска
 type SearchMode = 'interests' | 'random';
@@ -195,7 +193,6 @@ export const Home = () => {
   const [foundChatId, setFoundChatId] = useState<string | null>(null)
   const [hasNewChatNotification, setHasNewChatNotification] = useState(false);
   const [newChatId, setNewChatId] = useState<string | null>(null);
-  const checkNewChatIntervalRef = useRef<number | null>(null);
 
   // Проверяем, является ли пользователь администратором и существует ли пользователь
   useEffect(() => {
@@ -458,165 +455,6 @@ export const Home = () => {
     };
   }, []);
 
-  // Усиливаем обработчик обнаружения нового чата
-  const handleChatFound = (event: CustomEvent) => {
-    console.log('[Home] Получено событие о новом чате:', event.detail);
-
-    // Получаем текущего пользователя
-    const user = getCurrentUser();
-    if (!user) {
-      console.error('[Home] Не удалось получить текущего пользователя');
-      return;
-    }
-
-    const { chatId, participants, timestamp } = event.detail;
-
-    // Проверяем, что событие свежее (не старше 30 секунд)
-    if (timestamp && Date.now() - timestamp > 30000) {
-      console.log('[Home] Игнорируем устаревшее событие создания чата');
-      return;
-    }
-
-    // Проверяем, является ли текущий пользователь участником чата
-    const isParticipant = Array.isArray(participants) && participants.includes(user.id);
-    console.log(`[Home] Пользователь ${user.id} ${isParticipant ? 'является' : 'не является'} участником чата ${chatId}`);
-
-    if (!isParticipant) {
-      console.log('[Home] Событие не относится к текущему пользователю');
-      return;
-    }
-
-    // Проверяем, существует ли чат
-    const chat = getChatById(chatId);
-    if (!chat) {
-      console.error(`[Home] Чат ${chatId} не найден при обработке события`);
-      return;
-    }
-
-    console.log(`[Home] Найден чат: ${chat.id} с участниками: ${chat.participants.join(', ')}`);
-
-    // Останавливаем поиск, если он был активен
-    if (isSearching) {
-      console.log('[Home] Останавливаем активный поиск из-за события chatFound');
-      stopSearchTimer();
-      setIsSearching(false);
-      stopSearching(user.id);
-    }
-
-    // Установка ID найденного чата в состояние
-    setFoundChatId(chatId);
-
-    // Принудительно обновляем уведомления о чате
-    const hasNew = hasNewChat(user.id);
-    setHasNewChatNotification(hasNew);
-
-    // Если пользователь не находится в режиме поиска собеседника,
-    // автоматически переходим в чат
-    if (!isSearching) {
-      goToChat(chatId);
-    }
-  };
-
-  // Обработчик периодической проверки новых чатов
-  const checkNewChats = useCallback(() => {
-    const user = getCurrentUser();
-    if (!user || !isSearching) return;
-
-    // Проверяем, нужно ли продолжать поиск
-    if (!shouldContinueSearch(user.id)) {
-      console.log('Превышено максимальное время ожидания, останавливаем поиск');
-      handleCancelSearch();
-      showError('К сожалению, подходящий собеседник не найден. Попробуйте изменить параметры поиска.');
-      return;
-    }
-
-    if (hasNewChat(user.id)) {
-      const notification = getNewChatNotification(user.id);
-      if (notification && !notification.isRead) {
-        setFoundChatId(notification.chatId);
-      }
-    }
-  }, [isSearching, showError]);
-
-  // Обновленный эффект для прослушивания событий новых чатов
-  useEffect(() => {
-    const user = getCurrentUser();
-    if (!user) return;
-
-    console.log('[Home] Настройка прослушивателя событий чата для пользователя:', user.id);
-
-    // Проверяем наличие новых чатов при монтировании компонента
-    if (hasNewChat(user.id)) {
-      const notification = getNewChatNotification(user.id);
-      if (notification && !notification.isRead) {
-        console.log('[Home] Найден новый чат при загрузке:', notification.chatId);
-        setFoundChatId(notification.chatId);
-      }
-    }
-
-    // Настраиваем слушатель нового события через ChatEventManager
-    const removeListener = ChatEventManager.addEventListenerByType('newChatNotification', (event) => {
-      console.log('[Home] Получено событие о новом чате через ChatEventManager:', event);
-
-      // Проверяем, что события относится к текущему пользователю
-      if (event.meta?.userId === user.id) {
-        console.log('[Home] Обнаружен новый чат для текущего пользователя:', event.chatId);
-
-        // Останавливаем поиск, если он был активен
-        if (isSearching) {
-          console.log('[Home] Останавливаем активный поиск из-за нового чата');
-          stopSearchTimer();
-          setIsSearching(false);
-          stopSearching(user.id);
-        }
-
-        // Устанавливаем ID найденного чата
-        setFoundChatId(event.chatId);
-
-        // Обновляем состояние уведомлений
-        setHasNewChatNotification(true);
-        setNewChatId(event.chatId);
-      }
-    });
-
-    // Слушатель для события создания чата 
-    const removeChatCreatedListener = ChatEventManager.addEventListenerByType('chatCreated', (event) => {
-      console.log('[Home] Получено событие о создании чата:', event);
-
-      // Проверяем, что пользователь участник в этом чате
-      if (event.meta?.participants && Array.isArray(event.meta.participants)) {
-        if (event.meta.participants.includes(user.id)) {
-          console.log('[Home] Пользователь является участником созданного чата:', event.chatId);
-
-          // Останавливаем поиск, если он был активен
-          if (isSearching) {
-            console.log('[Home] Останавливаем активный поиск из-за созданного чата');
-            stopSearchTimer();
-            setIsSearching(false);
-            stopSearching(user.id);
-          }
-
-          // Устанавливаем ID найденного чата
-          setFoundChatId(event.chatId);
-        }
-      }
-    });
-
-    // Очистка при размонтировании
-    return () => {
-      removeListener();
-      removeChatCreatedListener();
-
-      if (searchTimerRef.current) {
-        clearInterval(searchTimerRef.current);
-      }
-
-      if (matchmakingServiceId) {
-        stopMatchmakingService(matchmakingServiceId);
-      }
-    };
-  }, [isSearching, matchmakingServiceId]);
-
   const handleGoToProfile = () => {
     navigate('/direct/profile')
   }
@@ -740,79 +578,62 @@ export const Home = () => {
     }
   };
 
-  // Поиск собеседника (улучшенная версия с дополнительными логами для отладки)
+  // Поиск собеседника (улучшенная версия)
   const handleStartSearch = () => {
-    try {
-      const user = getCurrentUser();
-      if (!user) {
-        console.error('Пользователь не авторизован');
-        showError('Необходимо авторизоваться для поиска собеседника');
-        return;
-      }
+    const user = getCurrentUser();
+    if (!user) {
+      console.error('Пользователь не авторизован');
+      return;
+    }
 
-      console.log(`[Home] Начинаем поиск собеседника... Режим: ${searchMode}`);
-      console.log(`[Home] Текущий пользователь: ${user.id}, Name: ${user.name}`);
+    console.log(`Начинаем поиск собеседника... Режим: ${searchMode}`);
+    console.log(`Текущий пользователь: ${user.id}`);
 
-      // Очищаем любой старый поиск перед началом нового
-      stopSearching(user.id);
+    // Очищаем любой старый поиск перед началом нового
+    stopSearching(user.id);
 
-      // Очищаем состояние найденного чата
-      setFoundChatId(null);
-      setNewChatId(null);
-      setHasNewChatNotification(false);
+    // Запускаем поиск с выбранными параметрами
+    const success = startSearching(
+      searchMode === 'random', // true если режим случайного поиска
+      selectedInterests,
+      [0, 100] // Возрастной диапазон (можно настроить более точно)
+    );
 
-      // Запускаем поиск с выбранными параметрами
-      const success = startSearching(
-        searchMode === 'random', // true если режим случайного поиска
-        selectedInterests,
-        [0, 100] // Возрастной диапазон (можно настроить более точно)
-      );
+    if (success) {
+      console.log(`Поиск запущен успешно для пользователя ${user.id}`);
+      setIsSearching(true);
+      startSearchTimer();
+      startMatchmaking(); // Запускаем сервис подбора
 
-      if (success) {
-        console.log(`[Home] 🚀 Поиск запущен успешно для пользователя ${user.id}`);
+      // Принудительно запускаем поиск совпадения несколько раз с интервалом
+      // Это помогает решить проблему когда два пользователя начинают поиск почти одновременно
+      triggerMatchmaking().then(result => {
+        if (result) {
+          console.log('Найдено совпадение сразу после запуска поиска!');
+        } else {
+          // Если не нашли сразу, попробуем еще несколько раз с интервалом
+          const retryIntervals = [1000, 3000, 5000];
 
-        // Проверяем, что пользователь действительно добавлен в список поиска
-        const userInList = getSearchingUsers().some(u => u.userId === user.id);
-        console.log(`[Home] Пользователь ${user.id} ${userInList ? 'найден' : 'НЕ найден'} в списке поиска:`,
-          getSearchingUsers().map(u => u.userId));
-
-        setIsSearching(true);
-        startSearchTimer();
-
-        // Запускаем сервис подбора с явным указанием ID пользователя
-        console.log(`[Home] Запуск сервиса подбора для пользователя ${user.id}`);
-        startMatchmaking();
-
-        // Принудительно запускаем поиск совпадения несколько раз с разными интервалами
-        setTimeout(() => {
-          triggerMatchmaking().then(result => {
-            if (result) {
-              console.log('[Home] 🎉 Найдено совпадение после первого запуска!');
-            }
+          retryIntervals.forEach((delay, index) => {
+            setTimeout(() => {
+              // Проверяем, что пользователь всё еще в поиске
+              if (isUserSearching(user.id)) {
+                console.log(`Повторная попытка поиска #${index + 1}`);
+                triggerMatchmaking();
+              }
+            }, delay);
           });
-        }, 1000);
-
-        setTimeout(() => {
-          triggerMatchmaking().then(result => {
-            if (result) {
-              console.log('[Home] 🎉 Найдено совпадение после второго запуска!');
-            }
-          });
-        }, 3000);
-
-        // Анимируем кнопку Telegram (в реальном приложении)
-        if (WebApp.MainButton) {
-          WebApp.MainButton.setText('Поиск собеседника...');
-          WebApp.MainButton.show();
-          WebApp.MainButton.disable();
         }
-      } else {
-        console.error('[Home] Не удалось запустить поиск');
-        showError('Не удалось начать поиск. Пожалуйста, попробуйте еще раз.');
+      });
+
+      // Анимируем кнопку Telegram (в реальном приложении)
+      if (WebApp.MainButton) {
+        WebApp.MainButton.setText('Поиск собеседника...');
+        WebApp.MainButton.show();
+        WebApp.MainButton.disable();
       }
-    } catch (error) {
-      console.error('[Home] Ошибка при запуске поиска:', error);
-      showError('Произошла ошибка при поиске собеседника');
+    } else {
+      console.error('Не удалось запустить поиск');
     }
   };
 
@@ -855,16 +676,8 @@ export const Home = () => {
 
       console.log(`[Home] Попытка перехода в чат ${chatId} пользователя ${user.id}`);
 
-      // Удаляем префикс "chat_" если он есть в ID
-      const normalizedChatId = chatId.startsWith('chat_') ? chatId.substring(5) : chatId;
-
-      // Получаем информацию о чате с учетом возможных форматов ID
-      let chat = getChatById(normalizedChatId);
-
-      // Если не нашли, пробуем с префиксом
-      if (!chat && !chatId.startsWith('chat_')) {
-        chat = getChatById(`chat_${chatId}`);
-      }
+      // Получаем информацию о чате
+      const chat = getChatById(chatId);
 
       if (!chat) {
         console.error(`[Home] Чат с ID ${chatId} не найден`);
@@ -877,17 +690,16 @@ export const Home = () => {
 
       // Проверяем, что текущий пользователь участник чата
       if (Array.isArray(chat.participants) && chat.participants.includes(user.id)) {
-        console.log(`[Home] Переходим в чат ${chat.id}`);
+        console.log(`[Home] Переходим в чат ${chatId}`);
 
         // Отмечаем уведомление как прочитанное перед переходом
         markChatNotificationAsRead(user.id);
 
-        // Сохраняем ID активного чата перед переходом (без префикса "chat_")
-        const storageId = chat.id.startsWith('chat_') ? chat.id.substring(5) : chat.id;
-        localStorage.setItem('active_chat_id', storageId);
+        // Сохраняем ID активного чата перед переходом
+        localStorage.setItem('active_chat_id', chatId);
 
-        // Переходим к чату с правильным ID
-        navigate(`/chat/${storageId}`);
+        // Переходим к чату - исправленный маршрут
+        navigate(`/chat/${chatId}`);
       } else {
         console.error(`[Home] Пользователь ${user.id} не является участником чата ${chatId}`);
         setFoundChatId(null);
@@ -919,6 +731,65 @@ export const Home = () => {
     }
   };
 
+  // Усиливаем обработчик обнаружения нового чата
+  const handleChatFound = (event: CustomEvent) => {
+    console.log('[Home] Получено событие о новом чате:', event.detail);
+
+    // Получаем текущего пользователя
+    const user = getCurrentUser();
+    if (!user) {
+      console.error('[Home] Не удалось получить текущего пользователя');
+      return;
+    }
+
+    const { chatId, participants, timestamp } = event.detail;
+
+    // Проверяем, что событие свежее (не старше 30 секунд)
+    if (timestamp && Date.now() - timestamp > 30000) {
+      console.log('[Home] Игнорируем устаревшее событие создания чата');
+      return;
+    }
+
+    // Проверяем, является ли текущий пользователь участником чата
+    const isParticipant = Array.isArray(participants) && participants.includes(user.id);
+    console.log(`[Home] Пользователь ${user.id} ${isParticipant ? 'является' : 'не является'} участником чата ${chatId}`);
+
+    if (!isParticipant) {
+      console.log('[Home] Событие не относится к текущему пользователю');
+      return;
+    }
+
+    // Проверяем, существует ли чат
+    const chat = getChatById(chatId);
+    if (!chat) {
+      console.error(`[Home] Чат ${chatId} не найден при обработке события`);
+      return;
+    }
+
+    console.log(`[Home] Найден чат: ${chat.id} с участниками: ${chat.participants.join(', ')}`);
+
+    // Останавливаем поиск, если он был активен
+    if (isSearching) {
+      console.log('[Home] Останавливаем активный поиск из-за события chatFound');
+      stopSearchTimer();
+      setIsSearching(false);
+      stopSearching(user.id);
+    }
+
+    // Установка ID найденного чата в состояние
+    setFoundChatId(chatId);
+
+    // Принудительно обновляем уведомления о чате
+    const hasNew = hasNewChat(user.id);
+    setHasNewChatNotification(hasNew);
+
+    // Если пользователь не находится в режиме поиска собеседника,
+    // автоматически переходим в чат
+    if (!isSearching) {
+      goToChat(chatId);
+    }
+  };
+
   // Обновленное отображение поиска
   const renderSearchBlock = () => {
     if (foundChatId) {
@@ -930,17 +801,15 @@ export const Home = () => {
             className="mb-4"
           >
             <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center shadow-lg">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <span className="text-green-500 text-3xl">✓</span>
             </div>
           </motion.div>
 
           <h2 className="text-xl font-bold mb-2">Собеседник найден!</h2>
 
           <div className="text-center mb-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-              Нажмите кнопку, чтобы начать общение
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              Мы нашли вам собеседника. Нажмите кнопку ниже, чтобы начать общение.
             </p>
           </div>
 
@@ -952,9 +821,9 @@ export const Home = () => {
               onClick={() => goToChat(foundChatId)}
               variant="primary"
               size="large"
-              className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow-md"
+              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold rounded-lg shadow-lg"
             >
-              Перейти к чату
+              Начать общение
             </Button>
           </motion.div>
         </div>
@@ -969,10 +838,7 @@ export const Home = () => {
           className="mb-4"
         >
           <div className="w-20 h-20 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center shadow-lg">
-            <svg className="animate-spin h-10 w-10 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+            <span className="text-blue-500 text-3xl">🔍</span>
           </div>
         </motion.div>
 
@@ -980,16 +846,11 @@ export const Home = () => {
 
         <div className="text-center mb-6">
           <p className="text-gray-600 dark:text-gray-300 mb-2">
-            Пожалуйста, подождите, мы ищем для вас подходящего собеседника
+            {searchMode === 'random'
+              ? 'Ищем случайного собеседника онлайн...'
+              : 'Ищем собеседника с похожими интересами...'}
           </p>
-          <div className="font-mono text-lg tracking-wider bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-1 inline-block">
-            {formatSearchTime(searchDuration)}
-          </div>
-        </div>
-
-        {/* Добавляем счетчик активных пользователей во время поиска */}
-        <div className="mt-2 mb-4">
-          <ActiveSearchCounter refreshIntervalMs={3000} />
+          <div className="font-mono text-lg tracking-wider bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-1 inline-block">{formatSearchTime(searchDuration)}</div>
         </div>
 
         <motion.div
@@ -1010,37 +871,43 @@ export const Home = () => {
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
-            Поиск собеседника
+            {currentUser ? `Привет, ${currentUser.name}!` : 'Добро пожаловать!'}
           </h2>
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <button
-              onClick={toggleSearchMode}
-              className="text-xs bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 py-1 px-2 rounded-lg flex items-center gap-1"
+            <Button
+              variant="outline"
+              onClick={handleGoToSettings}
+              className="text-sm px-3 py-1 flex items-center shadow-sm rounded-lg font-bold"
             >
-              <span>{searchMode === 'random' ? 'Случайный' : 'По интересам'}</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+              ⚙️ Настройки
+            </Button>
           </motion.div>
         </div>
 
         <div className="flex justify-center mb-5">
           <div className="bg-gray-100 dark:bg-gray-700 rounded-full p-1 flex w-full max-w-xs shadow-inner">
-            <button
-              className={`flex-1 py-2 rounded-full text-sm font-medium transition-all ${searchMode === 'random' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-600 dark:text-gray-400'
-                }`}
+            <motion.button
               onClick={() => setSearchMode('random')}
+              className={`flex-1 px-4 py-2 rounded-full transition-all text-center font-medium ${searchMode === 'random'
+                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
+                : 'text-gray-700 dark:text-gray-300'
+                }`}
+              whileHover={searchMode !== 'random' ? { scale: 1.03 } : {}}
+              whileTap={{ scale: 0.97 }}
             >
               Случайный
-            </button>
-            <button
-              className={`flex-1 py-2 rounded-full text-sm font-medium transition-all ${searchMode === 'interests' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-600 dark:text-gray-400'
-                }`}
+            </motion.button>
+            <motion.button
               onClick={() => setSearchMode('interests')}
+              className={`flex-1 px-4 py-2 rounded-full transition-all text-center font-medium ${searchMode === 'interests'
+                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
+                : 'text-gray-700 dark:text-gray-300'
+                }`}
+              whileHover={searchMode !== 'interests' ? { scale: 1.03 } : {}}
+              whileTap={{ scale: 0.97 }}
             >
               По интересам
-            </button>
+            </motion.button>
           </div>
         </div>
 
@@ -1052,11 +919,15 @@ export const Home = () => {
             exit={{ opacity: 0, height: 0 }}
           >
             <Card className="p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-md">
+              <h3 className="font-medium mb-3">Выберите интересы:</h3>
               <InterestsSelector
                 selectedInterests={selectedInterests}
                 onChange={handleInterestsChange}
                 maxSelections={5}
               />
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 italic">
+                Выберите до 5 интересов для лучшего подбора собеседника
+              </p>
             </Card>
           </motion.div>
         )}
@@ -1068,25 +939,24 @@ export const Home = () => {
           transition={{ delay: 0.1 }}
         >
           <Card className="p-4 bg-opacity-95 backdrop-blur-sm shadow-md bg-white dark:bg-gray-800/95 border-l-4 border-indigo-500">
-            <div className="flex flex-col gap-3">
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                {searchMode === 'random'
-                  ? 'Поиск случайного собеседника без учета интересов для быстрого старта общения.'
-                  : 'Поиск собеседника с похожими интересами для более глубокого общения.'}
-              </p>
+            <div className="text-sm mb-4 text-gray-600 dark:text-gray-300">
+              Найдите собеседника для анонимного общения. Жмите кнопку ниже:
+            </div>
 
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full"
+            >
               <Button
                 onClick={handleStartSearch}
-                className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold py-3"
+                fullWidth
+                className="bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-bold py-3 rounded-lg shadow-md"
+                size="large"
               >
-                {searchMode === 'random' ? 'Найти случайного собеседника' : 'Найти собеседника по интересам'}
+                🔍 Найти собеседника
               </Button>
-
-              {/* Показываем счетчик активных пользователей */}
-              <div className="mt-2">
-                <ActiveSearchCounter refreshIntervalMs={3000} />
-              </div>
-            </div>
+            </motion.div>
           </Card>
         </motion.div>
 
@@ -1114,17 +984,40 @@ export const Home = () => {
             buttonAnimation="pulse"
           />
 
+          {/* Добавляем кнопку тестирования для локальной разработки */}
           {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
-            <ActionCard
-              icon="🧪"
-              title="Тестирование чатов"
-              description="Отладочная страница для тестирования чатов"
-              buttonText="🔍 Открыть тест чатов"
-              onClick={handleGoToTestChat}
-              accentColor="purple"
-              animationDelay={0.3}
-              buttonAnimation="scale"
-            />
+            <div className="mt-4 border-t border-gray-200 pt-4">
+              <h3 className="text-sm font-semibold text-gray-500 mb-2">Инструменты разработчика</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Button
+                    onClick={handleGoToTestChat}
+                    fullWidth
+                    variant="outline"
+                    className="border-purple-400 text-purple-500 hover:bg-purple-50"
+                  >
+                    <span className="mr-2">🧪</span> Тестовый чат
+                  </Button>
+                </motion.div>
+
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Button
+                    onClick={handleGoToDebug}
+                    fullWidth
+                    variant="outline"
+                    className="border-indigo-400 text-indigo-500 hover:bg-indigo-50"
+                  >
+                    <span className="mr-2">🛠️</span> Отладка
+                  </Button>
+                </motion.div>
+              </div>
+            </div>
           )}
 
           {isAdminUser && (
@@ -1148,6 +1041,14 @@ export const Home = () => {
             transition={{ duration: 0.5, delay: 0.45 }}
             className="mt-2"
           >
+            <Button
+              onClick={handleGoToProfile}
+              fullWidth
+              variant="secondary"
+              className="bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white font-bold shadow-md rounded-lg"
+            >
+              <span className="mr-2">👤</span> Мой профиль
+            </Button>
           </motion.div>
         </div>
       </div>
@@ -1212,38 +1113,7 @@ export const Home = () => {
     </div>
   );
 };
-
 function checkForNewChat() {
-  const currentUser = getCurrentUser();
-
-  if (!currentUser) {
-    console.log('[checkForNewChat] Пользователь не найден');
-    return false;
-  }
-
-  try {
-    const hasNewChatFlag = hasNewChat(currentUser.id);
-
-    if (hasNewChatFlag) {
-      const notification = getNewChatNotification(currentUser.id);
-      if (notification) {
-        return {
-          found: true,
-          chatId: notification.chatId,
-          otherUserId: notification.otherUserId
-        };
-      }
-    }
-
-    return {
-      found: false
-    };
-  } catch (error) {
-    console.error('[checkForNewChat] Ошибка при проверке новых чатов:', error);
-    return {
-      found: false,
-      error: true
-    };
-  }
+  throw new Error('Function not implemented.')
 }
 

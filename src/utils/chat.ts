@@ -50,121 +50,44 @@ export interface GameResult {
 export const getUserChats = (userId: string): Chat[] => {
   try {
     const chatsData = localStorage.getItem('chats')
-    let chats: Chat[] = [];
+    const chats: Chat[] = chatsData ? JSON.parse(chatsData) : []
 
-    if (chatsData) {
-      try {
-        chats = JSON.parse(chatsData);
-      } catch (e) {
-        console.error('Ошибка при парсинге данных чатов:', e);
-        return [];
-      }
-    }
-
-    // Проверяем, что chats - это массив
-    if (!Array.isArray(chats)) {
-      console.error('Данные чатов в localStorage повреждены, не массив');
-      return [];
-    }
-
-    // Фильтруем чаты с дополнительной проверкой на наличие массива participants
-    return chats.filter(chat => {
-      // Проверяем, содержит ли чат массив participants
-      if (!chat.participants || !Array.isArray(chat.participants)) {
-        console.warn(`Чат ${chat.id} не содержит корректный массив participants, добавляем пустой массив`);
-        chat.participants = [];
-      }
-
-      return chat.participants.includes(userId);
-    });
+    // Фильтруем чаты, в которых участвует пользователь
+    return chats.filter(chat => chat.participants.includes(userId))
   } catch (error) {
     console.error('Ошибка при получении чатов пользователя:', error)
     return []
   }
 }
 
-// Получить конкретный чат по ID - улучшенная обработка различных форматов ID
+// Получить конкретный чат по ID - убедимся, что функция корректно находит чат
 export const getChatById = (chatId: string): Chat | null => {
   try {
-    if (!chatId) {
-      console.log('[getChatById] Получен пустой ID чата');
+    const chatsData = localStorage.getItem('chats');
+    if (!chatsData) {
+      console.log('Нет сохраненных чатов');
       return null;
     }
 
-    // Создаем массив возможных ID для проверки
-    const possibleIds = [
-      chatId,
-      chatId.startsWith('chat_') ? chatId.substring(5) : `chat_${chatId}`
-    ];
+    const chats: Chat[] = JSON.parse(chatsData);
 
-    console.log(`[getChatById] Проверяем следующие варианты ID чата: ${possibleIds.join(', ')}`);
-
-    // Сначала пробуем найти в общем списке чатов
-    const chatsData = localStorage.getItem('chats');
-    if (chatsData) {
-      try {
-        const chats: Chat[] = JSON.parse(chatsData);
-
-        // Проверяем, что chats - это массив
-        if (!Array.isArray(chats)) {
-          console.error('[getChatById] Данные чатов повреждены - не массив');
-        } else {
-          // Ищем чат по всем возможным вариантам ID
-          for (const possibleId of possibleIds) {
-            const chat = chats.find(c => c.id === possibleId);
-            if (chat) {
-              // Проверяем наличие массива participants
-              if (!chat.participants || !Array.isArray(chat.participants)) {
-                console.warn(`[getChatById] У чата ${possibleId} отсутствует массив participants, добавляем пустой массив`);
-                chat.participants = [];
-
-                // Обновляем чат в массиве
-                const chatIndex = chats.findIndex(c => c.id === possibleId);
-                if (chatIndex !== -1) {
-                  chats[chatIndex] = chat;
-                  localStorage.setItem('chats', JSON.stringify(chats));
-                }
-              }
-
-              console.log(`[getChatById] Найден чат в общем списке: ${chat.id}`);
-              return chat;
-            }
-          }
-        }
-      } catch (parseError) {
-        console.error('[getChatById] Ошибка при парсинге общего списка чатов:', parseError);
-      }
+    // Проверяем, что chats - это массив
+    if (!Array.isArray(chats)) {
+      console.error('Данные чатов повреждены');
+      return null;
     }
 
-    // Если не нашли в общем списке, проверяем прямое хранение
-    for (const possibleId of possibleIds) {
-      // Всегда проверяем с префиксом при прямом доступе
-      const directKey = possibleId.startsWith('chat_') ? possibleId : `chat_${possibleId}`;
-      const directChatData = localStorage.getItem(directKey);
+    const chat = chats.find(c => c.id === chatId);
 
-      if (directChatData) {
-        try {
-          const directChat = JSON.parse(directChatData);
-
-          // Проверяем, есть ли массив participants
-          if (!directChat.participants || !Array.isArray(directChat.participants)) {
-            console.warn(`[getChatById] У чата ${directKey} отсутствует массив participants, добавляем пустой массив`);
-            directChat.participants = [];
-            localStorage.setItem(directKey, JSON.stringify(directChat));
-          }
-
-          console.log(`[getChatById] Найден чат через прямой доступ: ${directKey}`);
-          return directChat;
-        } catch (parseError) {
-          console.error(`[getChatById] Ошибка при разборе прямого доступа к чату ${directKey}:`, parseError);
-        }
-      }
+    if (!chat) {
+      console.log(`Чат с ID ${chatId} не найден`);
+      return null;
     }
 
-    console.log(`[getChatById] Чат с ID ${chatId} не найден ни в одном из форматов`);
-    return null;
+    console.log(`Найден чат: ${chat.id}`);
+    return chat;
   } catch (error) {
-    console.error('[getChatById] Ошибка при получении чата по ID:', error);
+    console.error('Ошибка при получении чата по ID:', error);
     return null;
   }
 }

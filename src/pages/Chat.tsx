@@ -45,53 +45,21 @@ export const Chat = () => {
 
       // Если ID чата передан через параметры - используем его, иначе берем из localStorage
       const targetChatId = chatId || localStorage.getItem('active_chat_id');
+
       if (!targetChatId) {
         throw new Error('ID чата не найден');
       }
 
       console.log(`[Chat] Загрузка данных чата ${targetChatId}...`);
 
-      // Создаем все возможные варианты ID для поиска
-      // Гарантируем, что будем проверять оба варианта: с префиксом "chat_" и без него
-      const possibleIds = [
-        targetChatId,
-        targetChatId.startsWith('chat_') ? targetChatId.substring(5) : `chat_${targetChatId}`
-      ];
-
-      console.log(`[Chat] Проверяем следующие варианты ID: ${possibleIds.join(', ')}`);
-
-      // Пробуем найти чат по всем возможным вариантам ID
-      let chatData = null;
-      for (const id of possibleIds) {
-        chatData = getChatById(id);
-        if (chatData) {
-          console.log(`[Chat] Чат найден по ID: ${id}`);
-
-          // Сохраняем найденный ID чата в localStorage для последующего использования
-          // Это поможет при обновлении страницы
-          localStorage.setItem('active_chat_id', chatData.id);
-          break;
-        }
-      }
+      // Получаем данные чата
+      const chatData = getChatById(targetChatId);
 
       if (!chatData) {
         throw new Error(`Чат с ID ${targetChatId} не найден`);
       }
 
-      // Проверяем наличие массива participants и добавляем, если отсутствует
-      if (!chatData.participants || !Array.isArray(chatData.participants)) {
-        console.warn(`[Chat] У чата ${chatData.id} отсутствует или некорректный массив participants`);
-        chatData.participants = [];
-        // Сохраняем исправленный чат в localStorage
-        try {
-          // Используем ID из объекта chatData, так как он гарантированно правильный
-          localStorage.setItem(`chat_${chatData.id}`, JSON.stringify(chatData));
-        } catch (e) {
-          console.error(`[Chat] Ошибка при исправлении данных чата ${chatData.id}:`, e);
-        }
-      }
-
-      console.log(`[Chat] Чат найден! ID: ${chatData.id}, Участники: ${chatData.participants.join(', ')}`);
+      console.log(`[Chat] Чат найден! Участники: ${chatData.participants.join(', ')}`);
 
       // Проверяем, что текущий пользователь является участником чата
       if (!chatData.participants.includes(currentUser.id)) {
@@ -101,6 +69,7 @@ export const Chat = () => {
       // Получаем ID партнера
       const partnerUserId = chatData.participants.find(id => id !== currentUser.id);
       setPartnerId(partnerUserId || null);
+
       if (partnerUserId) {
         const partner = await getUserById(partnerUserId);
         if (partner) {
@@ -153,12 +122,8 @@ export const Chat = () => {
       const storedChatId = localStorage.getItem('active_chat_id');
       if (storedChatId) {
         console.log(`[Chat] Получен ID чата из localStorage: ${storedChatId}`);
-
-        // Определяем ID для URL-навигации (без префикса "chat_")
-        const navigationChatId = storedChatId.startsWith('chat_') ? storedChatId.substring(5) : storedChatId;
-
-        // Перенаправляем на URL с корректным ID чата
-        navigate(`/chat/${navigationChatId}`, { replace: true });
+        // Перенаправляем с URL с корректным ID чата
+        navigate(`/chat/${storedChatId}`, { replace: true });
         return;
       }
     }

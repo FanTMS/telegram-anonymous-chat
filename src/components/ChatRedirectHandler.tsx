@@ -1,143 +1,81 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { hasNewChat, getNewChatNotification, markChatNotificationAsRead, getChatById } from '../utils/matchmaking';
+import { useNavigate } from 'react-router-dom';
 import { getCurrentUser } from '../utils/user';
+import { getNewChatNotification, hasNewChat, markChatNotificationAsRead } from '../utils/matchmaking';
 
 interface ChatRedirectHandlerProps {
-    checkIntervalMs?: number;
-    redirectDelay?: number;
-    onChatFound?: (chatId: string) => void;
+    enabled?: boolean;
 }
 
-/**
- * Компонент для автоматического перенаправления пользователя в новый чат
- * при его создании. Регулярно проверяет наличие новых уведомлений о чатах.
- */
-export const ChatRedirectHandler: React.FC<ChatRedirectHandlerProps> = ({
-    checkIntervalMs = 3000,
-    redirectDelay = 1000,
-    onChatFound
-}) => {
+export const ChatRedirectHandler: React.FC<ChatRedirectHandlerProps> = ({ enabled = true }) => {
     const navigate = useNavigate();
-    const location = useLocation();
-    const [foundChatId, setFoundChatId] = useState<string | null>(null);
-    const [isRedirecting, setIsRedirecting] = useState(false);
+    const [checking, setChecking] = useState(false);
 
-    // Проверка на наличие новых чатов
-    const checkForNewChats = () => {
-        try {
-            const currentUser = getCurrentUser();
-            if (!currentUser) return;
+    useEffect(() => {
+        if (!enabled) return;
 
-            if (hasNewChat(currentUser.id)) {
-                const notification = getNewChatNotification(currentUser.id);
-                if (notification && !notification.isRead) {
-                    console.log(`[ChatRedirectHandler] Найден новый чат: ${notification.chatId}`);
+        let isComponentMounted = true;
+        let checkInterval: ReturnType<typeof setInterval> | null = null;
 
-                    // Проверяем, существует ли чат
-                    const chatId = notification.chatId;
-                    const chat = getChatById(chatId);
+        const checkForNewChat = async () => {
+            if (checking || !isComponentMounted) return;
 
-                    if (chat) {
-                        console.log(`[ChatRedirectHandler] Чат найден, участники: ${chat.participants.join(', ')}`);
-                        setFoundChatId(chatId);
+            try {
+                setChecking(true);
+                const currentUser = getCurrentUser();
 
-                        // Вызываем callback, если он предоставлен
-                        if (onChatFound) {
-                            onChatFound(chatId);
-                        }
+                if (currentUser && hasNewChat(currentUser.id)) {
+                    console.log('[ChatRedirectHandler] Обнаружен новый чат для пользователя', currentUser.id);
+                    const notification = getNewChatNotification(currentUser.id);
 
-                        // Начинаем процесс перенаправления
-                        setIsRedirecting(true);
-                    } else {
-                        console.error(`[ChatRedirectHandler] Чат ${chatId} не найден`);
+                    if (notification && !notification.isRead) {
+                        console.log('[ChatRedirectHandler] Перенаправление в чат:', notification.chatId);
+
+                        // Сохраняем ID чата в localStorage для надежности
+                        localStorage.setItem('active_chat_id', notification.chatId);
+
+                        // Перенаправляем в чат
+                        navigate(`/chat/${notification.chatId}`);
                     }
                 }
-            }
-        } catch (error) {
-            console.error('[ChatRedirectHandler] Ошибка при проверке чатов:', error);
-        }
-    };
-
-    // Обработчик события для обнаружения новых чатов
-    const handleChatFound = (event: CustomEvent) => {
-        console.log('[ChatRedirectHandler] Получено событие chatFound', event.detail);
-
-        try {
-            const currentUser = getCurrentUser();
-            if (!currentUser) return;
-
-            const { chatId, participants } = event.detail;
-
-            // Проверяем, является ли текущий пользователь участником чата
-            if (participants && Array.isArray(participants) && participants.includes(currentUser.id)) {
-                console.log(`[ChatRedirectHandler] Текущий пользователь участник чата ${chatId}`);
-                setFoundChatId(chatId);
-
-                // Вызываем callback, если он предоставлен
-                if (onChatFound) {
-                    onChatFound(chatId);
+            } catch (error) {
+                console.error('[ChatRedirectHandler] Ошибка при проверке новых чатов:', error);
+            } finally {
+                if (isComponentMounted) {
+                    setChecking(false);
                 }
-
-                // Начинаем процесс перенаправления
-                setIsRedirecting(true);
             }
-        } catch (error) {
-            console.error('[ChatRedirectHandler] Ошибка при обработке события chatFound:', error);
-        }
-    };
+        };
 
-    // Перенаправление в чат с задержкой
-    useEffect(() => {
-        if (isRedirecting && foundChatId) {
-            const timer = setTimeout(() => {
-                try {
-                    const currentUser = getCurrentUser();
-                    if (!currentUser) return;
-
-                    // Отмечаем уведомление как прочитанное
-                    markChatNotificationAsRead(currentUser.id);
-
-                    // Извлекаем ID чата без префикса "chat_"
-                    const normalizedChatId = foundChatId.startsWith('chat_')
-                        ? foundChatId.substring(5)
-                        : foundChatId;
-
-                    console.log(`[ChatRedirectHandler] Перенаправление в чат ${normalizedChatId}`);
-
-                    // Перенаправляем пользователя в чат
-                    navigate(`/chat/${normalizedChatId}`);
-
-                    // Сбрасываем состояние после перенаправления
-                    setIsRedirecting(false);
-                    setFoundChatId(null);
-                } catch (error) {
-                    console.error('[ChatRedirectHandler] Ошибка при перенаправлении:', error);
-                }
-            }, redirectDelay);
-
-            return () => clearTimeout(timer);
-        }
-    }, [isRedirecting, foundChatId, navigate, redirectDelay]);
-
-    // Настраиваем периодическую проверку и слушатель событий
-    useEffect(() => {
         // Проверяем при монтировании компонента
-        checkForNewChats();
+        checkForNewChat();
 
-        // Устанавливаем слушатель события chatFound
+        // Устанавливаем интервал для периодической проверки
+        checkInterval = setInterval(checkForNewChat, 3000);
+
+        // Настраиваем слушатель событий для нового чата
+        const handleChatFound = (event: CustomEvent) => {
+            const { chatId, userId } = event.detail;
+            console.log('[ChatRedirectHandler] Получено событие chatFound:', chatId, userId);
+
+            const currentUser = getCurrentUser();
+            if (currentUser && currentUser.id === userId) {
+                console.log('[ChatRedirectHandler] Это наш чат, перенаправляем...');
+                localStorage.setItem('active_chat_id', chatId);
+                navigate(`/chat/${chatId}`);
+            }
+        };
+
         window.addEventListener('chatFound', handleChatFound as EventListener);
 
-        // Настраиваем интервал для периодической проверки
-        const intervalId = setInterval(checkForNewChats, checkIntervalMs);
-
-        // Очистка при размонтировании компонента
         return () => {
-            clearInterval(intervalId);
+            isComponentMounted = false;
+            if (checkInterval) {
+                clearInterval(checkInterval);
+            }
             window.removeEventListener('chatFound', handleChatFound as EventListener);
         };
-    }, [checkIntervalMs]);
+    }, [navigate, enabled, checking]);
 
-    // Компонент ничего не рендерит
-    return null;
+    return null; // Этот компонент не рендерит никакой UI
 };

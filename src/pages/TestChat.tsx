@@ -1,467 +1,662 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
-import {
-    startSearching, stopSearching, isUserSearching, startMatchmakingService, stopMatchmakingService,
-    getSearchingUsers, getChatById, getNewChatNotification, hasNewChat, markChatNotificationAsRead
-} from '../utils/matchmaking';
-import { getCurrentUser, createUser, getUserById } from '../utils/user';
+import { createTestUser, getCurrentUser, getUserById } from '../utils/user';
+import { getChatById } from '../utils/chat'; // Импортируем getChatById из chat.ts
+import { getNewChatNotification, getSearchingUsers, hasNewChat, saveNewChatNotification, startSearching, stopSearching, triggerMatchmaking } from '../utils/matchmaking';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { v4 as uuidv4 } from 'uuid';
-import { ActiveSearchCounter } from '../components/ActiveSearchCounter';
 
 export const TestChat = () => {
     const navigate = useNavigate();
-    const [usersList, setUsersList] = useState<string[]>([]);
-    const [testingUsers, setTestingUsers] = useState<{ id: string, name: string }[]>([]);
-    const [activeUser, setActiveUser] = useState<string | null>(null);
+    const [testUsers, setTestUsers] = useState<any[]>([]);
+    const [logs, setLogs] = useState<string[]>([]);
     const [searchingUsers, setSearchingUsers] = useState<any[]>([]);
-    const [generatedChats, setGeneratedChats] = useState<any[]>([]);
-    const [logMessages, setLogMessages] = useState<string[]>([]);
+    const [showDetailedLogs, setShowDetailedLogs] = useState(false);
+    const [autoSearching, setAutoSearching] = useState(false);
+    const [autoSearchInterval, setAutoSearchInterval] = useState<NodeJS.Timeout | null>(null);
+    const [chats, setChats] = useState<any[]>([]);
 
-    // Инициализация при загрузке страницы
     useEffect(() => {
-        // Создаем несколько тестовых пользователей
-        createTestUsers();
+        // Загружаем существующих пользователей при старте
+        loadExistingUsers();
 
-        // Получаем список пользователей в поиске при загрузке
-        updateSearchingUsers();
+        // Обновляем список всех данных при монтировании компонента
+        checkExistingChats();
 
-        // Настраиваем обработчик для событий создания чатов
-        const chatFoundHandler = (event: CustomEvent) => {
-            addLogMessage(`📢 Событие chatFound: Создан чат ${event.detail.chatId}`);
-            updateGeneratedChats();
+        // Обновляем список пользователей в поиске каждую секунду
+        const interval = setInterval(() => {
+            const users = getSearchingUsers();
+
+            // Добавляем имена для лучшей читаемости
+            const usersWithNames = users.map(user => {
+                const userData = getUserById(user.userId);
+                return {
+                    ...user,
+                    name: userData?.name || 'Неизвестный'
+                };
+            });
+
+            setSearchingUsers(usersWithNames);
+        }, 1000);
+
+        // Слушаем событие chatFound для отображения в логах и обновления чатов
+        const handleChatFound = (event: any) => {
+            const { chatId, userId } = event.detail;
+            addLog(`✅ Получено событие chatFound: chatId=${chatId}, userId=${userId || 'не указан'}`);
+
+            // Обязательно обновляем список чатов после создания нового
+            setTimeout(() => checkExistingChats(), 500);
+
+            // Проверяем, что действительно был создан чат
+            const chat = getChatById(chatId);
+            if (chat) {
+                addLog(`✅ Подтверждено создание чата ${chatId} между: ${chat.participants.join(' и ')}`);
+            } else {
+                addLog(`❌ ОШИБКА: Чат ${chatId} не найден после события chatFound!`);
+            }
         };
 
-        window.addEventListener('chatFound', chatFoundHandler as EventListener);
+        window.addEventListener('chatFound', handleChatFound);
 
-        // Интервал для обновления списка пользователей в поиске
-        const intervalId = setInterval(updateSearchingUsers, 2000);
-
-        // Очистка при размонтировании
         return () => {
-            window.removeEventListener('chatFound', chatFoundHandler as EventListener);
-            clearInterval(intervalId);
+            clearInterval(interval);
+            if (autoSearchInterval) {
+                clearInterval(autoSearchInterval);
+            }
+            window.removeEventListener('chatFound', handleChatFound);
         };
     }, []);
 
-    // Добавляет сообщение в лог
-    const addLogMessage = (message: string) => {
-        setLogMessages(prev => [message, ...prev].slice(0, 20));
-    };
-
-    // Создание тестовых пользователей
-    const createTestUsers = () => {
-        const users = [];
-        // Проверяем, есть ли уже пользователи
-        const existingUsers = getAllTestUsers();
-
-        if (existingUsers.length === 0) {
-            // Создаем новых тестовых пользователей
-            for (let i = 1; i <= 5; i++) {
-                const id = `test-user-${uuidv4().substring(0, 8)}`;
-                const name = `Тестовый пользователь ${i}`;
-                const user = createUser(id, name);
-                users.push({ id, name });
-            }
-            setTestingUsers(users);
-        } else {
-            // Используем существующих пользователей
-            setTestingUsers(existingUsers.map(id => {
-                const user = getUserById(id);
-                return { id, name: user?.name || `Пользователь ${id}` };
-            }));
-        }
-
-        addLogMessage('👤 Тестовые пользователи созданы/загружены');
-    };
-
-    // Получение всех тестовых пользователей
-    const getAllTestUsers = (): string[] => {
+    const loadExistingUsers = () => {
         try {
-            // Получение всех ключей из localStorage
-            const keys = Object.keys(localStorage);
+            // Загружаем существующих пользователей из localStorage
+            const usersStr = localStorage.getItem('users');
+            if (usersStr) {
+                const allUsers = JSON.parse(usersStr);
+                if (Array.isArray(allUsers) && allUsers.length > 0) {
+                    // Берем только тестовых пользователей
+                    const testUsers = allUsers.filter(user =>
+                        user.id.startsWith('test_') || user.name.startsWith('Тест')
+                    );
+                    setTestUsers(testUsers);
 
-            // Фильтрация ключей, относящихся к пользователям
-            const userKeys = keys.filter(key => key.startsWith('user_'));
-
-            // Извлечение ID пользователей
-            return userKeys.map(key => key.replace('user_', ''))
-                .filter(id => {
-                    const user = getUserById(id);
-                    return user !== null && (id.startsWith('test-user-') || user.name?.includes('Тестовый'));
-                });
-        } catch (error) {
-            console.error('Ошибка при получении тестовых пользователей:', error);
-            return [];
-        }
-    };
-
-    // Обновляет список пользователей в поиске
-    const updateSearchingUsers = () => {
-        const users = getSearchingUsers();
-        setSearchingUsers(users);
-    };
-
-    // Обновляет список созданных чатов
-    const updateGeneratedChats = () => {
-        try {
-            // Получение всех ключей из localStorage
-            const keys = Object.keys(localStorage);
-
-            // Фильтрация ключей, относящихся к чатам
-            const chatKeys = keys.filter(key => key.startsWith('chat_'));
-
-            // Извлечение чатов
-            const chats = chatKeys.map(key => {
-                try {
-                    const chatJson = localStorage.getItem(key);
-                    if (chatJson) {
-                        return JSON.parse(chatJson);
+                    if (testUsers.length > 0) {
+                        addLog(`Загружено ${testUsers.length} тестовых пользователей`);
                     }
-                    return null;
-                } catch {
-                    return null;
                 }
-            }).filter(chat => chat !== null);
-
-            setGeneratedChats(chats);
+            }
         } catch (error) {
-            console.error('Ошибка при обновлении списка чатов:', error);
+            console.error('Ошибка при загрузке пользователей:', error);
+            addLog('Ошибка при загрузке существующих пользователей');
         }
     };
 
-    // Переключение активного пользователя
-    const selectUser = (userId: string) => {
-        // Сохраняем ID пользователя в localStorage с правильным ключом
-        localStorage.setItem('current_user_id', userId);
-        setActiveUser(userId);
-        addLogMessage(`🔄 Переключились на пользователя ${userId}`);
+    const addLog = (message: string) => {
+        const timestamp = new Date().toLocaleTimeString();
+        setLogs(prev => [`[${timestamp}] ${message}`, ...prev.slice(0, 99)]);
     };
 
-    // Запуск поиска для выбранного пользователя
-    const startSearch = (userId: string, isRandom: boolean = true, interests: string[] = []) => {
-        // Переключаемся на пользователя
-        selectUser(userId);
-
-        // Запускаем поиск
-        const success = startSearching(isRandom, interests);
-
-        if (success) {
-            addLogMessage(`🔍 Пользователь ${userId} начал поиск (режим: ${isRandom ? 'случайный' : 'по интересам'})`);
-            updateSearchingUsers();
+    const createNewTestUser = () => {
+        const name = `Тест${testUsers.length + 1}`;
+        const user = createTestUser(name);
+        if (user) {
+            setTestUsers(prev => [...prev, user]);
+            addLog(`Создан тестовый пользователь: ${name} (${user.id})`);
         } else {
-            addLogMessage(`❌ Не удалось запустить поиск для пользователя ${userId}`);
+            addLog('Ошибка при создании тестового пользователя');
         }
     };
 
-    // Остановка поиска для выбранного пользователя
-    const stopSearch = (userId: string) => {
-        // Переключаемся на пользователя
-        selectUser(userId);
-
-        // Останавливаем поиск
-        const success = stopSearching(userId);
-
-        if (success) {
-            addLogMessage(`⏹️ Пользователь ${userId} остановил поиск`);
-            updateSearchingUsers();
-        } else {
-            addLogMessage(`❌ Не удалось остановить поиск для пользователя ${userId}`);
-        }
-    };
-
-    // Проверка, находится ли пользователь в поиске
-    const checkIsSearching = (userId: string) => {
-        return searchingUsers.some(user => user.userId === userId);
-    };
-
-    // Запуск сервиса подбора пар
-    const startMatchmaking = () => {
-        const serviceId = startMatchmakingService(1500);
-        addLogMessage(`🚀 Запущен сервис подбора пар с ID: ${serviceId}`);
-    };
-
-    // Остановка сервиса подбора пар
-    const stopMatchmaking = () => {
-        // @ts-ignore
-        if (window._matchmakingIntervalId) {
-            // @ts-ignore
-            stopMatchmakingService(window._matchmakingIntervalId);
-            addLogMessage(`🛑 Остановлен сервис подбора пар`);
-        } else {
-            addLogMessage(`❓ Сервис подбора пар не был активен`);
-        }
-    };
-
-    // Проверка на наличие новых чатов для пользователя
-    const checkNewChats = (userId: string) => {
-        selectUser(userId);
-
-        if (hasNewChat(userId)) {
-            const notification = getNewChatNotification(userId);
-            if (notification) {
-                addLogMessage(`🎉 Найден новый чат для пользователя ${userId}: ${notification.chatId}`);
-                return notification.chatId;
+    const create5TestUsers = () => {
+        let created = 0;
+        for (let i = 0; i < 5; i++) {
+            const name = `Тест${testUsers.length + i + 1}`;
+            const user = createTestUser(name);
+            if (user) {
+                created++;
+                setTestUsers(prev => [...prev, user]);
             }
         }
-
-        addLogMessage(`ℹ️ Нет новых чатов для пользователя ${userId}`);
-        return null;
+        addLog(`Создано ${created} тестовых пользователей`);
     };
 
-    // Перейти в чат
+    const startTestUserSearch = (userId: string) => {
+        const success = startSearching(true, [], [0, 100], userId);
+        if (success) {
+            addLog(`Пользователь ${userId} начал поиск`);
+
+            // Принудительно запускаем матчмейкинг через секунду
+            setTimeout(() => {
+                triggerMatchmaking()
+                    .then(result => {
+                        addLog(`Проверка матчмейкинга: ${result ? 'Найдено совпадение' : 'Совпадение не найдено'}`);
+                    })
+                    .catch(err => {
+                        addLog(`Ошибка при проверке матчмейкинга: ${err.message || 'Неизвестная ошибка'}`);
+                    });
+            }, 1000);
+        } else {
+            addLog(`Ошибка при запуске поиска для ${userId}`);
+        }
+    };
+
+    const stopTestUserSearch = (userId: string) => {
+        const success = stopSearching(userId);
+        if (success) {
+            addLog(`Поиск остановлен для ${userId}`);
+        } else {
+            addLog(`Ошибка при остановке поиска для ${userId}`);
+        }
+    };
+
+    const forceMatch = async () => {
+        addLog('Запуск принудительного подбора пар...');
+        try {
+            const result = await triggerMatchmaking();
+            addLog(`Результат: ${result ? 'Найдена пара! 🎉' : 'Пара не найдена 😞'}`);
+
+            if (result) {
+                // Принудительно проверяем список чатов после успешного подбора
+                setTimeout(() => {
+                    checkExistingChats();
+                }, 500);
+            }
+
+            // Обновляем список пользователей в поиске после подбора
+            const updatedUsers = getSearchingUsers();
+
+            // Добавляем имена для лучшей читаемости
+            const usersWithNames = updatedUsers.map(user => {
+                const userData = getUserById(user.userId);
+                return {
+                    ...user,
+                    name: userData?.name || 'Неизвестный'
+                };
+            });
+
+            setSearchingUsers(usersWithNames);
+
+            // Если пользователи остались - повторяем через 2 секунды
+            if (updatedUsers.length >= 2) {
+                setTimeout(forceMatch, 2000);
+            }
+        } catch (error) {
+            addLog(`Ошибка при подборе пар: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+        }
+    };
+
+    const startAutoSearch = () => {
+        if (autoSearchInterval) {
+            clearInterval(autoSearchInterval);
+        }
+
+        // Ставим двух тестовых пользователей в поиск каждые 5 секунд
+        const interval = setInterval(() => {
+            // Создаем пользователя, если нужно
+            if (testUsers.length < 2) {
+                createNewTestUser();
+            }
+
+            // Берем двух разных пользователей
+            const availableUsers = testUsers.filter(user =>
+                !searchingUsers.some(su => su.userId === user.id)
+            );
+
+            if (availableUsers.length >= 2) {
+                const user1 = availableUsers[0];
+                const user2 = availableUsers[1];
+
+                addLog(`Автоматически добавляем в поиск: ${user1.name} и ${user2.name}`);
+                startSearching(true, [], [0, 100], user1.id);
+                startSearching(true, [], [0, 100], user2.id);
+
+                // Через секунду запускаем матчмейкинг
+                setTimeout(() => {
+                    triggerMatchmaking().then(result => {
+                        addLog(`Автоматический матчмейкинг: ${result ? 'Успешно' : 'Неудачно'}`);
+                    });
+                }, 1000);
+            } else {
+                addLog('Недостаточно пользователей для автоматического поиска');
+                create5TestUsers();
+            }
+        }, 5000);
+
+        setAutoSearchInterval(interval);
+        setAutoSearching(true);
+        addLog('Автоматический поиск запущен');
+    };
+
+    const stopAutoSearch = () => {
+        if (autoSearchInterval) {
+            clearInterval(autoSearchInterval);
+            setAutoSearchInterval(null);
+            setAutoSearching(false);
+            addLog('Автоматический поиск остановлен');
+        }
+    };
+
+    const clearAllUsers = () => {
+        // Останавливаем поиск для всех тестовых пользователей
+        testUsers.forEach(user => {
+            stopSearching(user.id);
+        });
+
+        setTestUsers([]);
+        addLog('Список тестовых пользователей очищен');
+    };
+
+    const startSearchForAll = () => {
+        if (testUsers.length === 0) {
+            addLog('Нет тестовых пользователей для запуска поиска');
+            return;
+        }
+
+        for (const user of testUsers) {
+            startSearching(true, [], [0, 100], user.id);
+        }
+
+        addLog(`Запущен поиск для всех ${testUsers.length} тестовых пользователей`);
+
+        // Запускаем принудительный матчмейкинг через 1 секунду
+        setTimeout(forceMatch, 1000);
+    };
+
     const goToChat = (chatId: string) => {
-        if (!chatId) {
-            addLogMessage(`❌ Ошибка: ID чата отсутствует`);
-            return;
+        try {
+            // Проверяем, что чат существует перед переходом
+            const chat = getChatById(chatId);
+            if (!chat) {
+                addLog(`❌ Ошибка: Чат ${chatId} не найден при попытке открыть.`);
+                return;
+            }
+
+            addLog(`✅ Переход в чат ${chatId}`);
+
+            // Сохраняем активный чат для корректной загрузки
+            localStorage.setItem('active_chat_id', chatId);
+
+            // Переходим в чат
+            navigate(`/chat/${chatId}`);
+        } catch (error) {
+            addLog(`❌ Ошибка при переходе в чат: ${error}`);
         }
-
-        // Попробуем найти чат с различными форматами ID
-        const normalizedChatId = chatId.startsWith('chat_') ? chatId.substring(5) : chatId;
-        const fullChatId = chatId.startsWith('chat_') ? chatId : `chat_${chatId}`;
-
-        // Проверяем, существует ли чат с одним из вариантов ID
-        let chat = getChatById(chatId);
-        if (!chat) {
-            chat = getChatById(normalizedChatId);
-        }
-        if (!chat) {
-            chat = getChatById(fullChatId);
-        }
-
-        if (!chat) {
-            addLogMessage(`❌ Ошибка: Чат с ID ${chatId} не найден`);
-            return;
-        }
-
-        // Сохраняем полный ID чата с префиксом "chat_" в localStorage
-        // Это обеспечит совместимость с другими частями приложения
-        const storageId = chat.id.startsWith('chat_') ? chat.id : `chat_${chat.id}`;
-        localStorage.setItem('active_chat_id', storageId);
-
-        // Для навигации используем ID без префикса "chat_", как ожидает компонент Chat
-        const navigationId = chat.id.startsWith('chat_') ? chat.id.substring(5) : chat.id;
-
-        addLogMessage(`🔄 Переход в чат: ${navigationId} (оригинальный ID: ${chat.id})`);
-        navigate(`/chat/${navigationId}`);
     };
 
-    // Показать статистику поиска
-    const showSearchStats = () => {
-        const stats = {
-            totalUsers: testingUsers.length,
-            searchingUsers: searchingUsers.length,
-            generatedChats: generatedChats.length
-        };
+    const checkExistingChats = () => {
+        try {
+            const chatsData = localStorage.getItem('chats');
+            if (!chatsData) {
+                addLog('Чаты не найдены');
+                setChats([]);
+                return;
+            }
 
-        addLogMessage(`📊 Статистика: ${JSON.stringify(stats)}`);
+            const chats = JSON.parse(chatsData);
+            addLog(`Найдено ${chats.length} чатов`);
+
+            // Добавляем дополнительную информацию о чатах
+            const enhancedChats = chats.map(chat => {
+                // Проверим каждого участника
+                const participantsDetails = chat.participants.map(participantId => {
+                    const participant = getUserById(participantId);
+                    return {
+                        id: participantId,
+                        name: participant?.name || 'Неизвестный',
+                        exists: !!participant
+                    };
+                });
+
+                const participant1 = participantsDetails[0];
+                const participant2 = participantsDetails[1];
+
+                // Проверяем целостность чата
+                const chatIsValid = participantsDetails.every(p => p.exists) &&
+                    chat.participants.length === 2;
+
+                if (!chatIsValid) {
+                    addLog(`⚠️ Чат ${chat.id} может быть поврежден: проблемы с участниками или их кол-вом`);
+                }
+
+                return {
+                    ...chat,
+                    participant1Name: participant1?.name || 'Неизвестный',
+                    participant2Name: participant2?.name || 'Неизвестный',
+                    messageCount: chat.messages?.length || 0,
+                    isValid: chatIsValid
+                };
+            });
+
+            setChats(enhancedChats);
+
+            // Проверяем флаги уведомлений для всех пользователей
+            const users = JSON.parse(localStorage.getItem('users') || '[]');
+            for (const user of users) {
+                if (hasNewChat(user.id)) {
+                    const notification = getNewChatNotification(user.id);
+                    if (notification) {
+                        const chat = getChatById(notification.chatId);
+                        if (chat) {
+                            addLog(`🔔 Пользователь ${user.name} (${user.id}) имеет уведомление о чате ${notification.chatId}`);
+                        } else {
+                            addLog(`⚠️ Пользователь ${user.name} имеет уведомление о несуществующем чате ${notification.chatId}`);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            addLog(`Ошибка при проверке чатов: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+        }
     };
 
-    // Отметить уведомление о чате как прочитанное
-    const markAsRead = (userId: string) => {
-        selectUser(userId);
-        markChatNotificationAsRead(userId);
-        addLogMessage(`✓ Уведомление для ${userId} отмечено как прочитанное`);
+    // Очистка всех чатов
+    const clearAllChats = () => {
+        try {
+            localStorage.setItem('chats', JSON.stringify([]));
+            addLog('Все чаты очищены');
+            setChats([]);
+        } catch (error) {
+            addLog(`Ошибка при очистке чатов: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+        }
+    };
+
+    // Улучшенная проверка состояния
+    const debugState = () => {
+        try {
+            // Проверяем различные хранилища и их состояние
+            addLog('--- Диагностика состояния ---');
+
+            // Проверка пользователей
+            const usersData = localStorage.getItem('users');
+            const users = usersData ? JSON.parse(usersData) : [];
+            addLog(`Всего пользователей: ${users.length}`);
+
+            // Проверка пользователей в поиске
+            const searchingUsers = getSearchingUsers();
+            addLog(`Пользователей в поиске: ${searchingUsers.length}`);
+
+            // Проверка чатов
+            const chatsData = localStorage.getItem('chats');
+            const chats = chatsData ? JSON.parse(chatsData) : [];
+            addLog(`Всего чатов: ${chats.length}`);
+
+            // Проверка уведомлений
+            const keys = Object.keys(localStorage);
+            const notifications = keys.filter(key => key.startsWith('new_chat_notification_'));
+            const flags = keys.filter(key => key.startsWith('new_chat_flag_'));
+
+            addLog(`Уведомлений о чатах: ${notifications.length}`);
+            addLog(`Флагов новых чатов: ${flags.length}`);
+
+            if (flags.length > 0) {
+                flags.forEach(flag => {
+                    const userId = flag.replace('new_chat_flag_', '');
+                    const hasChat = hasNewChat(userId);
+                    addLog(`- Флаг для ${userId}: ${hasChat ? 'Активен' : 'Неактивен'}`);
+                });
+            }
+
+            addLog('--- Конец диагностики ---');
+        } catch (error) {
+            addLog(`Ошибка при диагностике: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+        }
+    };
+
+    // Добавим кнопку для ручной проверки маршрутов
+    const testNavigationRoutes = () => {
+        try {
+            // Берем последний созданный чат
+            if (chats.length === 0) {
+                addLog('Нет чатов для тестирования маршрутов');
+                return;
+            }
+
+            const lastChat = chats[chats.length - 1];
+            const chatId = lastChat.id;
+
+            // Проверяем, какие маршруты работают
+            addLog(`🧪 Тестирование маршрутов для чата ${chatId}`);
+
+            const routesToTest = [
+                `/chat/${chatId}`,
+                `chat/${chatId}`,
+                `../chat/${chatId}`
+            ];
+
+            for (const route of routesToTest) {
+                addLog(`  • Проверка маршрута: ${route}`);
+            }
+
+            addLog('Открываем первый маршрут...');
+            navigate(`/chat/${chatId}`);
+        } catch (error) {
+            addLog(`Ошибка при тестировании маршрутов: ${error}`);
+        }
+    };
+
+    // Добавим функцию для тестирования механизма перехода в чат
+
+    const testChatRedirection = (chatId: string) => {
+        try {
+            addLog(`🧪 Тестирование перехода в чат ${chatId}...`);
+
+            // Проверяем, что чат существует перед переходом
+            const chat = getChatById(chatId);
+            if (!chat) {
+                addLog(`❌ Ошибка: Чат ${chatId} не найден при попытке тестирования редиректа.`);
+                return;
+            }
+
+            // Сохраняем ID чата в localStorage для использования в компоненте чата
+            localStorage.setItem('active_chat_id', chatId);
+            addLog(`✅ Сохранен ID чата в localStorage: ${chatId}`);
+
+            // Симулируем создание уведомления для текущего пользователя
+            const currentUser = getCurrentUser();
+            if (currentUser) {
+                const otherUserId = chat.participants.find(id => id !== currentUser.id);
+
+                if (otherUserId) {
+                    saveNewChatNotification(currentUser.id, chatId, otherUserId);
+                    addLog(`✅ Создано тестовое уведомление для пользователя ${currentUser.id}`);
+
+                    // Проверяем, видно ли уведомление через API
+                    setTimeout(() => {
+                        const hasNotification = hasNewChat(currentUser.id);
+                        addLog(`🔍 Проверка hasNewChat: ${hasNotification ? 'Да' : 'Нет'}`);
+
+                        if (hasNotification) {
+                            // Преднамеренно не используем markChatNotificationAsRead, чтобы протестировать перенаправление
+                            addLog(`✅ Готово к тестированию перенаправления в чат ${chatId}`);
+                        } else {
+                            addLog(`❌ Уведомление не видно через hasNewChat!`);
+                        }
+                    }, 500);
+                } else {
+                    addLog(`❌ Не найден второй участник чата!`);
+                }
+            } else {
+                addLog(`❌ Текущий пользователь не найден!`);
+            }
+        } catch (error) {
+            addLog(`❌ Ошибка при тестировании редиректа: ${error}`);
+        }
     };
 
     return (
-        <div className="container mx-auto p-4 max-w-4xl">
-            <h1 className="text-2xl font-bold mb-6">Тестирование поиска собеседников</h1>
+        <div className="p-4 max-w-4xl mx-auto">
+            <h1 className="text-2xl font-bold mb-4">Отладка поиска собеседников</h1>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Левая колонка */}
-                <div className="space-y-6">
-                    {/* Блок тестовых пользователей */}
-                    <Card className="p-4">
-                        <h2 className="text-lg font-semibold mb-3">Тестовые пользователи</h2>
-                        <div className="space-y-3">
-                            {testingUsers.map(user => (
-                                <div key={user.id} className="p-3 border rounded-lg flex justify-between items-center bg-white dark:bg-gray-800 shadow-sm">
+            <div className="flex flex-wrap gap-2 mb-4">
+                <Button onClick={createNewTestUser} className="bg-blue-500 text-white">
+                    Создать тестового пользователя
+                </Button>
+                <Button onClick={create5TestUsers} className="bg-indigo-500 text-white">
+                    Создать 5 пользователей
+                </Button>
+                <Button onClick={startSearchForAll} className="bg-purple-500 text-white">
+                    Запустить поиск для всех
+                </Button>
+                <Button onClick={forceMatch} className="bg-green-500 text-white">
+                    Принудительный матчмейкинг
+                </Button>
+                <Button onClick={autoSearching ? stopAutoSearch : startAutoSearch}
+                    className={autoSearching ? "bg-red-500 text-white" : "bg-green-500 text-white"}>
+                    {autoSearching ? "Остановить автопоиск" : "Запустить автопоиск"}
+                </Button>
+                <Button onClick={clearAllUsers} className="bg-red-500 text-white">
+                    Очистить тестовых
+                </Button>
+                <Button onClick={() => navigate('/')} className="bg-gray-500 text-white">
+                    На главную
+                </Button>
+                <Button onClick={checkExistingChats} className="bg-yellow-500 text-white">
+                    Проверить чаты
+                </Button>
+                <Button onClick={clearAllChats} className="bg-red-500 text-white">
+                    Очистить чаты
+                </Button>
+                <Button onClick={debugState} className="bg-indigo-500 text-white">
+                    Диагностика
+                </Button>
+                <Button onClick={testNavigationRoutes} className="bg-pink-500 text-white">
+                    Тест маршрутов
+                </Button>
+                <Button
+                    onClick={() => testChatRedirection(chats[0]?.id)}
+                    className="bg-purple-500 text-white"
+                    disabled={chats.length === 0}
+                >
+                    Тест перенаправления
+                </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="p-4">
+                    <h2 className="text-xl font-bold mb-2">Тестовые пользователи ({testUsers.length})</h2>
+                    <div className="divide-y max-h-60 overflow-auto">
+                        {testUsers.map(user => (
+                            <div key={user.id} className="py-2">
+                                <div className="flex justify-between items-center">
                                     <div>
                                         <div className="font-medium">{user.name}</div>
-                                        <div className="text-xs text-gray-500 truncate">{user.id}</div>
+                                        <div className="text-xs text-gray-500">{user.id}</div>
                                     </div>
                                     <div className="flex space-x-2">
                                         <Button
-                                            onClick={() => selectUser(user.id)}
-                                            variant={activeUser === user.id ? "primary" : "outline"}
-                                            size="small"
-                                            className="text-xs"
+                                            onClick={() => startTestUserSearch(user.id)}
+                                            className="bg-green-500 text-white text-xs px-2 py-1"
                                         >
-                                            Выбрать
+                                            Начать поиск
                                         </Button>
-                                        {checkIsSearching(user.id) ? (
-                                            <Button
-                                                onClick={() => stopSearch(user.id)}
-                                                variant="outline"
-                                                size="small"
-                                                className="bg-red-100 text-red-700 border-red-300 text-xs"
-                                            >
-                                                Остановить
-                                            </Button>
-                                        ) : (
-                                            <Button
-                                                onClick={() => startSearch(user.id)}
-                                                variant="outline"
-                                                size="small"
-                                                className="bg-green-100 text-green-700 border-green-300 text-xs"
-                                            >
-                                                Искать
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="mt-4 flex items-center justify-between">
-                            <ActiveSearchCounter className="text-sm" refreshIntervalMs={2000} />
-
-                            <div className="flex space-x-2">
-                                <Button onClick={() => createTestUsers()} size="small">Обновить</Button>
-                                <Button
-                                    onClick={showSearchStats}
-                                    variant="outline"
-                                    size="small"
-                                >
-                                    Статистика
-                                </Button>
-                            </div>
-                        </div>
-                    </Card>
-
-                    {/* Блок управления поиском */}
-                    <Card className="p-4">
-                        <h2 className="text-lg font-semibold mb-3">Управление поиском</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <Button onClick={startMatchmaking} className="bg-blue-500 hover:bg-blue-600 text-white">
-                                Запустить подбор
-                            </Button>
-                            <Button onClick={stopMatchmaking} className="bg-red-500 hover:bg-red-600 text-white">
-                                Остановить подбор
-                            </Button>
-                            <Button
-                                onClick={() => {
-                                    const userId1 = testingUsers[0]?.id;
-                                    const userId2 = testingUsers[1]?.id;
-                                    if (userId1 && userId2) {
-                                        startSearch(userId1);
-                                        startSearch(userId2);
-                                        addLogMessage(`🔄 Запущен поиск для двух пользователей: ${userId1} и ${userId2}`);
-                                    }
-                                }}
-                                className="bg-green-500 hover:bg-green-600 text-white col-span-2"
-                            >
-                                Тест: Поиск для 2 пользователей
-                            </Button>
-                        </div>
-                    </Card>
-                </div>
-
-                {/* Правая колонка */}
-                <div className="space-y-6">
-                    {/* Блок активных поисков */}
-                    <Card className="p-4">
-                        <h2 className="text-lg font-semibold mb-3">Активные поиски</h2>
-                        {searchingUsers.length > 0 ? (
-                            <div className="space-y-2">
-                                {searchingUsers.map(user => (
-                                    <div key={user.userId} className="p-2 border rounded flex justify-between items-center text-sm bg-yellow-50 dark:bg-yellow-900/20">
-                                        <div className="truncate">
-                                            <span className="font-medium">{user.userId}</span>
-                                            <span className="text-xs ml-2 text-gray-500">
-                                                {new Date(user.startedAt).toLocaleTimeString()}
-                                            </span>
-                                        </div>
                                         <Button
-                                            onClick={() => stopSearch(user.userId)}
-                                            variant="outline"
-                                            size="small"
-                                            className="text-xs py-1 px-2 h-auto"
+                                            onClick={() => stopTestUserSearch(user.id)}
+                                            className="bg-red-500 text-white text-xs px-2 py-1"
                                         >
                                             Остановить
                                         </Button>
                                     </div>
-                                ))}
+                                </div>
                             </div>
-                        ) : (
-                            <div className="text-center py-4 text-gray-500">
-                                Нет активных поисков
+                        ))}
+                        {testUsers.length === 0 && (
+                            <div className="py-4 text-center text-gray-500">
+                                Нет тестовых пользователей
                             </div>
                         )}
-                    </Card>
+                    </div>
+                </Card>
 
-                    {/* Блок созданных чатов */}
-                    <Card className="p-4">
-                        <h2 className="text-lg font-semibold mb-3">Созданные чаты</h2>
-                        <Button onClick={updateGeneratedChats} variant="outline" size="small" className="mb-3 w-full">
-                            Обновить список чатов
+                <Card className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                        <h2 className="text-xl font-bold">Пользователи в поиске ({searchingUsers.length})</h2>
+                        <Button
+                            onClick={() => setShowDetailedLogs(!showDetailedLogs)}
+                            className="text-xs bg-gray-200 px-2 py-1 rounded"
+                        >
+                            {showDetailedLogs ? "Скрыть детали" : "Показать детали"}
                         </Button>
-
-                        {generatedChats.length > 0 ? (
-                            <div className="space-y-3 max-h-64 overflow-y-auto">
-                                {generatedChats.map((chat, index) => (
-                                    <div key={index} className="p-3 border rounded-lg bg-white dark:bg-gray-800 shadow-sm">
-                                        <div className="flex justify-between items-center">
-                                            <div className="font-medium truncate">{chat.id}</div>
-                                            <Button onClick={() => goToChat(chat.id)} size="small" className="text-xs">
-                                                Перейти
-                                            </Button>
-                                        </div>
-                                        <div className="text-xs text-gray-500 mt-1">
-                                            Участники: {chat.participants ? chat.participants.join(', ') : 'Нет участников'}
-                                        </div>
-                                        <div className="text-xs text-gray-500 mt-1">
-                                            Создан: {new Date(chat.createdAt).toLocaleString()}
+                    </div>
+                    <div className="text-xs overflow-auto max-h-60">
+                        {showDetailedLogs ? (
+                            <pre>{JSON.stringify(searchingUsers, null, 2)}</pre>
+                        ) : (
+                            <div className="space-y-2">
+                                {searchingUsers.map((user, index) => (
+                                    <div key={index} className="p-2 bg-gray-100 rounded">
+                                        <div className="font-bold">{user.name || 'Неизвестный'}</div>
+                                        <div className="text-gray-600">{user.userId}</div>
+                                        <div className="text-gray-500 text-xs">
+                                            Начал поиск: {new Date(user.startedAt).toLocaleTimeString()}
                                         </div>
                                     </div>
                                 ))}
-                            </div>
-                        ) : (
-                            <div className="text-center py-4 text-gray-500">
-                                Нет созданных чатов
+                                {searchingUsers.length === 0 && (
+                                    <div className="text-center text-gray-500">
+                                        Нет пользователей в поиске
+                                    </div>
+                                )}
                             </div>
                         )}
+                    </div>
+                </Card>
+
+                {chats.length > 0 && (
+                    <Card className="p-4 md:col-span-2">
+                        <div className="flex justify-between items-center mb-2">
+                            <h2 className="text-xl font-bold">Существующие чаты ({chats.length})</h2>
+                            <Button onClick={clearAllChats} className="text-xs bg-red-500 text-white px-2 py-1 rounded">
+                                Очистить все чаты
+                            </Button>
+                        </div>
+                        <div className="divide-y max-h-60 overflow-auto">
+                            {chats.map(chat => (
+                                <div key={chat.id} className="py-2">
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <div className="font-medium">{chat.id}</div>
+                                            <div className="text-xs text-gray-500">
+                                                Участники: {chat.participant1Name} и {chat.participant2Name}
+                                            </div>
+                                            <div className="text-xs text-gray-500">
+                                                Создан: {new Date(chat.createdAt).toLocaleString()}
+                                            </div>
+                                            <div className="text-xs text-gray-500">
+                                                Сообщений: {chat.messageCount}
+                                            </div>
+                                        </div>
+                                        <div className="flex space-x-2">
+                                            <Button
+                                                onClick={() => goToChat(chat.id)}
+                                                className="bg-blue-500 text-white text-xs px-2 py-1"
+                                            >
+                                                Открыть
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </Card>
-                </div>
+                )}
+
+                <Card className="p-4 md:col-span-2">
+                    <h2 className="text-xl font-bold mb-2">Логи</h2>
+                    <div className="text-xs font-mono bg-gray-100 p-2 rounded max-h-60 overflow-auto">
+                        {logs.map((log, i) => (
+                            <div key={i} className="mb-1">{log}</div>
+                        ))}
+                    </div>
+                </Card>
             </div>
 
-            {/* Лог событий */}
-            <Card className="p-4 mt-6">
-                <h2 className="text-lg font-semibold mb-3 flex justify-between items-center">
-                    <span>Журнал событий</span>
-                    <Button onClick={() => setLogMessages([])} variant="outline" size="small">Очистить</Button>
-                </h2>
-                <div className="border rounded-lg bg-black text-green-400 p-3 h-40 overflow-y-auto font-mono text-sm">
-                    {logMessages.length > 0 ? (
-                        <AnimatePresence>
-                            {logMessages.map((msg, index) => (
-                                <motion.div
-                                    key={index}
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0 }}
-                                    transition={{ duration: 0.3 }}
-                                    className="mb-1"
-                                >
-                                    <span className="text-gray-500">[{new Date().toLocaleTimeString()}]</span> {msg}
-                                </motion.div>
-                            ))}
-                        </AnimatePresence>
-                    ) : (
-                        <div className="text-gray-500 italic">Журнал пуст</div>
-                    )}
-                </div>
-            </Card>
-
-            {/* Кнопка возврата */}
-            <div className="mt-6">
-                <Button onClick={() => navigate('/')} variant="outline" className="w-full">
-                    ← Вернуться на главную
+            <div className="mt-4 text-center">
+                <Button onClick={() => navigate('/')} className="bg-gray-500 text-white">
+                    Вернуться на главную
                 </Button>
             </div>
         </div>
     );
 };
+
+export default TestChat;
