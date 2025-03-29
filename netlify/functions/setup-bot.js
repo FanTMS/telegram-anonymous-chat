@@ -1,5 +1,5 @@
 // Функция для настройки вебхука Telegram бота
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   // Проверяем авторизацию
   const authHeader = event.headers.authorization
   if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_API_KEY}`) {
@@ -35,7 +35,6 @@ exports.handler = async (event, context) => {
     })
 
     const data = await response.json()
-
     if (!data.ok) {
       return {
         statusCode: 500,
@@ -57,7 +56,6 @@ exports.handler = async (event, context) => {
     }
   } catch (error) {
     console.error('Error setting up webhook:', error)
-
     return {
       statusCode: 500,
       body: JSON.stringify({ message: 'Internal Server Error', error: error.message })
