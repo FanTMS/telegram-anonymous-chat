@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { RouterProvider } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { Layout } from './components/Layout'
+import { Home } from './pages/Home'
 import { router } from './routes'
 import { startMatchmakingService, stopMatchmakingService } from './utils/matchmaking'
-import { validateLocalStorage } from './utils/database' // Оставляем только этот импорт
-import { getCurrentUser, saveUser } from './utils/user' // Импортируем из utils/user вместо database
+import { validateLocalStorage } from './utils/database'
+import { getCurrentUser, saveUser, User } from './utils/user' // Добавим тип User
 import WebApp from '@twa-dev/sdk';
+import Debug from './pages/Debug'
 
 // Инициализация глобальных переменных для интервалов и флагов
 if (typeof window !== 'undefined') {
@@ -32,11 +35,12 @@ export const App = () => {
         localStorage.setItem('dev_mode', 'true');
 
         // Проверяем текущего пользователя и делаем его админом если локальная разработка
-        const currentUser = getCurrentUser();
-        if (currentUser) {
-          currentUser.isAdmin = true;
-          saveUser(currentUser);
-        }
+        getCurrentUser().then(currentUser => {
+          if (currentUser) {
+            currentUser.isAdmin = true;
+            saveUser(currentUser);
+          }
+        });
       }
 
       // Принудительно устанавливаем светлую тему для всех пользователей
@@ -208,7 +212,16 @@ export const App = () => {
   }
 
   // Рендерим только роутер
-  return <RouterProvider router={router} />;
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Home />} />
+          <Route path="/debug" element={<Debug />} /> {/* Добавляем маршрут отладки */}
+        </Route>
+      </Routes>
+    </Router>
+  );
 };
 
 export default App;

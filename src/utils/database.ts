@@ -336,67 +336,91 @@ export class TelegramIntegration {
 // Базовый модуль для работы с локальным хранилищем
 
 /**
- * Проверяет и исправляет структуру данных в localStorage
+ * Утилиты для работы с данными локального хранилища
  */
-export const validateLocalStorage = (): boolean => {
+
+// Функция для валидации структуры данных в localStorage
+export const validateLocalStorage = (): void => {
   try {
-    console.log('Проверка структуры данных в localStorage...');
+    console.log('[database] Проверка состояния локального хранилища');
 
-    // Проверяем структуру users
-    if (!localStorage.getItem('users')) {
-      localStorage.setItem('users', JSON.stringify([]));
-      console.log('Инициализирован пустой массив пользователей');
-    } else {
+    // Основные коллекции, которые должны быть массивами
+    const arrayCollections = ['users', 'chats', 'messages', 'searching_users'];
+
+    arrayCollections.forEach(collection => {
       try {
-        const users = JSON.parse(localStorage.getItem('users') || '[]');
-        if (!Array.isArray(users)) {
-          console.warn('Некорректные данные пользователей, сбрасываем');
-          localStorage.setItem('users', JSON.stringify([]));
+        const data = localStorage.getItem(collection);
+        if (data) {
+          const parsed = JSON.parse(data);
+          if (!Array.isArray(parsed)) {
+            console.warn(`[database] Коллекция ${collection} не является массивом, исправляем`);
+            localStorage.setItem(collection, JSON.stringify([]));
+          }
+        } else {
+          // Инициализируем пустые массивы для основных коллекций
+          localStorage.setItem(collection, JSON.stringify([]));
         }
-      } catch (e) {
-        console.error('Ошибка при парсинге данных пользователей:', e);
-        localStorage.setItem('users', JSON.stringify([]));
+      } catch (error) {
+        console.error(`[database] Ошибка при проверке коллекции ${collection}:`, error);
+        localStorage.setItem(collection, JSON.stringify([]));
+      }
+    });
+
+    console.log('[database] Проверка завершена');
+  } catch (error) {
+    console.error('[database] Критическая ошибка при валидации localStorage:', error);
+  }
+};
+
+// Функция для полной очистки данных (используется только для отладки)
+export const clearAllData = (): void => {
+  try {
+    localStorage.clear();
+    console.log('[database] Все данные в localStorage очищены');
+  } catch (error) {
+    console.error('[database] Ошибка при очистке данных:', error);
+  }
+};
+
+// Функция для экспорта всех данных
+export const exportAllData = (): string => {
+  try {
+    const data: { [key: string]: any } = {};
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        try {
+          data[key] = JSON.parse(localStorage.getItem(key) || 'null');
+        } catch {
+          data[key] = localStorage.getItem(key);
+        }
       }
     }
 
-    // Проверяем структуру chats
-    if (!localStorage.getItem('chats')) {
-      localStorage.setItem('chats', JSON.stringify([]));
-      console.log('Инициализирован пустой массив чатов');
-    } else {
-      try {
-        const chats = JSON.parse(localStorage.getItem('chats') || '[]');
-        if (!Array.isArray(chats)) {
-          console.warn('Некорректные данные чатов, сбрасываем');
-          localStorage.setItem('chats', JSON.stringify([]));
-        }
-      } catch (e) {
-        console.error('Ошибка при парсинге данных чатов:', e);
-        localStorage.setItem('chats', JSON.stringify([]));
-      }
-    }
+    return JSON.stringify(data, null, 2);
+  } catch (error) {
+    console.error('[database] Ошибка при экспорте данных:', error);
+    return JSON.stringify({ error: 'Failed to export data' });
+  }
+};
 
-    // Проверяем структуру searching_users
-    if (!localStorage.getItem('searching_users')) {
-      localStorage.setItem('searching_users', JSON.stringify([]));
-      console.log('Инициализирован пустой массив ищущих пользователей');
-    } else {
-      try {
-        const searchingUsers = JSON.parse(localStorage.getItem('searching_users') || '[]');
-        if (!Array.isArray(searchingUsers)) {
-          console.warn('Некорректные данные поиска, сбрасываем');
-          localStorage.setItem('searching_users', JSON.stringify([]));
-        }
-      } catch (e) {
-        console.error('Ошибка при парсинге данных поиска:', e);
-        localStorage.setItem('searching_users', JSON.stringify([]));
-      }
-    }
+// Функция для импорта данных
+export const importData = (jsonData: string): boolean => {
+  try {
+    const data = JSON.parse(jsonData);
 
-    console.log('Проверка структуры данных в localStorage завершена успешно');
+    Object.entries(data).forEach(([key, value]) => {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (error) {
+        console.error(`[database] Ошибка при импорте данных для ключа ${key}:`, error);
+      }
+    });
+
     return true;
   } catch (error) {
-    console.error('Ошибка при проверке структуры данных:', error);
+    console.error('[database] Ошибка при импорте данных:', error);
     return false;
   }
 };

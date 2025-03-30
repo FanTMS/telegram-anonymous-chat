@@ -34,60 +34,41 @@ export const Layout = () => {
   // Проверяем, является ли пользователь администратором
   useEffect(() => {
     try {
-      // Убедимся, что данные в localStorage корректны
-      const currentUserID = localStorage.getItem('current_user_id');
-      if (currentUserID) {
-        const userKey = `user_${currentUserID}`;
-        const userData = localStorage.getItem(userKey);
+      const checkAdminStatus = async () => {
+        // Проверяем админские права
+        const isUserAdmin = await checkAdmin();
+        setIsAdminUser(isUserAdmin);
+        setIsLoading(false); // Завершаем загрузку после проверки
+      };
 
-        if (!userData) {
-          console.warn('Layout: current_user_id exists but user data not found');
-        }
-      }
-
-      const isUserAdmin = checkAdmin();
-      setIsAdminUser(isUserAdmin);
-
-      // Завершаем загрузку после инициализации
-      setIsLoading(false);
-      if (loadingTimeout) clearTimeout(loadingTimeout);
-
+      checkAdminStatus();
     } catch (error) {
-      console.error('Layout initialization error:', error);
-      setIsLoading(false);
-      if (loadingTimeout) clearTimeout(loadingTimeout);
+      console.error('Error in Layout admin check:', error);
+      setIsLoading(false); // Завершаем загрузку в случае ошибки
     }
+  }, []);
 
-    // Проверяем наличие новых чатов с таймаутом
-    let checkAttemptsCount = 0;
-    const maxAttempts = 5;
-
-    const checkNewChats = () => {
+  // Эффект для проверки новых сообщений
+  useEffect(() => {
+    const checkForNewChat = async () => {
       try {
-        checkAttemptsCount++;
-        const currentUser = getCurrentUser();
+        const currentUser = await getCurrentUser();
         if (currentUser) {
-          const newChat = hasNewChat(currentUser.id);
-          setHasNewMessage(newChat);
-        }
-
-        // После maxAttempts попыток завершаем проверку, чтобы избежать бесконечных циклов
-        if (checkAttemptsCount >= maxAttempts) {
-          console.log(`Reached max check attempts (${maxAttempts}), stopping new chat checks`);
-          return;
+          const newChatExists = await hasNewChat(currentUser.id);
+          setHasNewMessage(newChatExists);
         }
       } catch (error) {
-        console.error('Ошибка при проверке новых чатов:', error);
+        console.error('Failed to check for new chats', error);
       }
     };
 
     // Проверяем при монтировании
-    checkNewChats();
+    checkForNewChat();
 
-    // После успешной проверки устанавливаем меньший интервал
-    const intervalId = setInterval(checkNewChats, 10000); // проверка каждые 10 секунд
+    // Настраиваем интервал для проверки
+    const interval = setInterval(checkForNewChat, 5000);
 
-    return () => clearInterval(intervalId);
+    return () => clearInterval(interval);
   }, []);
 
   // Функция создания демо-пользователя
@@ -210,11 +191,15 @@ export const Layout = () => {
   // Оптимизируем обработку чатов
   useEffect(() => {
     // Функция для проверки новых чатов
-    const checkNewChats = () => {
-      const currentUser = getCurrentUser();
-      if (currentUser) {
-        const newChat = hasNewChat(currentUser.id);
-        setHasNewMessage(newChat);
+    const checkNewChats = async () => {
+      try {
+        const currentUser = await getCurrentUser();
+        if (currentUser) {
+          const newChat = await hasNewChat(currentUser.id);
+          setHasNewMessage(newChat);
+        }
+      } catch (error) {
+        console.error('Failed to check for new chats', error);
       }
     };
 
@@ -228,14 +213,14 @@ export const Layout = () => {
   // Добавляем проверку для перенаправления чатов
   useEffect(() => {
     // Функция для проверки новых чатов
-    const checkForNewChats = () => {
-      const currentUser = getCurrentUser();
-      if (!currentUser) return;
-
+    const checkForNewChats = async () => {
       try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) return;
+
         // Проверяем, есть ли новый чат
-        if (hasNewChat(currentUser.id)) {
-          const notification = getNewChatNotification(currentUser.id);
+        if (await hasNewChat(currentUser.id)) {
+          const notification = await getNewChatNotification(currentUser.id);
 
           if (notification && !notification.isRead) {
             console.log(`Новый чат обнаружен: ${notification.chatId}`, notification);

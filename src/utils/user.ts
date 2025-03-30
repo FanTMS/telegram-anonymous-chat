@@ -258,6 +258,15 @@ export const getCurrentUser = async (): Promise<User | null> => {
     }
 
     const user = await getItem(`user_${userId}`);
+
+    // Если пользователя не найдено в базе, но это локальная разработка, создадим демо-пользователя
+    if (!user && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      console.log('Создание демо-пользователя для локальной разработки');
+      const demoUser = createDemoUser();
+      await setCurrentUser(demoUser.id);
+      return demoUser;
+    }
+
     return user;
   } catch (error) {
     console.error('Failed to get current user', error);

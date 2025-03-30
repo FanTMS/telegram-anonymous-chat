@@ -27,10 +27,16 @@ interface NewChatNotification {
     isRead: boolean;
 }
 
-// Импортируем необходимые функции
+// Импортируем необходимые функции и реэкспортируем getChatById из chat.ts
 import { getCurrentUser, getUserById } from './user';
 import { createChat, getChatById, setActiveChat, getActiveChat } from './chat';
 import { getItem, setItem, removeItem, getAllItems } from './dbService';
+
+// Реэкспортируем getChatById для обратной совместимости
+export { getChatById } from './chat';
+
+// Экспортируем getAllChats для обратной совместимости
+export { getAllChats } from './moderation';
 
 // Получить список ищущих пользователей
 export const getSearchingUsers = async (): Promise<SearchingUser[]> => {

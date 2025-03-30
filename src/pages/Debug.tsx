@@ -1,27 +1,105 @@
 import React, { useState, useEffect } from 'react';
 import { getCurrentUser } from '../utils/user';
 import { getSearchingUsers, triggerMatchmaking } from '../utils/matchmaking';
-import { getChatById } from '../utils/chat'; // Импортируем getChatById из chat.ts
+import { getChatById } from '../utils/chat';
+import { testMongoDBConnection } from '../utils/test-mongodb';
+import { checkMongoDbConnection } from '../utils/dbService';
 
-// Страница для отладки проблем с чатом
+// Определим компонент Card, если он отсутствует в импортах
+const Card: React.FC<{ className?: string, children: React.ReactNode }> = ({ className = '', children }) => (
+    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-md ${className}`}>
+        {children}
+    </div>
+);
+
+// Определим компонент Button, если он отсутствует в импортах
+interface ButtonProps {
+    onClick?: () => void;
+    children: React.ReactNode;
+    disabled?: boolean;
+    variant?: 'primary' | 'secondary' | 'outline';
+    fullWidth?: boolean;
+    className?: string;
+    size?: 'small' | 'medium' | 'large';
+}
+
+const Button: React.FC<ButtonProps> = ({
+    onClick,
+    children,
+    disabled = false,
+    variant = 'primary',
+    fullWidth = false,
+    className = '',
+    size = 'medium'
+}) => {
+    const baseClasses = 'inline-flex items-center justify-center rounded font-medium transition-colors';
+
+    const variantClasses = {
+        primary: 'bg-blue-600 hover:bg-blue-700 text-white',
+        secondary: 'bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white',
+        outline: 'border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'
+    };
+
+    const sizeClasses = {
+        small: 'text-xs py-1 px-2',
+        medium: 'text-sm py-2 px-4',
+        large: 'text-base py-3 px-6'
+    };
+
+    return (
+        <button
+            onClick={onClick}
+            disabled={disabled}
+            className={`
+        ${baseClasses}
+        ${variantClasses[variant]}
+        ${sizeClasses[size]}
+        ${fullWidth ? 'w-full' : ''}
+        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+        ${className}
+      `}
+        >
+            {children}
+        </button>
+    );
+};
+
+// Определим тип для результата getSearchingUsers
+interface SearchingUser {
+    userId: string;
+    startedAt: number;
+    preferences: {
+        random: boolean;
+        interests?: string[];
+        ageRange?: [number, number];
+        specificUserId?: string;
+    };
+}
+
 export const DebugPage = () => {
     const [logs, setLogs] = useState<string[]>([]);
     const [userInfo, setUserInfo] = useState<any>(null);
     const [searchingUsers, setSearchingUsers] = useState<any[]>([]);
     const [storageInfo, setStorageInfo] = useState<{ [key: string]: any }>({});
+    const [testResult, setTestResult] = useState<string | null>(null);
+    const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    const [connectionStatus, setConnectionStatus] = useState<boolean | null>(null);
+    const [isChecking, setIsChecking] = useState(false);
+    const [userId, setUserId] = useState<string | null>(null);
+    const [mongoUri, setMongoUri] = useState<string | null>(null);
 
     useEffect(() => {
         refreshData();
     }, []);
 
-    const refreshData = () => {
+    const refreshData = async () => {
         try {
             // Получаем информацию о текущем пользователе
-            const user = getCurrentUser();
+            const user = await getCurrentUser();
             setUserInfo(user);
 
-            // Получаем список пользователей в поиске
-            const users = getSearchingUsers();
+            // Получаем список пользователей в поиске - исправляем ошибку TS2345
+            const users = await getSearchingUsers();
             setSearchingUsers(users);
 
             // Получаем информацию из localStorage
@@ -137,7 +215,7 @@ export const DebugPage = () => {
     };
 
     // Проверка состояния уведомлений
-    const checkNotifications = () => {
+    const checkNotifications = async () => {
         try {
             const userId = userInfo?.id;
             if (!userId) {
@@ -156,7 +234,7 @@ export const DebugPage = () => {
                     addLog(`Уведомление: chatId=${notification.chatId}, isRead=${notification.isRead}`);
 
                     // Проверяем существование чата
-                    const chat = getChatById(notification.chatId);
+                    const chat = await getChatById(notification.chatId);
                     if (chat) {
                         addLog('Чат существует!');
                     } else {
@@ -170,6 +248,65 @@ export const DebugPage = () => {
             }
         } catch (error) {
             addLog(`Ошибка при проверке уведомлений: ${error}`);
+        }
+    };
+
+    const handleTestConnection = async () => {
+        try {
+            setTestStatus('loading');
+            setTestResult(null);
+
+            const result = await testMongoDBConnection();
+
+            if (result) {
+                setTestStatus('success');
+                setTestResult('✅ Подключение к MongoDB работает корректно!');
+            } else {
+                setTestStatus('error');
+                setTestResult('❌ Не удалось подключиться к MongoDB. Проверьте консоль для подробностей.');
+            }
+        } catch (error) {
+            setTestStatus('error');
+            setTestResult(`❌ Ошибка при тестировании: ${error instanceof Error ? error.message : String(error)}`);
+            console.error('Debug test error:', error);
+        }
+    };
+
+    const handleCheckConnection = async () => {
+        try {
+            setIsChecking(true);
+            const isConnected = await checkMongoDbConnection();
+            setConnectionStatus(isConnected);
+        } catch (error) {
+            console.error('Error checking connection:', error);
+            setConnectionStatus(false);
+        } finally {
+            setIsChecking(false);
+        }
+    };
+
+    const getUserInfo = async () => {
+        try {
+            const user = await getCurrentUser();
+            if (user) {
+                setUserId(user.id);
+            } else {
+                setUserId('Пользователь не найден');
+            }
+        } catch (error) {
+            console.error('Error getting user:', error);
+            setUserId('Ошибка получения пользователя');
+        }
+    };
+
+    // Получаем URI из переменных окружения (работает только в режиме разработки)
+    const getMongoUri = () => {
+        try {
+            const uri = import.meta.env.VITE_MONGODB_URI || 'Не установлен';
+            setMongoUri(uri);
+        } catch (error) {
+            console.error('Error getting MongoDB URI:', error);
+            setMongoUri('Ошибка получения URI');
         }
     };
 
@@ -259,6 +396,94 @@ export const DebugPage = () => {
                         ))}
                     </div>
                 </div>
+            </div>
+
+            <div className="p-4 max-w-3xl mx-auto">
+                <h1 className="text-2xl font-bold mb-6">Отладка подключения к базе данных</h1>
+
+                <Card className="p-4 mb-6">
+                    <h2 className="text-lg font-semibold mb-3">Проверка соединения с MongoDB</h2>
+                    <p className="text-gray-600 dark:text-gray-300 mb-4">
+                        Этот инструмент проверяет соединение с MongoDB путем выполнения тестовых операций чтения и записи.
+                    </p>
+
+                    <div className="space-y-4">
+                        <Button
+                            onClick={handleTestConnection}
+                            disabled={testStatus === 'loading'}
+                            fullWidth
+                            variant="primary"
+                        >
+                            {testStatus === 'loading' ? 'Проверка...' : 'Тестировать соединение с MongoDB'}
+                        </Button>
+
+                        {testResult && (
+                            <div className={`p-3 rounded-lg ${testStatus === 'success' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>
+                                {testResult}
+                            </div>
+                        )}
+                    </div>
+                </Card>
+
+                <Card className="p-4 mb-6">
+                    <h2 className="text-lg font-semibold mb-3">Быстрая проверка через dbService</h2>
+                    <p className="text-gray-600 dark:text-gray-300 mb-4">
+                        Проверка соединения через стандартный метод приложения.
+                    </p>
+
+                    <div className="space-y-4">
+                        <Button
+                            onClick={handleCheckConnection}
+                            disabled={isChecking}
+                            fullWidth
+                            variant="outline"
+                        >
+                            {isChecking ? 'Проверка...' : 'Проверить соединение'}
+                        </Button>
+
+                        {connectionStatus !== null && (
+                            <div className={`p-3 rounded-lg ${connectionStatus ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>
+                                {connectionStatus ? '✅ Соединение с MongoDB установлено' : '❌ Соединение с MongoDB отсутствует'}
+                            </div>
+                        )}
+                    </div>
+                </Card>
+
+                <Card className="p-4 mb-6">
+                    <h2 className="text-lg font-semibold mb-3">Информация о пользователе</h2>
+                    <Button
+                        onClick={getUserInfo}
+                        fullWidth
+                        variant="secondary"
+                        className="mb-3"
+                    >
+                        Получить ID текущего пользователя
+                    </Button>
+
+                    {userId && (
+                        <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                            <p><strong>ID пользователя:</strong> {userId}</p>
+                        </div>
+                    )}
+                </Card>
+
+                <Card className="p-4">
+                    <h2 className="text-lg font-semibold mb-3">Информация о подключении</h2>
+                    <Button
+                        onClick={getMongoUri}
+                        fullWidth
+                        variant="secondary"
+                        className="mb-3"
+                    >
+                        Показать MongoDB URI
+                    </Button>
+
+                    {mongoUri && (
+                        <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                            <p><strong>MongoDB URI:</strong> {mongoUri.substring(0, 20)}...</p>
+                        </div>
+                    )}
+                </Card>
             </div>
         </div>
     );

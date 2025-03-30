@@ -15,6 +15,7 @@ export interface Chat {
   gameRequestAccepted?: boolean; // Для отслеживания принятия запроса на игру
   title?: string; // Название чата, если оно есть
   ended?: boolean; // Флаг, указывающий, что чат завершен
+  isFavorite?: boolean; // Флаг, указывающий, что чат в избранном
 }
 
 // Создание нового чата
@@ -295,5 +296,82 @@ export const getActiveChat = async (userId: string): Promise<string | null> => {
   } catch (error) {
     console.error('[getActiveChat] Ошибка при получении активного чата:', error);
     return null;
+  }
+};
+
+// Переключение избранного статуса чата
+export const toggleFavoriteChat = async (chatId: string, userId: string): Promise<boolean> => {
+  try {
+    const chat = await getChatById(chatId);
+    if (!chat) {
+      console.error(`[toggleFavoriteChat] Чат с ID ${chatId} не найден`);
+      return false;
+    }
+
+    // Получаем список избранных чатов пользователя
+    const favoriteChats: string[] = await getItem(`favorite_chats.${userId}`) || [];
+
+    // Проверяем, есть ли данный чат в избранном
+    const isFavorite = favoriteChats.includes(chatId);
+
+    if (isFavorite) {
+      // Удаляем из избранного
+      const updatedFavorites = favoriteChats.filter(id => id !== chatId);
+      await setItem(`favorite_chats.${userId}`, updatedFavorites);
+      console.log(`[toggleFavoriteChat] Чат ${chatId} удален из избранного пользователя ${userId}`);
+    } else {
+      // Добавляем в избранное
+      favoriteChats.push(chatId);
+      await setItem(`favorite_chats.${userId}`, favoriteChats);
+      console.log(`[toggleFavoriteChat] Чат ${chatId} добавлен в избранное пользователя ${userId}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error(`[toggleFavoriteChat] Ошибка при изменении статуса избранного для чата ${chatId}:`, error);
+    return false;
+  }
+};
+
+// Получение всех чатов пользователя (включая признак избранного)
+export const getAllUserChats = async (userId: string): Promise<Chat[]> => {
+  try {
+    // Получаем список ID чатов пользователя
+    const chatIds = await getUserChats(userId);
+
+    // Получаем список избранных чатов
+    const favoriteChats: string[] = await getItem(`favorite_chats.${userId}`) || [];
+
+    // Получаем полные данные о каждом чате
+    const chats: Chat[] = [];
+    for (const chatId of chatIds) {
+      const chat = await getChatById(chatId);
+      if (chat) {
+        // Дополняем чат информацией о том, находится ли он в избранном
+        chat.isFavorite = favoriteChats.includes(chatId);
+        chats.push(chat);
+      }
+    }
+
+    // Сортируем: сначала избранные, затем по дате обновления
+    return chats.sort((a, b) => {
+      if (a.isFavorite && !b.isFavorite) return -1;
+      if (!a.isFavorite && b.isFavorite) return 1;
+      return b.updatedAt - a.updatedAt;
+    });
+  } catch (error) {
+    console.error(`[getAllUserChats] Ошибка при получении чатов пользователя ${userId}:`, error);
+    return [];
+  }
+};
+
+// Получение активных чатов пользователя (не завершенные)
+export const getActiveUserChats = async (userId: string): Promise<Chat[]> => {
+  try {
+    const allChats = await getAllUserChats(userId);
+    return allChats.filter(chat => !chat.ended);
+  } catch (error) {
+    console.error(`[getActiveUserChats] Ошибка при получении активных чатов пользователя ${userId}:`, error);
+    return [];
   }
 };
