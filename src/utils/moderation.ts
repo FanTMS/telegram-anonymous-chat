@@ -1,4 +1,5 @@
 import { getUsers } from './user'
+import { getItem, setItem, getAllItems } from './dbService'
 
 // Интерфейс для сообщения
 export interface Message {
@@ -77,220 +78,189 @@ const defaultModerationSettings: ModerationSettings = {
 }
 
 // Получение настроек модерации
-export const getModerationSettings = (): ModerationSettings => {
+export const getModerationSettings = async (): Promise<ModerationSettings> => {
   try {
-    const settingsData = localStorage.getItem('moderation_settings')
+    const settings = await getItem('moderation_settings');
 
-    if (settingsData) {
-      return JSON.parse(settingsData)
+    if (settings) {
+      return settings;
     }
 
     // Если настроек нет, создаем их и сохраняем по умолчанию
-    saveModerationSettings(defaultModerationSettings)
-    return defaultModerationSettings
+    await saveModerationSettings(defaultModerationSettings);
+    return defaultModerationSettings;
   } catch (error) {
-    console.error('Ошибка при получении настроек модерации:', error)
-    return defaultModerationSettings
+    console.error('Ошибка при получении настроек модерации:', error);
+    return defaultModerationSettings;
   }
 }
 
 // Сохранение настроек модерации
-export const saveModerationSettings = (settings: ModerationSettings): boolean => {
+export const saveModerationSettings = async (settings: ModerationSettings): Promise<boolean> => {
   try {
-    localStorage.setItem('moderation_settings', JSON.stringify(settings))
-    return true
+    await setItem('moderation_settings', settings);
+    return true;
   } catch (error) {
-    console.error('Ошибка при сохранении настроек модерации:', error)
-    return false
+    console.error('Ошибка при сохранении настроек модерации:', error);
+    return false;
   }
 }
 
 // Проверка текста на запрещенный контент
-export const checkForProfanity = (text: string): boolean => {
-  if (!text) return false
+export const checkForProfanity = async (text: string): Promise<boolean> => {
+  if (!text) return false;
 
-  const settings = getModerationSettings()
-  if (!settings.profanityFilter) return false
+  const settings = await getModerationSettings();
+  if (!settings.profanityFilter) return false;
 
-  const lowerText = text.toLowerCase()
+  const lowerText = text.toLowerCase();
 
   // Проверка на запрещенные слова из настроек
-  const allBlockedWords = [...blockedWords, ...settings.customBlockedWords]
-  return allBlockedWords.some(word => lowerText.includes(word.toLowerCase()))
+  const allBlockedWords = [...blockedWords, ...settings.customBlockedWords];
+  return allBlockedWords.some(word => lowerText.includes(word.toLowerCase()));
 }
 
 // Проверка текста на спам (упрощенный алгоритм)
-export const checkForSpam = (text: string): boolean => {
-  if (!text) return false
+export const checkForSpam = async (text: string): Promise<boolean> => {
+  if (!text) return false;
 
-  const settings = getModerationSettings()
-  if (!settings.spamFilter) return false
+  const settings = await getModerationSettings();
+  if (!settings.spamFilter) return false;
 
   // Примитивная проверка на спам - повторяющиеся символы
-  const repeatedChars = text.match(/(.)\1{5,}/g)
-  if (repeatedChars) return true
+  const repeatedChars = text.match(/(.)\1{5,}/g);
+  if (repeatedChars) return true;
 
   // Много заглавных букв
-  const uppercaseRatio = text.split('').filter(char => char.match(/[А-ЯA-Z]/)).length / text.length
-  if (uppercaseRatio > 0.7 && text.length > 5) return true
+  const uppercaseRatio = text.split('').filter(char => char.match(/[А-ЯA-Z]/)).length / text.length;
+  if (uppercaseRatio > 0.7 && text.length > 5) return true;
 
   // Наличие URL и ключевых слов
-  const hasLinks = text.match(/https?:\/\/|www\./i)
+  const hasLinks = text.match(/https?:\/\/|www\./i);
   const hasSpamKeywords = ['купить сейчас', 'скидка', 'акция', 'выигрыш', 'приз', 'быстрый заработок'].some(
     keyword => text.toLowerCase().includes(keyword)
-  )
+  );
 
-  return !!(hasLinks && hasSpamKeywords)
+  return !!(hasLinks && hasSpamKeywords);
 }
 
 // Проверка на личные данные (упрощенный алгоритм)
-export const checkForPersonalData = (text: string): boolean => {
-  if (!text) return false
+export const checkForPersonalData = async (text: string): Promise<boolean> => {
+  if (!text) return false;
 
-  const settings = getModerationSettings()
-  if (!settings.personalDataFilter) return false
+  const settings = await getModerationSettings();
+  if (!settings.personalDataFilter) return false;
 
   // Проверка на телефонные номера
-  const hasPhoneNumber = !!text.match(/(\+7|8)[- _]?\(?[0-9]{3}\)?[- _]?[0-9]{3}[- _]?[0-9]{2}[- _]?[0-9]{2}/g)
+  const hasPhoneNumber = !!text.match(/(\+7|8)[- _]?\(?[0-9]{3}\)?[- _]?[0-9]{3}[- _]?[0-9]{2}[- _]?[0-9]{2}/g);
 
   // Проверка на email
-  const hasEmail = !!text.match(/[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}/g)
+  const hasEmail = !!text.match(/[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}/g);
 
   // Проверка на паспортные данные (упрощенно)
-  const hasPassportData = !!text.match(/\b\d{4}\s?\d{6}\b/g)
+  const hasPassportData = !!text.match(/\b\d{4}\s?\d{6}\b/g);
 
-  return hasPhoneNumber || hasEmail || hasPassportData
+  return hasPhoneNumber || hasEmail || hasPassportData;
 }
 
 // Комплексная проверка сообщения по всем фильтрам
-export const moderateMessage = (message: Message): {
+export const moderateMessage = async (message: Message): Promise<{
   isAllowed: boolean,
   violationTypes: ViolationType[],
   autoModerated: boolean
-} => {
-  const settings = getModerationSettings()
+}> => {
+  const settings = await getModerationSettings();
   if (!settings.autoModeration) {
-    return { isAllowed: true, violationTypes: [], autoModerated: false }
+    return { isAllowed: true, violationTypes: [], autoModerated: false };
   }
 
-  const violations: ViolationType[] = []
+  const violations: ViolationType[] = [];
 
   // Проверка текста на нецензурную лексику
-  if (checkForProfanity(message.text)) {
-    violations.push(ViolationType.PROFANITY)
+  if (await checkForProfanity(message.text)) {
+    violations.push(ViolationType.PROFANITY);
   }
 
   // Проверка на спам
-  if (checkForSpam(message.text)) {
-    violations.push(ViolationType.SPAM)
+  if (await checkForSpam(message.text)) {
+    violations.push(ViolationType.SPAM);
   }
 
   // Проверка на личные данные
-  if (checkForPersonalData(message.text)) {
-    violations.push(ViolationType.PERSONAL_DATA)
+  if (await checkForPersonalData(message.text)) {
+    violations.push(ViolationType.PERSONAL_DATA);
   }
 
   return {
     isAllowed: violations.length === 0,
     violationTypes: violations,
     autoModerated: true
-  }
+  };
 }
 
 // Получение всех сообщений из указанного чата
-export const getChatMessages = (chatId: string): Message[] => {
+export const getChatMessages = async (chatId: string): Promise<Message[]> => {
   try {
-    const messagesKey = `messages_${chatId}`
-    const messagesData = localStorage.getItem(messagesKey)
-
-    if (messagesData) {
-      return JSON.parse(messagesData) as Message[]
-    }
-
-    return []
+    const messages = await getAllItems(`messages`, { chatId });
+    return messages || [];
   } catch (error) {
-    console.error(`Ошибка при получении сообщений чата ${chatId}:`, error)
-    return []
+    console.error(`Ошибка при получении сообщений чата ${chatId}:`, error);
+    return [];
   }
 }
 
 // Получение всех сообщений со статусом на модерации
-export const getPendingModerationMessages = (): Message[] => {
+export const getPendingModerationMessages = async (): Promise<Message[]> => {
   try {
-    // Собираем все ключи сообщений
-    const chatKeys = Object.keys(localStorage).filter(key => key.startsWith('messages_'))
-    let pendingMessages: Message[] = []
+    // Получаем все сообщения из MongoDB с фильтром по статусу модерации
+    const pendingMessages = await getAllItems('messages', {
+      $or: [
+        { moderationStatus: 'pending' },
+        { isModerated: true, moderationStatus: { $exists: false } }
+      ]
+    });
 
-    // Проходим по всем ключам сообщений
-    chatKeys.forEach(key => {
-      const messages = JSON.parse(localStorage.getItem(key) || '[]') as Message[]
-      // Фильтруем сообщения, ожидающие модерации
-      const pending = messages.filter(msg =>
-        msg.moderationStatus === 'pending' ||
-        (msg.isModerated === true && !msg.moderationStatus)
-      )
-      pendingMessages = [...pendingMessages, ...pending]
-    })
-
-    // Сортируем по времени создания (новые в начале)
-    return pendingMessages.sort((a, b) => b.timestamp - a.timestamp)
+    return pendingMessages || [];
   } catch (error) {
-    console.error('Ошибка при получении сообщений для модерации:', error)
-    return []
+    console.error(`Ошибка при получении сообщений на модерацию:`, error);
+    return [];
   }
 }
 
 // Получение всех сообщений, отклоненных модерацией
-export const getRejectedMessages = (): Message[] => {
+export const getRejectedMessages = async (): Promise<Message[]> => {
   try {
-    const chatKeys = Object.keys(localStorage).filter(key => key.startsWith('messages_'))
-    let rejectedMessages: Message[] = []
-
-    chatKeys.forEach(key => {
-      const messages = JSON.parse(localStorage.getItem(key) || '[]') as Message[]
-      const rejected = messages.filter(msg => msg.moderationStatus === 'rejected')
-      rejectedMessages = [...rejectedMessages, ...rejected]
-    })
-
-    return rejectedMessages.sort((a, b) => b.timestamp - a.timestamp)
+    const rejectedMessages = await getAllItems('messages', { moderationStatus: 'rejected' });
+    return rejectedMessages || [];
   } catch (error) {
-    console.error('Ошибка при получении отклоненных сообщений:', error)
-    return []
+    console.error('Ошибка при получении отклоненных сообщений:', error);
+    return [];
   }
 }
 
 // Действие модерации сообщения
-export const moderateMessageAction = (
+export const moderateMessageAction = async (
   messageId: string,
   chatId: string,
   action: 'approve' | 'reject',
   moderatorId: string,
   violationType?: ViolationType,
   comment?: string
-): boolean => {
+): Promise<boolean> => {
   try {
-    const messagesKey = `messages_${chatId}`
-    const messagesData = localStorage.getItem(messagesKey)
-
-    if (!messagesData) {
-      console.error(`Чат ${chatId} не найден`)
-      return false
-    }
-
-    const messages = JSON.parse(messagesData) as Message[]
-    const messageIndex = messages.findIndex(msg => msg.id === messageId)
+    const messages = await getAllItems(`messages`, { chatId });
+    const messageIndex = messages.findIndex(msg => msg.id === messageId);
 
     if (messageIndex === -1) {
-      console.error(`Сообщение ${messageId} не найдено в чате ${chatId}`)
-      return false
+      console.error(`Сообщение ${messageId} не найдено в чате ${chatId}`);
+      return false;
     }
 
     // Обновляем статус модерации сообщения
-    messages[messageIndex].isModerated = true
-    // Преобразуем статус действия (approve -> approved, reject -> rejected)
-    messages[messageIndex].moderationStatus = action === 'approve' ? 'approved' : 'rejected'
-    messages[messageIndex].moderatedBy = moderatorId
-    messages[messageIndex].moderationTimestamp = Date.now()
+    messages[messageIndex].isModerated = true;
+    messages[messageIndex].moderationStatus = action === 'approve' ? 'approved' : 'rejected';
+    messages[messageIndex].moderatedBy = moderatorId;
+    messages[messageIndex].moderationTimestamp = Date.now();
 
     // Сохраняем действие модерации
     const moderationAction: ModerationAction = {
@@ -301,65 +271,52 @@ export const moderateMessageAction = (
       violationType,
       comment,
       timestamp: Date.now()
-    }
+    };
 
     // Сохраняем обновленный список сообщений
-    localStorage.setItem(messagesKey, JSON.stringify(messages))
+    await setItem(`messages.${chatId}`, messages);
 
     // Сохраняем действие модерации в истории
-    const moderationHistoryKey = 'moderation_history'
-    const moderationHistoryData = localStorage.getItem(moderationHistoryKey)
-    let moderationHistory: ModerationAction[] = []
+    const moderationHistory = await getItem('moderation_history') || [];
+    moderationHistory.push(moderationAction);
+    await setItem('moderation_history', moderationHistory);
 
-    if (moderationHistoryData) {
-      moderationHistory = JSON.parse(moderationHistoryData)
-    }
-
-    moderationHistory.push(moderationAction)
-    localStorage.setItem(moderationHistoryKey, JSON.stringify(moderationHistory))
-
-    return true
+    return true;
   } catch (error) {
-    console.error('Ошибка при модерации сообщения:', error)
-    return false
+    console.error('Ошибка при модерации сообщения:', error);
+    return false;
   }
 }
 
 // Получение истории модерации
-export const getModerationHistory = (): ModerationAction[] => {
+export const getModerationHistory = async (): Promise<ModerationAction[]> => {
   try {
-    const moderationHistoryKey = 'moderation_history'
-    const moderationHistoryData = localStorage.getItem(moderationHistoryKey)
-
-    if (moderationHistoryData) {
-      return JSON.parse(moderationHistoryData) as ModerationAction[]
-    }
-
-    return []
+    const moderationHistory = await getItem('moderation_history');
+    return moderationHistory || [];
   } catch (error) {
-    console.error('Ошибка при получении истории модерации:', error)
-    return []
+    console.error('Ошибка при получении истории модерации:', error);
+    return [];
   }
 }
 
 // Получение статистики модерации
-export const getModerationStats = () => {
+export const getModerationStats = async () => {
   try {
-    const history = getModerationHistory()
-    const pendingCount = getPendingModerationMessages().length
-    const rejectedCount = getRejectedMessages().length
+    const history = await getModerationHistory();
+    const pendingCount = (await getPendingModerationMessages()).length;
+    const rejectedCount = (await getRejectedMessages()).length;
 
     // Количество действий за последние 24 часа
-    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000
-    const recentActions = history.filter(action => action.timestamp > oneDayAgo)
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const recentActions = history.filter(action => action.timestamp > oneDayAgo);
 
     // Количество по типам нарушений
-    const violationCounts: Record<string, number> = {}
+    const violationCounts: Record<string, number> = {};
     history.forEach(action => {
       if (action.violationType) {
-        violationCounts[action.violationType] = (violationCounts[action.violationType] || 0) + 1
+        violationCounts[action.violationType] = (violationCounts[action.violationType] || 0) + 1;
       }
-    })
+    });
 
     return {
       totalModerated: history.length,
@@ -369,9 +326,9 @@ export const getModerationStats = () => {
       approvedCount: history.filter(h => h.actionType === 'approve').length,
       rejectedTotal: history.filter(h => h.actionType === 'reject').length,
       violationCounts
-    }
+    };
   } catch (error) {
-    console.error('Ошибка при получении статистики модерации:', error)
+    console.error('Ошибка при получении статистики модерации:', error);
     return {
       totalModerated: 0,
       pendingCount: 0,
@@ -380,52 +337,42 @@ export const getModerationStats = () => {
       approvedCount: 0,
       rejectedTotal: 0,
       violationCounts: {}
-    }
+    };
   }
 }
 
 // Обновление списка запрещенных слов
-export const updateBlockedWordsList = (words: string[]): boolean => {
+export const updateBlockedWordsList = async (words: string[]): Promise<boolean> => {
   try {
-    const settings = getModerationSettings()
-    settings.customBlockedWords = words
-    saveModerationSettings(settings)
-    return true
+    const settings = await getModerationSettings();
+    settings.customBlockedWords = words;
+    return await saveModerationSettings(settings);
   } catch (error) {
-    console.error('Ошибка при обновлении списка запрещенных слов:', error)
-    return false
+    console.error('Ошибка при обновлении списка запрещенных слов:', error);
+    return false;
   }
 }
 
 // Проверить, требует ли сообщение модерации перед отправкой
-export const messageRequiresModeration = (text: string): boolean => {
-  const settings = getModerationSettings()
+export const messageRequiresModeration = async (text: string): Promise<boolean> => {
+  const settings = await getModerationSettings();
 
   if (!settings.autoModeration) {
-    return false
+    return false;
   }
 
-  return checkForProfanity(text) ||
-         checkForSpam(text) ||
-         checkForPersonalData(text)
+  return (await checkForProfanity(text)) ||
+    (await checkForSpam(text)) ||
+    (await checkForPersonalData(text));
 }
 
 // Получить все чаты
-export const getAllChats = (): Chat[] => {
+export const getAllChats = async (): Promise<Chat[]> => {
   try {
-    const chatKeys = Object.keys(localStorage).filter(key => key.startsWith('chat_'))
-    const chats: Chat[] = []
-
-    chatKeys.forEach(key => {
-      const chatData = localStorage.getItem(key)
-      if (chatData) {
-        chats.push(JSON.parse(chatData))
-      }
-    })
-
-    return chats.sort((a, b) => b.updatedAt - a.updatedAt)
+    const chats = await getAllItems('chats', {});
+    return chats.sort((a, b) => b.updatedAt - a.updatedAt);
   } catch (error) {
-    console.error('Ошибка при получении всех чатов:', error)
-    return []
+    console.error('Ошибка при получении всех чатов:', error);
+    return [];
   }
 }

@@ -5,10 +5,9 @@ import { Card } from './Card'
 import { Input } from './Input'
 import { InterestsSelector } from './InterestsSelector'
 import { generateRandomNickname } from '../utils/interests'
-import { createUserFromTelegram, createDemoUser, saveUser, User, addAdmin } from '../utils/user'
+import { createUserFromTelegram, createDemoUser, saveUser, User } from '../utils/user'
 import { telegramApi } from '../utils/database'
-import { motion } from 'framer-motion'
-import WebApp from '@twa-dev/sdk'
+import { motion, AnimatePresence } from 'framer-motion'
 
 interface UserRegistrationProps {
   onComplete?: () => void;
@@ -22,39 +21,14 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onComplete }
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [randomName, setRandomName] = useState('')
-  const [telegramData, setTelegramData] = useState<any>(null)
 
   // Состояния для валидации
   const [ageError, setAgeError] = useState('')
   const [interestsError, setInterestsError] = useState('')
 
-  // Получаем данные из Telegram и генерируем случайное имя при загрузке
+  // Генерируем случайное имя при загрузке компонента
   useEffect(() => {
-    const initData = async () => {
-      try {
-        // Инициализируем Telegram API если еще не инициализирован
-        if (!telegramApi.isReady()) {
-          await telegramApi.initialize();
-        }
-
-        // Получаем данные пользователя из Telegram
-        const userData = telegramApi.getUserData();
-        setTelegramData(userData);
-
-        // Если есть имя пользователя из Telegram, предзаполняем поле
-        if (userData && userData.first_name) {
-          setName(userData.first_name);
-        } else {
-          // Иначе генерируем случайное имя
-          setRandomName(generateRandomNickname());
-        }
-      } catch (error) {
-        console.error('Ошибка при получении данных из Telegram:', error);
-        setRandomName(generateRandomNickname());
-      }
-    };
-
-    initData();
+    setRandomName(generateRandomNickname())
   }, [])
 
   // Обработчик изменения имени
@@ -95,12 +69,6 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onComplete }
     if (!age) {
       setAgeError('Пожалуйста, укажите ваш возраст')
       isValid = false
-    } else if (parseInt(age) < 13) {
-      setAgeError('Возраст должен быть не менее 13 лет')
-      isValid = false
-    } else if (parseInt(age) > 100) {
-      setAgeError('Возраст должен быть не более 100 лет')
-      isValid = false
     }
 
     if (selectedInterests.length === 0) {
@@ -109,50 +77,6 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onComplete }
     }
 
     return isValid
-  }
-
-  // Проверка, является ли текущий пользователь администратором по Telegram ID
-  const checkAdminStatus = (telegramId: string): boolean => {
-    try {
-      // Проверяем специально сохраненный список Telegram ID администраторов
-      const adminTelegramIds = localStorage.getItem('admin_telegram_ids');
-      if (adminTelegramIds) {
-        const adminIds = JSON.parse(adminTelegramIds);
-        if (Array.isArray(adminIds) && adminIds.includes(telegramId)) {
-          console.log(`Пользователь с Telegram ID ${telegramId} найден в списке администраторов`);
-          return true;
-        }
-      }
-
-      // Проверяем значение во временном хранилище
-      const tempAdminId = localStorage.getItem('temp_current_admin');
-      if (tempAdminId && tempAdminId === telegramId) {
-        console.log(`Пользователь с Telegram ID ${telegramId} найден в временном хранилище администраторов`);
-        return true;
-      }
-
-      // Проверяем основной список администраторов
-      const admins = localStorage.getItem('admin_users');
-      if (admins) {
-        const adminList = JSON.parse(admins);
-        if (Array.isArray(adminList) && adminList.includes(telegramId)) {
-          console.log(`Пользователь с Telegram ID ${telegramId} найден в основном списке администраторов`);
-          return true;
-        }
-      }
-
-      // Проверка на целевого администратора
-      const targetAdminId = '5394381166';
-      if (telegramId === targetAdminId) {
-        console.log(`Обнаружен целевой администратор с Telegram ID: ${telegramId}`);
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      console.error('Ошибка при проверке статуса администратора:', error);
-      return false;
-    }
   }
 
   // Обработчик завершения регистрации
@@ -167,76 +91,40 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onComplete }
 
     try {
       let user: User | null = null
-      const telegramId = telegramApi.getUserId();
-      let isAdminUser = false;
 
       // Проверяем, есть ли данные Telegram
-      if (telegramId) {
-        console.log('Создание пользователя с Telegram ID:', telegramId);
-
-        // Проверяем, является ли пользователь администратором
-        isAdminUser = checkAdminStatus(telegramId);
-        console.log(`Пользователь ${telegramId} администратор: ${isAdminUser}`);
-
-        // Создаем пользователя из данных Telegram с уникальным ID
-        user = await createUserFromTelegram(telegramId, name || randomName);
-
-        // Если пользователь найден в списке администраторов, устанавливаем флаг
-        if (user && isAdminUser) {
-          user.isAdmin = true;
-          console.log(`Установлен флаг isAdmin для пользователя ${user.name} (${user.id})`);
-
-          // Также добавляем в общий список администраторов
-          addAdmin(telegramId);
-        }
+      if (telegramApi.isReady() && telegramApi.getUserId()) {
+        // Создаем пользователя из данных Telegram
+        user = await createUserFromTelegram(telegramApi.getUserId() as string, name || randomName)
       } else {
-        // Создаем демо-пользователя только если не в Telegram
-        console.log('Создание демо пользователя (не в Telegram)');
-        user = createDemoUser(name || randomName);
+        // Создаем демо-пользователя
+        user = createDemoUser()
+        user.name = name || randomName // Обновляем имя
       }
 
       if (!user) {
-        throw new Error('Не удалось создать пользователя');
+        throw new Error('Не удалось создать пользователя')
       }
 
       // Обновляем данные пользователя
-      user.age = age ? parseInt(age) : undefined;
-      user.interests = selectedInterests;
+      user.age = age ? parseInt(age) : undefined
+      user.interests = selectedInterests
 
       // Сохраняем пользователя
-      await saveUser(user);
-
-      // Показываем сообщение об успехе в Telegram
-      if (WebApp.isExpanded) {
-        WebApp.showPopup({
-          title: 'Регистрация успешна!',
-          message: isAdminUser
-            ? 'Профиль администратора создан. Теперь вы можете использовать все функции приложения.'
-            : 'Ваш профиль создан. Теперь вы можете начать общение.',
-          buttons: [{ type: 'ok' }]
-        });
-      }
+      await saveUser(user)
 
       // Вызываем callback если он есть
       if (onComplete) {
-        onComplete();
+        onComplete()
       } else {
         // Перенаправляем на главную
-        navigate('/');
+        navigate('/')
       }
     } catch (error) {
-      console.error('Ошибка при регистрации:', error);
-      setError('Произошла ошибка при регистрации. Пожалуйста, попробуйте еще раз.');
-
-      if (WebApp.isExpanded) {
-        WebApp.showPopup({
-          title: 'Ошибка регистрации',
-          message: 'Не удалось создать профиль. Пожалуйста, попробуйте еще раз.',
-          buttons: [{ type: 'ok' }]
-        });
-      }
+      console.error('Ошибка при регистрации:', error)
+      setError('Произошла ошибка при регистрации. Пожалуйста, попробуйте еще раз.')
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
   }
 
@@ -269,17 +157,15 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onComplete }
             >
               <Input
                 label="Имя или никнейм"
-                placeholder={telegramData?.first_name ? "Оставьте имя из Telegram или измените" : "Введите имя или оставьте пустым"}
+                placeholder="Введите имя или оставьте пустым"
                 value={name}
                 onChange={handleNameChange}
                 fullWidth
                 className="border-2 border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-lg"
               />
+
               <div className="text-sm text-gray-500 dark:text-gray-400 mt-2 pl-2 border-l-2 border-blue-300">
-                {!name && telegramData?.first_name ?
-                  `Будет использовано ваше имя из Telegram: ${telegramData.first_name}` :
-                  `Если оставите поле пустым, вы получите псевдоним: ${randomName}`
-                }
+                Если оставите поле пустым, вы получите псевдоним: <span className="font-medium text-blue-500">{randomName}</span>
               </div>
             </motion.div>
 
@@ -300,6 +186,7 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onComplete }
                 fullWidth
                 className="border-2 border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-lg"
               />
+
               {ageError && (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -324,6 +211,7 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onComplete }
                   maxSelections={5}
                 />
               </div>
+
               {interestsError && (
                 <motion.div
                   initial={{ opacity: 0 }}

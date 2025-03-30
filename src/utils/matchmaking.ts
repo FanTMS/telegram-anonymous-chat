@@ -29,18 +29,18 @@ interface NewChatNotification {
 
 // Импортируем необходимые функции
 import { getCurrentUser, getUserById } from './user';
-import { createChat, getChatById } from './chat';
+import { createChat, getChatById, setActiveChat, getActiveChat } from './chat';
+import { getItem, setItem, removeItem, getAllItems } from './dbService';
 
 // Получить список ищущих пользователей
-export const getSearchingUsers = (): SearchingUser[] => {
+export const getSearchingUsers = async (): Promise<SearchingUser[]> => {
     try {
-        const data = localStorage.getItem(SEARCHING_USERS_KEY);
-        if (!data) {
+        const users = await getItem(SEARCHING_USERS_KEY);
+        if (!users) {
             if (DEBUG) console.log('[getSearchingUsers] Нет данных о пользователях в поиске');
             return [];
         }
 
-        const users = JSON.parse(data);
         if (!Array.isArray(users)) {
             console.error('[getSearchingUsers] Данные не являются массивом, возвращаем пустой массив');
             return [];
@@ -54,9 +54,9 @@ export const getSearchingUsers = (): SearchingUser[] => {
 };
 
 // Сохранить список ищущих пользователей
-const saveSearchingUsers = (users: SearchingUser[]): void => {
+const saveSearchingUsers = async (users: SearchingUser[]): Promise<void> => {
     try {
-        localStorage.setItem(SEARCHING_USERS_KEY, JSON.stringify(users));
+        await setItem(SEARCHING_USERS_KEY, users);
         if (DEBUG) console.log(`[saveSearchingUsers] Сохранено ${users.length} пользователей в поиске`);
     } catch (error) {
         console.error('[saveSearchingUsers] Ошибка при сохранении списка ищущих пользователей:', error);
@@ -64,19 +64,19 @@ const saveSearchingUsers = (users: SearchingUser[]): void => {
 };
 
 // Добавить пользователя в поиск
-export const startSearching = (
+export const startSearching = async (
     isRandom: boolean = false,
     interests: string[] = [],
     ageRange: [number, number] = [0, 100],
     specificUserId?: string
-): boolean => {
+): Promise<boolean> => {
     try {
         // Определяем ID пользователя
         let userId;
         if (specificUserId) {
             userId = specificUserId;
         } else {
-            const currentUser = getCurrentUser();
+            const currentUser = await getCurrentUser();
             if (!currentUser) {
                 console.error('[startSearching] Текущий пользователь не найден');
                 return false;
@@ -87,7 +87,7 @@ export const startSearching = (
         if (DEBUG) console.log(`[startSearching] Начало поиска для пользователя ${userId}`);
 
         // Проверяем, не ищет ли пользователь уже
-        const searchingUsers = getSearchingUsers();
+        const searchingUsers = await getSearchingUsers();
         const alreadySearching = searchingUsers.some(user => user.userId === userId);
 
         if (alreadySearching) {
@@ -107,7 +107,7 @@ export const startSearching = (
         };
 
         const updatedUsers = [...searchingUsers, newSearchingUser];
-        saveSearchingUsers(updatedUsers);
+        await saveSearchingUsers(updatedUsers);
 
         if (DEBUG) console.log(`[startSearching] Пользователь ${userId} добавлен в поиск`);
         return true;
@@ -118,14 +118,14 @@ export const startSearching = (
 };
 
 // Прекратить поиск для пользователя
-export const stopSearching = (userId?: string): boolean => {
+export const stopSearching = async (userId?: string): Promise<boolean> => {
     try {
         // Определяем ID пользователя
         let targetUserId;
         if (userId) {
             targetUserId = userId;
         } else {
-            const currentUser = getCurrentUser();
+            const currentUser = await getCurrentUser();
             if (!currentUser) {
                 console.error('[stopSearching] Текущий пользователь не найден');
                 return false;
@@ -136,7 +136,7 @@ export const stopSearching = (userId?: string): boolean => {
         if (DEBUG) console.log(`[stopSearching] Остановка поиска для пользователя ${targetUserId}`);
 
         // Обновляем список ищущих пользователей
-        const searchingUsers = getSearchingUsers();
+        const searchingUsers = await getSearchingUsers();
         const wasSearching = searchingUsers.some(user => user.userId === targetUserId);
 
         if (!wasSearching) {
@@ -145,7 +145,7 @@ export const stopSearching = (userId?: string): boolean => {
         }
 
         const updatedUsers = searchingUsers.filter(user => user.userId !== targetUserId);
-        saveSearchingUsers(updatedUsers);
+        await saveSearchingUsers(updatedUsers);
 
         if (DEBUG) console.log(`[stopSearching] Поиск для пользователя ${targetUserId} остановлен`);
         return true;
@@ -156,14 +156,14 @@ export const stopSearching = (userId?: string): boolean => {
 };
 
 // Проверить, ищет ли пользователь собеседника
-export const isUserSearching = (userId?: string): boolean => {
+export const isUserSearching = async (userId?: string): Promise<boolean> => {
     try {
         // Определяем ID пользователя
         let targetUserId;
         if (userId) {
             targetUserId = userId;
         } else {
-            const currentUser = getCurrentUser();
+            const currentUser = await getCurrentUser();
             if (!currentUser) {
                 console.error('[isUserSearching] Текущий пользователь не найден');
                 return false;
@@ -172,7 +172,7 @@ export const isUserSearching = (userId?: string): boolean => {
         }
 
         // Проверяем наличие пользователя в списке ищущих
-        const searchingUsers = getSearchingUsers();
+        const searchingUsers = await getSearchingUsers();
         return searchingUsers.some(user => user.userId === targetUserId);
     } catch (error) {
         console.error('[isUserSearching] Ошибка при проверке статуса поиска:', error);
@@ -181,7 +181,7 @@ export const isUserSearching = (userId?: string): boolean => {
 };
 
 // Функция для создания чата между пользователями - улучшенная версия
-const createChatBetweenUsers = (participants: string[]): any => {
+const createChatBetweenUsers = async (participants: string[]): Promise<any> => {
     try {
         if (DEBUG) console.log(`[createChatBetweenUsers] Создание чата между пользователями: ${participants.join(', ')}`);
 
@@ -192,8 +192,8 @@ const createChatBetweenUsers = (participants: string[]): any => {
         }
 
         // Проверяем, что оба участника существуют
-        const user1 = getUserById(participants[0]);
-        const user2 = getUserById(participants[1]);
+        const user1 = await getItem(`user_${participants[0]}`);
+        const user2 = await getItem(`user_${participants[1]}`);
 
         if (!user1 || !user2) {
             console.error('[createChatBetweenUsers] Один или оба участника не найдены:',
@@ -203,7 +203,7 @@ const createChatBetweenUsers = (participants: string[]): any => {
         }
 
         // Проверяем, не существует ли уже чат между этими пользователями
-        const existingChats = getAllChats();
+        const existingChats = await getAllChatsLocal();
         const existingChat = existingChats.find(chat =>
             chat.participants.includes(participants[0]) &&
             chat.participants.includes(participants[1]) &&
@@ -214,11 +214,11 @@ const createChatBetweenUsers = (participants: string[]): any => {
             if (DEBUG) console.log(`[createChatBetweenUsers] Чат между ${participants[0]} и ${participants[1]} уже существует (${existingChat.id})`);
 
             // Устанавливаем существующий чат как активный для обоих пользователей
-            setActiveChat(participants[0], existingChat.id);
-            setActiveChat(participants[1], existingChat.id);
+            await setActiveChat(participants[0], existingChat.id);
+            await setActiveChat(participants[1], existingChat.id);
 
             // Создаем уведомления о чате для обоих пользователей
-            createChatNotifications(participants[0], participants[1], existingChat.id);
+            await createChatNotifications(participants[0], participants[1], existingChat.id);
 
             // Отправляем событие о существующем чате
             dispatchChatFoundEvent(existingChat.id, participants);
@@ -227,7 +227,7 @@ const createChatBetweenUsers = (participants: string[]): any => {
         }
 
         // Создаем новый чат
-        const newChat = createChat(participants);
+        const newChat = await createChat(participants);
 
         if (!newChat) {
             console.error('[createChatBetweenUsers] Не удалось создать чат');
@@ -235,11 +235,11 @@ const createChatBetweenUsers = (participants: string[]): any => {
         }
 
         // Устанавливаем активный чат для обоих пользователей
-        setActiveChat(participants[0], newChat.id);
-        setActiveChat(participants[1], newChat.id);
+        await setActiveChat(participants[0], newChat.id);
+        await setActiveChat(participants[1], newChat.id);
 
         // Создаем уведомления о чате для обоих пользователей
-        createChatNotifications(participants[0], participants[1], newChat.id);
+        await createChatNotifications(participants[0], participants[1], newChat.id);
 
         if (DEBUG) console.log(`[createChatBetweenUsers] Чат успешно создан: ${newChat.id}`);
 
@@ -258,7 +258,7 @@ export const findMatch = async (): Promise<boolean> => {
     if (DEBUG) console.log('[findMatch] Начинаем поиск совпадений...');
 
     try {
-        const searchingUsers = getSearchingUsers();
+        const searchingUsers = await getSearchingUsers();
         if (searchingUsers.length < 2) {
             if (DEBUG) console.log('[findMatch] Недостаточно пользователей для создания пары');
             return false;
@@ -273,11 +273,11 @@ export const findMatch = async (): Promise<boolean> => {
 
         // Берем первого пользователя, который ждет дольше всех
         const firstUser = sortedUsers[0];
-        const firstUserData = getUserById(firstUser.userId);
+        const firstUserData = await getItem(`user_${firstUser.userId}`);
 
         if (!firstUserData) {
             console.error(`[findMatch] Пользователь ${firstUser.userId} не найден, удаляем из поиска`);
-            stopSearching(firstUser.userId);
+            await stopSearching(firstUser.userId);
             return false;
         }
 
@@ -330,10 +330,10 @@ export const findMatch = async (): Promise<boolean> => {
             const potentialMatch = sortedUsers[i];
 
             // Проверяем существование
-            const matchData = getUserById(potentialMatch.userId);
+            const matchData = await getItem(`user_${potentialMatch.userId}`);
             if (!matchData) {
                 console.error(`[findMatch] Потенциальный партнер ${potentialMatch.userId} не найден, удаляем из поиска`);
-                stopSearching(potentialMatch.userId);
+                await stopSearching(potentialMatch.userId);
                 continue;
             }
 
@@ -352,7 +352,7 @@ export const findMatch = async (): Promise<boolean> => {
             if (DEBUG) console.log(`[findMatch] Лучшая пара: ${firstUser.userId} и ${bestMatch.userId} (совместимость: ${bestScore}%)`);
 
             // Создаем чат между пользователями
-            const newChat = createChatBetweenUsers([firstUser.userId, bestMatch.userId]);
+            const newChat = await createChatBetweenUsers([firstUser.userId, bestMatch.userId]);
 
             if (!newChat) {
                 console.error('[findMatch] Не удалось создать чат для пары');
@@ -360,8 +360,8 @@ export const findMatch = async (): Promise<boolean> => {
             }
 
             // Удаляем пользователей из списка поиска
-            stopSearching(firstUser.userId);
-            stopSearching(bestMatch.userId);
+            await stopSearching(firstUser.userId);
+            await stopSearching(bestMatch.userId);
 
             if (DEBUG) console.log(`[findMatch] Успешно создана пара с чатом ${newChat.id}`);
 
@@ -377,13 +377,13 @@ export const findMatch = async (): Promise<boolean> => {
 };
 
 // Функция для создания уведомлений о чате для пользователей
-function createChatNotifications(userId1: string, userId2: string, chatId: string): void {
+async function createChatNotifications(userId1: string, userId2: string, chatId: string): Promise<void> {
     try {
         if (DEBUG) console.log(`[createChatNotifications] Создание уведомлений для пользователей ${userId1} и ${userId2} о чате ${chatId}`);
 
         // Создаем уведомления для обоих пользователей
-        saveNewChatNotification(userId1, chatId, userId2);
-        saveNewChatNotification(userId2, chatId, userId1);
+        await saveNewChatNotification(userId1, chatId, userId2);
+        await saveNewChatNotification(userId2, chatId, userId1);
 
         if (DEBUG) console.log('[createChatNotifications] Уведомления успешно созданы');
     } catch (error) {
@@ -391,20 +391,22 @@ function createChatNotifications(userId1: string, userId2: string, chatId: strin
     }
 }
 
-// Сохранить уведомление о новом чате для пользователя
-export const saveNewChatNotification = (userId: string, chatId: string, otherUserId: string): void => {
+// Сохраняет уведомление о новом чате для пользователя
+export const saveNewChatNotification = async (userId: string, chatId: string, otherUserId: string): Promise<void> => {
     try {
-        if (DEBUG) console.log(`[saveNewChatNotification] Сохранение уведомления для ${userId} о чате ${chatId}`);
-
-        const notification: NewChatNotification = {
+        if (DEBUG) console.log(`[saveNewChatNotification] Сохраняем уведомление о новом чате для ${userId}`);
+        // Создаем объект уведомления
+        const notification = {
             chatId,
-            createdAt: Date.now(),
             otherUserId,
+            createdAt: Date.now(),
             isRead: false
         };
 
-        localStorage.setItem(`${NEW_CHAT_KEY}_${userId}`, JSON.stringify(notification));
-        localStorage.setItem(`${NEW_CHAT_FLAG_KEY}_${userId}`, 'true');
+        // Сохраняем данные уведомления
+        await setItem(`new_chat_notification_${userId}`, notification);
+        // Устанавливаем флаг нового чата
+        await setItem(`new_chat_flag_${userId}`, true);
 
         if (DEBUG) console.log(`[saveNewChatNotification] Уведомление сохранено для ${userId}`);
     } catch (error) {
@@ -413,24 +415,23 @@ export const saveNewChatNotification = (userId: string, chatId: string, otherUse
 };
 
 // Получить уведомление о новом чате для пользователя
-export const getNewChatNotification = (userId: string): NewChatNotification | null => {
+export const getNewChatNotification = async (userId: string): Promise<NewChatNotification | null> => {
     try {
-        const data = localStorage.getItem(`${NEW_CHAT_KEY}_${userId}`);
+        const notification = await getItem(`new_chat_notification_${userId}`);
 
-        if (!data) {
+        if (!notification) {
             if (DEBUG) console.log(`[getNewChatNotification] Нет уведомлений для ${userId}`);
             return null;
         }
 
-        const notification = JSON.parse(data);
         if (DEBUG) console.log(`[getNewChatNotification] Получено уведомление для ${userId}: `, notification);
 
         // Проверяем, существует ли чат
-        const chatExists = getChatById(notification.chatId);
+        const chatExists = await getChatById(notification.chatId);
         if (!chatExists) {
             console.log(`[getNewChatNotification] Чат ${notification.chatId} не найден, очищаем уведомление`);
-            localStorage.removeItem(`${NEW_CHAT_FLAG_KEY}_${userId}`);
-            localStorage.removeItem(`${NEW_CHAT_KEY}_${userId}`);
+            await removeItem(`new_chat_flag_${userId}`);
+            await removeItem(`new_chat_notification_${userId}`);
             return null;
         }
 
@@ -442,46 +443,44 @@ export const getNewChatNotification = (userId: string): NewChatNotification | nu
 };
 
 // Проверить наличие нового чата для пользователя
-export const hasNewChat = (userId: string): boolean => {
+export const hasNewChat = async (userId: string): Promise<boolean> => {
     try {
         if (!userId) {
             console.warn('[hasNewChat] userId не указан');
             return false;
         }
 
-        const hasFlag = localStorage.getItem(`${NEW_CHAT_FLAG_KEY}_${userId}`) === 'true';
+        const hasFlag = await getItem(`new_chat_flag_${userId}`);
         if (DEBUG) console.log(`[hasNewChat] Проверка флага для ${userId}: ${hasFlag}`);
 
         if (!hasFlag) {
             return false;
         }
 
-        const notificationData = localStorage.getItem(`${NEW_CHAT_KEY}_${userId}`);
-        if (!notificationData) {
+        const notification = await getItem(`new_chat_notification_${userId}`);
+        if (!notification) {
             // Если флаг есть, но данных нет, очищаем флаг
-            localStorage.removeItem(`${NEW_CHAT_FLAG_KEY}_${userId}`);
+            await removeItem(`new_chat_flag_${userId}`);
             console.log(`[hasNewChat] Найден флаг, но нет данных уведомления для ${userId}`);
             return false;
         }
 
         try {
-            const notification = JSON.parse(notificationData);
-
             // Проверяем, что чат действительно существует
-            const chat = getChatById(notification.chatId);
+            const chat = await getChatById(notification.chatId);
 
             if (!chat) {
                 // Если чат не существует, очищаем уведомление
-                localStorage.removeItem(`${NEW_CHAT_FLAG_KEY}_${userId}`);
-                localStorage.removeItem(`${NEW_CHAT_KEY}_${userId}`);
+                await removeItem(`new_chat_flag_${userId}`);
+                await removeItem(`new_chat_notification_${userId}`);
                 console.log(`[hasNewChat] Чат ${notification.chatId} не найден, очищаем уведомление`);
                 return false;
             }
 
             // Проверяем, что пользователь действительно участник этого чата
             if (!chat.participants.includes(userId)) {
-                localStorage.removeItem(`${NEW_CHAT_FLAG_KEY}_${userId}`);
-                localStorage.removeItem(`${NEW_CHAT_KEY}_${userId}`);
+                await removeItem(`new_chat_flag_${userId}`);
+                await removeItem(`new_chat_notification_${userId}`);
                 console.log(`[hasNewChat] Пользователь ${userId} не является участником чата ${notification.chatId}`);
                 return false;
             }
@@ -489,7 +488,7 @@ export const hasNewChat = (userId: string): boolean => {
             console.log(`[hasNewChat] Для ${userId} найден активный чат: ${notification.chatId}`);
             return true;
         } catch (parseError) {
-            console.error('[hasNewChat] Ошибка при парсинге уведомления:', parseError);
+            console.error('[hasNewChat] Ошибка при обработке уведомления:', parseError);
             return false;
         }
     } catch (error) {
@@ -498,19 +497,15 @@ export const hasNewChat = (userId: string): boolean => {
     }
 };
 
-// Отметить чат как прочитанный
-export const markChatNotificationAsRead = (userId: string): void => {
+// Отмечаем уведомление о чате как прочитанное
+export const markChatNotificationAsRead = async (userId: string): Promise<void> => {
     try {
         if (DEBUG) console.log(`[markChatNotificationAsRead] Отмечаем уведомление как прочитанное для ${userId}`);
-
-        const notificationData = localStorage.getItem(`${NEW_CHAT_KEY}_${userId}`);
-        if (notificationData) {
-            const notification = JSON.parse(notificationData);
+        const notification = await getItem(`new_chat_notification_${userId}`);
+        if (notification) {
             notification.isRead = true;
-
-            localStorage.setItem(`${NEW_CHAT_KEY}_${userId}`, JSON.stringify(notification));
-            localStorage.removeItem(`${NEW_CHAT_FLAG_KEY}_${userId}`);
-
+            await setItem(`new_chat_notification_${userId}`, notification);
+            await removeItem(`new_chat_flag_${userId}`);
             if (DEBUG) console.log(`[markChatNotificationAsRead] Уведомление отмечено как прочитанное для ${userId}`);
         }
     } catch (error) {
@@ -543,7 +538,7 @@ export const startMatchmakingService = (intervalMs: number = 2000): number => {
         // Создаем новый интервал с более частой проверкой
         const intervalId = window.setInterval(async () => {
             try {
-                const searchingUsers = getSearchingUsers();
+                const searchingUsers = await getSearchingUsers();
                 if (searchingUsers.length >= 2) {
                     const result = await findMatch();
                     if (DEBUG && result) console.log('[startMatchmakingService] Найдено совпадение в регулярной проверке');
@@ -564,6 +559,34 @@ export const startMatchmakingService = (intervalMs: number = 2000): number => {
     } catch (error) {
         console.error('[startMatchmakingService] Ошибка при запуске сервиса:', error);
         return 0;
+    }
+};
+
+// Получить все чаты (локальная имплементация, не экспортируется)
+const getAllChatsLocal = async (): Promise<any[]> => {
+    try {
+        const chats = await getAllItems('chats', {});
+        return chats || [];
+    } catch (error) {
+        console.error('[getAllChatsLocal] Ошибка при получении списка чатов:', error);
+        return [];
+    }
+};
+
+// Выделяем отправку события в отдельную функцию для переиспользования
+const dispatchChatFoundEvent = (chatId: string, participants: string[]): void => {
+    try {
+        const event = new CustomEvent('chatFound', {
+            detail: {
+                chatId,
+                participants,
+                timestamp: Date.now()
+            }
+        });
+        window.dispatchEvent(event);
+        if (DEBUG) console.log(`[dispatchChatFoundEvent] Событие chatFound отправлено для чата ${chatId}`);
+    } catch (eventError) {
+        console.error('[dispatchChatFoundEvent] Ошибка при отправке события chatFound:', eventError);
     }
 };
 
@@ -593,7 +616,7 @@ export const triggerMatchmaking = async (): Promise<boolean> => {
 
     try {
         // Проверяем количество пользователей в поиске перед запуском
-        const searchingUsers = getSearchingUsers();
+        const searchingUsers = await getSearchingUsers();
         if (searchingUsers.length < 2) {
             if (DEBUG) console.log('[triggerMatchmaking] Недостаточно пользователей в поиске (нужно минимум 2)');
             return false;
@@ -607,13 +630,13 @@ export const triggerMatchmaking = async (): Promise<boolean> => {
 };
 
 // Принудительно создать пару между двумя конкретными пользователями - улучшенная версия
-const forceMatchUsers = (userId1: string, userId2: string): boolean => {
+export const forceMatchUsers = async (userId1: string, userId2: string): Promise<boolean> => {
     if (DEBUG) console.log(`[forceMatchUsers] Принудительное создание пары между ${userId1} и ${userId2}`);
 
     try {
         // Проверяем существование пользователей
-        const user1 = getUserById(userId1);
-        const user2 = getUserById(userId2);
+        const user1 = await getItem(`user_${userId1}`);
+        const user2 = await getItem(`user_${userId2}`);
 
         if (!user1 || !user2) {
             console.error('[forceMatchUsers] Один или оба пользователя не найдены');
@@ -621,11 +644,11 @@ const forceMatchUsers = (userId1: string, userId2: string): boolean => {
         }
 
         // Удаляем пользователей из списка поиска, если они там есть
-        if (isUserSearching(userId1)) stopSearching(userId1);
-        if (isUserSearching(userId2)) stopSearching(userId2);
+        if (await isUserSearching(userId1)) await stopSearching(userId1);
+        if (await isUserSearching(userId2)) await stopSearching(userId2);
 
         // Создаем чат между указанными пользователями
-        const newChat = createChatBetweenUsers([userId1, userId2]);
+        const newChat = await createChatBetweenUsers([userId1, userId2]);
 
         if (!newChat) {
             console.error('[forceMatchUsers] Не удалось создать чат');
@@ -642,96 +665,6 @@ const forceMatchUsers = (userId1: string, userId2: string): boolean => {
     }
 };
 
-// Установить активный чат для пользователя - улучшенная версия
-const setActiveChat = (userId: string, chatId: string): void => {
-    try {
-        if (DEBUG) console.log(`[setActiveChat] Установка активного чата ${chatId} для пользователя ${userId}`);
-
-        // Проверяем существование чата
-        const chat = getChatById(chatId);
-        if (!chat) {
-            console.error(`[setActiveChat] Чат ${chatId} не найден`);
-            return;
-        }
-
-        // Проверяем, что пользователь действительно участник чата
-        if (!chat.participants.includes(userId)) {
-            console.error(`[setActiveChat] Пользователь ${userId} не является участником чата ${chatId}`);
-            return;
-        }
-
-        // Проверяем, не завершен ли чат
-        if (chat.ended) {
-            console.error(`[setActiveChat] Попытка установить завершенный чат ${chatId} как активный`);
-            return;
-        }
-
-        // Устанавливаем активный чат для конкретного пользователя
-        localStorage.setItem(`active_chat_${userId}`, chatId);
-
-        // Для совместимости также сохраняем общий ключ активного чата
-        // Это решает проблему с переходом в активный чат
-        localStorage.setItem('active_chat_id', chatId);
-
-        if (DEBUG) console.log(`[setActiveChat] Активный чат успешно установлен для ${userId}`);
-    } catch (error) {
-        console.error('[setActiveChat] Ошибка при установке активного чата:', error);
-    }
-};
-
-// Получить активный чат пользователя
-const getActiveChat = (userId: string): string | null => {
-    try {
-        const chatId = localStorage.getItem(`active_chat_${userId}`);
-        if (!chatId) return null;
-
-        // Проверяем существование чата
-        const chat = getChatById(chatId);
-        if (!chat) {
-            localStorage.removeItem(`active_chat_${userId}`);
-            return null;
-        }
-
-        return chatId;
-    } catch (error) {
-        console.error('[getActiveChat] Ошибка при получении активного чата:', error);
-        return null;
-    }
-};
-
-// Получить все чаты
-const getAllChats = (): any[] => {
-    try {
-        const chatsData = localStorage.getItem('chats');
-        if (!chatsData) return [];
-
-        const chats = JSON.parse(chatsData);
-        if (!Array.isArray(chats)) return [];
-
-        return chats;
-    } catch (error) {
-        console.error('[getAllChats] Ошибка при получении списка чатов:', error);
-        return [];
-    }
-};
-
-// Выделяем отправку события в отдельную функцию для переиспользования
-const dispatchChatFoundEvent = (chatId: string, participants: string[]): void => {
-    try {
-        const event = new CustomEvent('chatFound', {
-            detail: {
-                chatId,
-                participants,
-                timestamp: Date.now()
-            }
-        });
-        window.dispatchEvent(event);
-        if (DEBUG) console.log(`[dispatchChatFoundEvent] Событие chatFound отправлено для чата ${chatId}`);
-    } catch (eventError) {
-        console.error('[dispatchChatFoundEvent] Ошибка при отправке события chatFound:', eventError);
-    }
-};
-
 // Объявление для TypeScript - глобальная переменная для ID интервала
 declare global {
     interface Window {
@@ -740,13 +673,4 @@ declare global {
         demoUserAdded: boolean;
     }
 }
-
-// Экспортируем функции
-export {
-    getChatById,
-    getActiveChat,
-    setActiveChat,
-    forceMatchUsers,
-    getAllChats
-};
 

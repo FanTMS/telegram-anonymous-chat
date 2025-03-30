@@ -1,137 +1,48 @@
-import { resetApplication } from './reset';
-import WebApp from '@twa-dev/sdk';
-import { getCurrentUser, isAdmin } from './user';
-import { telegramApi } from './database';
+import { getUsers, saveUser, User } from './user';
+import { getChatsByUserId, endChat } from './chat';
+import { isTestUser } from './friends';
 
-/**
- * Функция для перехода в production режим с очисткой тестовых данных
- * при сохранении важных настроек, таких как права администратора
- */
-export const prepareForProduction = async () => {
+// Удаление всех тестовых пользователей
+export const removeTestUsers = (): boolean => {
     try {
-        console.log('Подготовка приложения к production режиму...');
+        const users = getUsers();
+        const testUsers = users.filter(user => isTestUser(user));
 
-        // Сохраняем текущего пользователя и его Telegram ID если он администратор
-        const currentUser = getCurrentUser();
-        const currentTelegramId = telegramApi.getUserId();
+        // Завершаем все чаты с тестовыми пользователями
+        testUsers.forEach(user => {
+            const userChats = getChatsByUserId(user.id);
+            userChats.forEach(chat => {
+                endChat(chat.id);
+            });
+        });
 
-        // Обязательно проверяем, является ли пользователь администратором
-        const isCurrentAdmin = currentUser?.isAdmin || isAdmin();
-
-        console.log('Текущий пользователь перед очисткой:',
-            currentUser ? `${currentUser.name} (ID: ${currentUser.id})` : 'Не найден',
-            'Telegram ID:', currentTelegramId,
-            'Админ:', isCurrentAdmin);
-
-        // Получаем текущее хранилище администраторов перед очисткой
-        const adminsTelegram = {};
-
-        // Сохраняем ID текущего администратора
-        if (currentTelegramId && isCurrentAdmin) {
-            adminsTelegram[currentTelegramId] = true;
-            console.log(`Сохраняем текущего администратора с Telegram ID: ${currentTelegramId}`);
-
-            // Гарантируем сохранение в localStorage для последующего использования
-            localStorage.setItem('temp_current_admin', currentTelegramId);
-
-            // Добавляем в список Telegram ID администраторов, если такой список уже есть
-            try {
-                const existingAdminTelegramIds = localStorage.getItem('admin_telegram_ids');
-                const adminIds = existingAdminTelegramIds ? JSON.parse(existingAdminTelegramIds) : [];
-
-                if (!adminIds.includes(currentTelegramId)) {
-                    adminIds.push(currentTelegramId);
-                    localStorage.setItem('admin_telegram_ids', JSON.stringify(adminIds));
-                    console.log(`Добавлен ID ${currentTelegramId} в список admin_telegram_ids`);
-                }
-            } catch (e) {
-                console.error('Ошибка при сохранении admin_telegram_ids:', e);
+        // Удаляем тестовых пользователей из списков друзей у реальных пользователей
+        const realUsers = users.filter(user => !isTestUser(user));
+        realUsers.forEach(user => {
+            if (user.favorites) {
+                user.favorites = user.favorites.filter(
+                    friendId => !testUsers.some(testUser => testUser.id === friendId)
+                );
+                saveUser(user);
             }
-        }
+        });
 
-        // Сохраняем целевого администратора
-        const targetAdminId = '5394381166';
-        adminsTelegram[targetAdminId] = true;
-
-        // Очищаем базу данных, но сохраняем список администраторов
-        const result = await resetApplication(true, adminsTelegram);
-
-        if (result) {
-            console.log('Приложение успешно подготовлено к production режиму!');
-
-            // Очищаем текущего пользователя для принудительной регистрации
-            localStorage.removeItem('current_user_id');
-
-            // Обновляем список пользователей (чистим кэш)
-            localStorage.setItem('users', JSON.stringify([]));
-
-            // Показываем уведомление, если приложение запущено в Telegram
-            if (WebApp.isExpanded) {
-                WebApp.showPopup({
-                    title: 'Готово к работе',
-                    message: 'Приложение очищено и готово к production использованию. Необходимо зарегистрироваться заново.',
-                    buttons: [{ type: 'ok' }]
-                });
-            }
-
-            // Перезагрузка страницы после очистки для сброса всех кэшей
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
-
-            return true;
-        } else {
-            console.error('Произошла ошибка при подготовке приложения к production режиму');
-            return false;
-        }
+        return true;
     } catch (error) {
-        console.error('Произошла ошибка при подготовке приложения:', error);
+        console.error('Failed to remove test users:', error);
         return false;
     }
 };
 
-/**
- * Функция для полного удаления всех данных и выхода из приложения
- * Может использоваться для "выхода из аккаунта"
- */
-export const clearAllAndExit = async () => {
+// Очистка всей системы для производственного использования
+export const prepareForProduction = (): boolean => {
     try {
-        console.log('Полная очистка данных перед выходом...');
-
-        // Полная очистка без сохранения администраторов
-        await resetApplication(false);
-
-        // Очищаем сессию Telegram
-        localStorage.removeItem('telegram_user_id');
-        localStorage.removeItem('telegram_user_data');
-        localStorage.removeItem('current_user_id');
-
-        console.log('Данные очищены, выход из приложения...');
-
-        // Если в Telegram, закрываем WebApp
-        if (WebApp.isExpanded) {
-            // Показываем сообщение перед закрытием
-            WebApp.showPopup({
-                title: 'Выход выполнен',
-                message: 'Все данные очищены. До свидания!',
-                buttons: [
-                    {
-                        type: 'ok',
-                        id: 'close'
-                    }
-                ]
-            }, () => {
-                // После закрытия сообщения закрываем WebApp
-                setTimeout(() => WebApp.close(), 500);
-            });
-        } else {
-            // Если не в Telegram, перезагружаем страницу
-            window.location.reload();
-        }
+        // Удаляем тестовых пользователей
+        removeTestUsers();
 
         return true;
     } catch (error) {
-        console.error('Произошла ошибка при очистке и выходе:', error);
+        console.error('Failed to prepare for production:', error);
         return false;
     }
 };

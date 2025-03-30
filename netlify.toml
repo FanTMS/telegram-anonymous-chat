@@ -1,11 +1,13 @@
 [build]
   command = "npm install && npm run build"
-  publish = "dist"
+  functions = "netlify/functions"
+  publish = "build"  # Или куда компилируется ваш проект
 
 [dev]
   command = "npm run dev"
-  port = 8888
+  port = 5173
   targetPort = 5173
+  functions = "netlify/functions"
 
 [[redirects]]
   from = "/*"
@@ -25,23 +27,9 @@
   NPM_VERSION = "9"
   PRESERVE_SESSION = "true"
 
-# FaunaDB configuration is managed via Netlify environment variables
-# Set these in the Netlify UI:
-# - FAUNA_SECRET - Client-side app secret (limited permissions)
-# - FAUNA_ADMIN_KEY - Admin key used by serverless functions for setup
-# - ADMIN_API_KEY - Secret key for accessing admin functions
-
 [functions]
   directory = "netlify/functions"
 
-# Run FaunaDB setup once at first deploy and then daily at 1:00 AM
-[functions.setup-fauna]
-  schedule = "0 1 * * *"
-
-# Используем только рабочий плагин
-[[plugins]]
-  package = "netlify-plugin-inline-functions-env"
-  
 [[headers]]
   for = "/manifest.json"
   [headers.values]

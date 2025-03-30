@@ -8,10 +8,6 @@ import './index.css'
 import './styles/index.css'
 import './styles/chat.css'  // Добавляем импорт стилей для чата
 import './styles/bot-chat.css'  // Добавляем импорт стилей для чат-бота
-// Импорт модуля для выдачи прав администратора
-import { setupAdmin } from './utils/admin-helper'
-// Импортируем диагностические инструменты
-import './utils/app-status'
 
 // Инициализация WebApp и адаптация цветовой схемы
 try {
@@ -23,9 +19,6 @@ try {
   } else {
     document.documentElement.classList.remove('dark');
   }
-
-  // Запускаем настройку администратора после инициализации WebApp
-  setupAdmin();
 } catch (e) {
   console.warn('Cannot initialize Telegram WebApp:', e);
 
@@ -35,9 +28,6 @@ try {
   } else {
     document.documentElement.classList.remove('dark');
   }
-
-  // Даже при ошибке инициализации WebApp пытаемся настроить администратора
-  setupAdmin();
 }
 
 // Устанавливаем переменные RGB для корректной работы прозрачности

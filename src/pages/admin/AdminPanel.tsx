@@ -420,20 +420,6 @@ export const AdminPanel = () => {
           </Button>
         </div>
 
-        <div className="border-t pt-4 mb-6">
-          <h3 className="font-medium mb-2">Production режим</h3>
-          <p className="text-sm text-gray-600 mb-3">
-            Подготовка приложения к production использованию. Очистка тестовых данных с сохранением прав администратора.
-          </p>
-          <Button
-            onClick={() => navigate('/admin/production')}
-            fullWidth
-            className="bg-green-500 hover:bg-green-600"
-          >
-            <span className="mr-2">🚀</span> Перейти к настройке production
-          </Button>
-        </div>
-
         <div className="border-t pt-4">
           <h3 className="font-medium mb-2">Управление администраторами</h3>
 

@@ -1,4 +1,4 @@
-export const handler = async (event) => {
+exports.handler = async (event) => {
   // Проверяем метод запроса
   if (event.httpMethod !== 'POST') {
     return {

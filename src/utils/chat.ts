@@ -1,539 +1,299 @@
-import { User } from './user'
-import { db } from './database'
-import { storageAPI } from './storage-wrapper'
-import faunadb from 'faunadb'
-import { config, hasFaunaCredentials } from './config'
+import { getItem, setItem, getAllItems, removeItem } from './dbService';
+import { Message } from './moderation';
+import { User, getCurrentUser, getUserById } from './user';
 
-// FaunaDB configuration
-const q = faunadb.query
-let faunaClient: faunadb.Client | null = null
-
-// Initialize FaunaDB client if FAUNA_SECRET is available
-try {
-  if (hasFaunaCredentials()) {
-    faunaClient = new faunadb.Client({
-      secret: config.faunaSecret!,
-      domain: 'db.fauna.com',
-      scheme: 'https'
-    })
-    console.log('FaunaDB client initialized in chat.ts')
-  } else {
-    console.warn('No FaunaDB secret found in chat.ts, falling back to local storage')
-  }
-} catch (error) {
-  console.error('Error initializing FaunaDB client in chat.ts:', error)
-}
-
-// Интерфейс для сообщения
-export interface Message {
-  id: string
-  chatId: string
-  senderId: string
-  text: string
-  timestamp: number
-  isRead: boolean
-  isSystem?: boolean // Флаг для системных сообщений
-}
-
-// Интерфейс для чата с дополнительными полями
+// Интерфейс для чата
 export interface Chat {
-  ended: any
-  id: string
-  participants: string[] // ID участников
-  messages: Message[]
-  isActive: boolean
-  startedAt: number
-  endedAt?: number
-  userId: string
-  partnerId: string
-  createdAt: Date
-  lastActivity: Date
-  isFavorite?: boolean // Добавлено для отметки избранных чатов
-  friendRequestSent?: boolean // Был ли отправлен запрос в друзья
-  friendRequestAccepted?: boolean // Принят ли запрос в друзья
-  gameRequestSent?: boolean // Был ли отправлен запрос на игру
-  gameRequestAccepted?: boolean // Принят ли запрос на игру
-  gameData?: GameResult // Данные текущей или последней игры
+  id: string;
+  participants: string[];
+  lastMessage?: Message;
+  createdAt: number;
+  updatedAt: number;
+  isActive: boolean;
+  isModerated?: boolean;
+  gameData?: any; // Для игровых данных
+  gameRequestAccepted?: boolean; // Для отслеживания принятия запроса на игру
+  title?: string; // Название чата, если оно есть
+  ended?: boolean; // Флаг, указывающий, что чат завершен
 }
 
-// Интерфейс для результатов игры "Камень-ножницы-бумага"
-export type GameChoice = 'rock' | 'paper' | 'scissors'
-export interface GameResult {
-  chatId: string
-  player1Id: string
-  player2Id: string
-  player1Choice?: GameChoice
-  player2Choice?: GameChoice
-  winner?: string // ID победителя, undefined если ничья
-  timestamp: number
-  isCompleted: boolean
-}
-
-// Получить все активные чаты пользователя с поддержкой FaunaDB
-export const getUserChats = async (userId: string): Promise<Chat[]> => {
+// Создание нового чата
+export const createChat = async (participants: string[]): Promise<Chat> => {
   try {
-    // Пытаемся получить чаты из FaunaDB
-    if (faunaClient) {
-      try {
-        // Поиск всех чатов, в которых участвует пользователь
-        const result = await faunaClient.query(
-          q.Map(
-            q.Paginate(
-              q.Match(q.Index('chat_by_participant'), userId),
-              { size: 1000 }
-            ),
-            q.Lambda('chatRef', q.Get(q.Var('chatRef')))
-          )
-        ) as { data?: any[] };
+    const chatId = `chat_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const currentUser = await getCurrentUser();
 
-        if (result && result.data && Array.isArray(result.data)) {
-          const chats = result.data.map((item: any) => item.data) as Chat[];
-          console.log(`Получено ${chats.length} чатов из FaunaDB для пользователя ${userId}`);
+    const now = Date.now();
+    const newChat: Chat = {
+      id: chatId,
+      participants,
+      createdAt: now,
+      updatedAt: now,
+      isActive: true,
+      isModerated: false,
+    };
 
-          // Сохраняем копию в localStorage для offline доступа
-          storageAPI.setItem('chats', JSON.stringify(chats));
+    // Добавляем системное сообщение о создании чата
+    const systemMessage: Message = {
+      id: `msg_${now}_system`,
+      chatId,
+      senderId: 'system',
+      text: 'Чат создан. Теперь вы можете общаться!',
+      timestamp: now,
+      isRead: false,
+      isSystem: true
+    };
 
-          return chats;
-        }
-      } catch (faunaError) {
-        console.error('Ошибка при получении чатов из FaunaDB:', faunaError);
-        // Если произошла ошибка, используем локальное хранилище
+    // Сохраняем чат в базу данных
+    await setItem(`chats.${chatId}`, newChat);
+
+    // Сохраняем первое сообщение
+    await setItem(`messages.${chatId}`, [systemMessage]);
+
+    // Обновляем список чатов каждого пользователя
+    for (const userId of participants) {
+      const userChats = await getUserChats(userId);
+      if (!userChats.includes(chatId)) {
+        userChats.push(chatId);
+        await setItem(`user_chats.${userId}`, userChats);
       }
     }
 
-    // Резервный вариант - получаем из localStorage
-    const chatsData = localStorage.getItem('chats');
-    const chats: Chat[] = chatsData ? JSON.parse(chatsData) : [];
-
-    // Фильтруем чаты, в которых участвует пользователь
-    return chats.filter(chat => chat.participants.includes(userId));
+    return newChat;
   } catch (error) {
-    console.error('Ошибка при получении чатов пользователя:', error);
-    return [];
+    console.error('Ошибка при создании чата:', error);
+    throw error;
   }
-}
+};
 
-// Получить конкретный чат по ID с поддержкой FaunaDB
-// Interface for FaunaDB document structure
-interface FaunaDocument<T> {
-  ref: any;
-  ts: number;
-  data: T;
-}
-
+// Получение чата по идентификатору
 export const getChatById = async (chatId: string): Promise<Chat | null> => {
   try {
-    if (!chatId) {
-      console.error('getChatById: ID чата не указан');
-      return null;
-    }
-
-    // Пытаемся получить чат из FaunaDB
-    if (faunaClient) {
-      try {
-        const result = await faunaClient.query(
-          q.Let(
-            {
-              chatRef: q.Match(q.Index('chat_by_id'), chatId)
-            },
-            q.If(
-              q.Exists(q.Var('chatRef')),
-              q.Get(q.Var('chatRef')),
-              null
-            )
-          )
-        ) as FaunaDocument<Chat> | null;
-
-        if (result !== null) {
-          const chat = result.data;
-          console.log(`Чат с ID ${chatId} найден в FaunaDB`);
-          return chat;
-        }
-      } catch (faunaError) {
-        console.error(`Ошибка при получении чата из FaunaDB (ID: ${chatId}):`, faunaError);
-        // Если произошла ошибка, используем локальное хранилище
-      }
-    }
-
-    // Резервный вариант - получаем из localStorage
-    const chatsData = localStorage.getItem('chats');
-    if (!chatsData) {
-      console.log('Нет сохраненных чатов');
-      return null;
-    }
-
-    const chats: Chat[] = JSON.parse(chatsData);
-
-    // Проверяем, что chats - это массив
-    if (!Array.isArray(chats)) {
-      console.error('Данные чатов повреждены');
-      return null;
-    }
-
-    const chat = chats.find(c => c.id === chatId);
-    if (!chat) {
-      console.log(`Чат с ID ${chatId} не найден`);
-      return null;
-    }
-
-    console.log(`Найден чат: ${chat.id}`);
+    const chat = await getItem(`chats.${chatId}`);
     return chat;
   } catch (error) {
-    console.error('Ошибка при получении чата по ID:', error);
+    console.error(`Ошибка при получении чата с ID ${chatId}:`, error);
     return null;
   }
-}
+};
 
-// Сохранение чата в FaunaDB
-const saveChatToFauna = async (chat: Chat): Promise<boolean> => {
-  if (!faunaClient) return false;
-
+// Отправка сообщения в чат
+export const sendMessage = async (chatId: string, text: string, senderId: string): Promise<Message> => {
   try {
-    await faunaClient.query(
-      q.Let(
-        {
-          chatRef: q.Match(q.Index('chat_by_id'), chat.id)
-        },
-        q.If(
-          q.Exists(q.Var('chatRef')),
-          q.Update(
-            q.Select('ref', q.Get(q.Var('chatRef'))),
-            { data: chat }
-          ),
-          q.Create(q.Collection('chats'), {
-            data: chat
-          })
-        )
-      )
-    );
-
-    console.log(`Чат ${chat.id} успешно сохранен в FaunaDB`);
-    return true;
-  } catch (error) {
-    console.error(`Ошибка при сохранении чата в FaunaDB (ID: ${chat.id}):`, error);
-    return false;
-  }
-}
-
-// Отправить сообщение в чат с поддержкой FaunaDB
-export const sendMessage = async (chatId: string, senderId: string, text: string): Promise<Message | null> => {
-  try {
-    // Получаем чат из БД
     const chat = await getChatById(chatId);
-    if (!chat) return null;
-
-    // Проверяем, активен ли чат
-    if (!chat.isActive) {
-      console.error('Нельзя отправить сообщение в завершенный чат');
-      return null;
+    if (!chat) {
+      throw new Error(`Чат с ID ${chatId} не найден`);
     }
 
     // Создаем новое сообщение
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const now = Date.now();
+
     const newMessage: Message = {
-      id: Date.now().toString(),
+      id: messageId,
       chatId,
       senderId,
       text,
-      timestamp: Date.now(),
+      timestamp: now,
       isRead: false
     };
 
-    // Добавляем сообщение в чат
-    chat.messages.push(newMessage);
-    chat.lastActivity = new Date();
+    // Получаем текущие сообщения чата
+    let messages: Message[] = await getItem(`messages.${chatId}`) || [];
+    messages.push(newMessage);
 
-    // Сохраняем обновленный чат
-    await saveChat(chat);
+    // Обновляем список сообщений
+    await setItem(`messages.${chatId}`, messages);
+
+    // Обновляем информацию о чате
+    chat.lastMessage = newMessage;
+    chat.updatedAt = now;
+    await setItem(`chats.${chatId}`, chat);
 
     return newMessage;
   } catch (error) {
-    console.error('Ошибка при отправке сообщения:', error);
-    return null;
+    console.error(`Ошибка при отправке сообщения в чат ${chatId}:`, error);
+    throw error;
   }
-}
+};
 
-// Общая функция для сохранения чата (FaunaDB + localStorage)
-export const saveChat = async (chat: Chat): Promise<boolean> => {
+// Получение сообщений из чата
+export const getChatMessages = async (chatId: string): Promise<Message[]> => {
   try {
-    // Сохраняем в локальное хранилище
-    const chatsData = localStorage.getItem('chats');
-    let chats: Chat[] = [];
+    const messages = await getItem(`messages.${chatId}`);
+    return messages || [];
+  } catch (error) {
+    console.error(`Ошибка при получении сообщений из чата ${chatId}:`, error);
+    return [];
+  }
+};
 
-    if (chatsData) {
-      chats = JSON.parse(chatsData);
-      const chatIndex = chats.findIndex(c => c.id === chat.id);
+// Отметить сообщения как прочитанные
+export const markMessagesAsRead = async (chatId: string, userId: string): Promise<void> => {
+  try {
+    const messages = await getChatMessages(chatId);
 
-      if (chatIndex !== -1) {
-        chats[chatIndex] = chat;
-      } else {
-        chats.push(chat);
+    let updated = false;
+    for (const message of messages) {
+      // Отмечаем как прочитанные только сообщения, которые НЕ отправлены текущим пользователем
+      if (!message.isRead && message.senderId !== userId) {
+        message.isRead = true;
+        updated = true;
       }
-    } else {
-      chats = [chat];
     }
 
-    localStorage.setItem('chats', JSON.stringify(chats));
-
-    // Сохраняем в FaunaDB если доступна
-    if (faunaClient) {
-      await saveChatToFauna(chat);
+    if (updated) {
+      await setItem(`messages.${chatId}`, messages);
     }
-
-    return true;
   } catch (error) {
-    console.error('Ошибка при сохранении чата:', error);
-    return false;
-  }
-}
-
-// Создание нового чата - улучшенная версия с поддержкой FaunaDB
-export const createChat = async (participants: string[]): Promise<Chat | null> => {
-  try {
-    if (!participants || participants.length < 2) {
-      console.error('Недостаточно участников для создания чата');
-      return null;
-    }
-
-    console.log(`[createChat] Создание чата для участников: ${participants.join(', ')}`);
-
-    // Создаем уникальный ID для чата
-    const chatId = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`[createChat] Создан ID чата: ${chatId}`);
-
-    // Создаем новый чат
-    const newChat: Chat = {
-      id: chatId,
-      participants: [...participants], // Создаем копию массива
-      messages: [],
-      createdAt: new Date(),
-      isActive: true,
-      startedAt: Date.now(),
-      userId: participants[0],
-      partnerId: participants[1],
-      lastActivity: new Date(),
-      ended: undefined
-    };
-
-    // Сохраняем чат
-    await saveChat(newChat);
-
-    console.log(`[createChat] Чат успешно создан и сохранен: ${newChat.id}`);
-    return newChat;
-  } catch (error) {
-    console.error('[createChat] Ошибка при создании чата:', error);
-    return null;
-  }
-}
-
-// Завершить чат с поддержкой FaunaDB
-export const endChat = async (chatId: string): Promise<boolean> => {
-  try {
-    console.log(`Попытка завершения чата ${chatId}`);
-
-    // Получаем чат
-    const chat = await getChatById(chatId);
-    if (!chat) {
-      console.error(`Чат с ID ${chatId} не найден`);
-      return false;
-    }
-
-    // Устанавливаем флаг завершения, но не удаляем чат
-    chat.isActive = false;
-    chat.endedAt = Date.now();
-
-    // Добавляем системное сообщение о завершении чата
-    const systemMessage: Message = {
-      id: `system_${Date.now()}`,
-      chatId,
-      senderId: 'system',
-      text: 'Чат был завершен',
-      timestamp: Date.now(),
-      isRead: true,
-      isSystem: true
-    };
-
-    chat.messages.push(systemMessage);
-
-    // Сохраняем обновленный чат
-    await saveChat(chat);
-
-    console.log(`Чат ${chatId} успешно завершен и сохранен в истории`);
-    return true;
-  } catch (error) {
-    console.error('Ошибка при завершении чата:', error);
-    return false;
+    console.error(`Ошибка при отметке сообщений как прочитанных в чате ${chatId}:`, error);
   }
 };
 
-// Упрощенная функция получения всех чатов пользователя
-export const getAllUserChats = async (userId: string): Promise<Chat[]> => {
-  if (!userId) {
-    console.error('getAllUserChats: ID пользователя не указан');
-    return [];
-  }
-
+// Получение списка чатов пользователя
+export const getUserChats = async (userId: string): Promise<string[]> => {
   try {
-    const chats = await getUserChats(userId);
-    return chats;
+    const userChats = await getItem(`user_chats.${userId}`);
+    return userChats || [];
   } catch (error) {
-    console.error('Error in getAllUserChats:', error);
+    console.error(`Ошибка при получении списка чатов пользователя ${userId}:`, error);
     return [];
   }
 };
 
-// Упрощенные версии функций для активных и завершенных чатов
-export const getActiveUserChats = async (userId: string): Promise<Chat[]> => {
-  try {
-    const allChats = await getAllUserChats(userId);
-    return allChats.filter(chat => Boolean(chat.isActive) === true);
-  } catch (error) {
-    console.error('Error in getActiveUserChats:', error);
-    return [];
-  }
-};
-
-export const getEndedUserChats = async (userId: string): Promise<Chat[]> => {
-  try {
-    const allChats = await getAllUserChats(userId);
-    return allChats.filter(chat => Boolean(chat.isActive) === false);
-  } catch (error) {
-    console.error('Error in getEndedUserChats:', error);
-    return [];
-  }
-};
-
-// Отметить чат как избранный с поддержкой FaunaDB
-export const toggleFavoriteChat = async (chatId: string, isFavorite: boolean): Promise<boolean> => {
-  try {
-    const chat = await getChatById(chatId);
-    if (!chat) return false;
-
-    // Обновляем статус избранного
-    chat.isFavorite = isFavorite;
-
-    // Сохраняем обновленный чат
-    return await saveChat(chat);
-  } catch (error) {
-    console.error('Ошибка при изменении статуса избранного чата:', error);
-    return false;
-  }
-};
-
-// Обновить чат с поддержкой FaunaDB
+// Обновление данных чата
 export const updateChat = async (chatId: string, updates: Partial<Chat>): Promise<boolean> => {
   try {
     const chat = await getChatById(chatId);
-    if (!chat) return false;
+    if (!chat) {
+      return false;
+    }
 
-    // Обновляем чат указанными полями
-    Object.assign(chat, updates);
+    // Объединяем текущие данные с обновлениями
+    const updatedChat = { ...chat, ...updates, updatedAt: Date.now() };
+    await setItem(`chats.${chatId}`, updatedChat);
 
-    // Сохраняем обновленный чат
-    return await saveChat(chat);
+    return true;
   } catch (error) {
-    console.error('Ошибка при обновлении чата:', error);
+    console.error(`Ошибка при обновлении чата ${chatId}:`, error);
     return false;
   }
 };
 
-// Игра "Камень-ножницы-бумага" с поддержкой FaunaDB
-export const playGame = async (
-  chatId: string,
-  player1Id: string,
-  player2Id: string,
-  player1Choice: GameChoice,
-  player2Choice: GameChoice
-): Promise<GameResult> => {
-  // Определяем победителя
-  let winner: string | undefined;
-  if (player1Choice === player2Choice) {
-    winner = undefined; // Ничья
-  } else if (
-    (player1Choice === 'rock' && player2Choice === 'scissors') ||
-    (player1Choice === 'paper' && player2Choice === 'rock') ||
-    (player1Choice === 'scissors' && player2Choice === 'paper')
-  ) {
-    winner = player1Id;
-  } else {
-    winner = player2Id;
-  }
-
-  const result: GameResult = {
-    chatId,
-    player1Id,
-    player2Id,
-    player1Choice,
-    player2Choice,
-    winner,
-    timestamp: Date.now(),
-    isCompleted: true
-  };
-
-  // Сохраняем результат игры
+// Добавление системного сообщения в чат
+export const addSystemMessage = async (chatId: string, text: string): Promise<boolean> => {
   try {
-    // Сохраняем в localStorage
-    const gamesData = localStorage.getItem('games');
-    const games: GameResult[] = gamesData ? JSON.parse(gamesData) : [];
-    games.push(result);
-    localStorage.setItem('games', JSON.stringify(games));
-
-    // Сохраняем в FaunaDB если доступна
-    if (faunaClient) {
-      try {
-        await faunaClient.query(
-          q.Create(q.Collection('games'), {
-            data: result
-          })
-        );
-      } catch (faunaError) {
-        console.error('Ошибка при сохранении результата игры в FaunaDB:', faunaError);
-      }
-    }
-
-    // Обновляем данные игры в чате
     const chat = await getChatById(chatId);
-    if (chat) {
-      chat.gameData = result;
-      await saveChat(chat);
+    if (!chat) {
+      return false;
     }
-  } catch (error) {
-    console.error('Ошибка при сохранении результата игры:', error);
-  }
 
-  return result;
-};
-
-// Получить чаты по ID пользователя
-export const getChatsByUserId = async (userId: string): Promise<Chat[]> => {
-  const allChats = await getUserChats(userId);
-  return allChats.filter(chat => chat.userId === userId || chat.partnerId === userId);
-};
-
-// Добавить системное сообщение в чат с поддержкой FaunaDB
-export const addSystemMessage = async (chatId: string, text: string): Promise<Message | null> => {
-  try {
+    // Создаем системное сообщение
+    const messageId = `msg_${Date.now()}_system`;
+    const now = Date.now();
     const systemMessage: Message = {
-      id: `system_${Date.now()}`,
+      id: messageId,
       chatId,
       senderId: 'system',
       text,
-      timestamp: Date.now(),
-      isRead: true,
+      timestamp: now,
+      isRead: false,
       isSystem: true
     };
 
-    const chat = await getChatById(chatId);
-    if (!chat) return null;
+    // Получаем текущие сообщения и добавляем новое
+    const messages = await getChatMessages(chatId);
+    messages.push(systemMessage);
+    await setItem(`messages.${chatId}`, messages);
 
-    // Добавляем системное сообщение в чат
-    chat.messages.push(systemMessage);
+    // Обновляем информацию о последнем сообщении в чате
+    chat.lastMessage = systemMessage;
+    chat.updatedAt = now;
+    await setItem(`chats.${chatId}`, chat);
 
-    // Сохраняем чат
-    await saveChat(chat);
-
-    return systemMessage;
+    return true;
   } catch (error) {
-    console.error('Ошибка при добавлении системного сообщения:', error);
+    console.error(`Ошибка при добавлении системного сообщения в чат ${chatId}:`, error);
+    return false;
+  }
+};
+
+// Завершение чата
+export const endChat = async (chatId: string): Promise<boolean> => {
+  try {
+    const chat = await getChatById(chatId);
+    if (!chat) {
+      return false;
+    }
+
+    // Отмечаем чат как завершенный
+    chat.ended = true;
+    chat.isActive = false;
+    chat.updatedAt = Date.now();
+
+    await setItem(`chats.${chatId}`, chat);
+
+    // Добавляем системное сообщение о завершении чата
+    await addSystemMessage(chatId, 'Чат был завершен.');
+
+    return true;
+  } catch (error) {
+    console.error(`Ошибка при завершении чата ${chatId}:`, error);
+    return false;
+  }
+};
+
+// Получение непрочитанных сообщений
+export const getUnreadMessagesCount = async (userId: string, chatId?: string): Promise<number> => {
+  try {
+    // Если указан chatId, считаем непрочитанные только в этом чате
+    if (chatId) {
+      const messages = await getChatMessages(chatId);
+      return messages.filter(msg => !msg.isRead && msg.senderId !== userId).length;
+    }
+
+    // Если chatId не указан, считаем все непрочитанные сообщения
+    const userChats = await getUserChats(userId);
+    let totalUnread = 0;
+
+    for (const chat of userChats) {
+      const messages = await getChatMessages(chat);
+      totalUnread += messages.filter(msg => !msg.isRead && msg.senderId !== userId).length;
+    }
+
+    return totalUnread;
+  } catch (error) {
+    console.error(`Ошибка при подсчете непрочитанных сообщений для ${userId}:`, error);
+    return 0;
+  }
+};
+
+// Устанавливаем активный чат для пользователя
+export const setActiveChat = async (userId: string, chatId: string): Promise<void> => {
+  try {
+    await setItem(`active_chat_${userId}`, chatId);
+    // Для совместимости также сохраняем общий ключ активного чата
+    await setItem('active_chat_id', chatId);
+    console.log(`[setActiveChat] Активный чат успешно установлен для ${userId}`);
+  } catch (error) {
+    console.error('[setActiveChat] Ошибка при установке активного чата:', error);
+  }
+};
+
+// Получить активный чат пользователя
+export const getActiveChat = async (userId: string): Promise<string | null> => {
+  try {
+    const chatId = await getItem(`active_chat_${userId}`);
+    if (!chatId) return null;
+    // Проверяем существование чата
+    const chat = await getChatById(chatId);
+    if (!chat) {
+      await removeItem(`active_chat_${userId}`);
+      return null;
+    }
+    return chatId;
+  } catch (error) {
+    console.error('[getActiveChat] Ошибка при получении активного чата:', error);
     return null;
   }
 };

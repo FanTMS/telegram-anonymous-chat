@@ -14,7 +14,6 @@ import { GroupChats } from './pages/GroupChats'
 import { GroupChatView } from './pages/GroupChatView'
 import { AdminGuard } from './components/AdminGuard'
 import { StoreManagement } from './pages/admin/StoreManagement'
-import { Production } from './pages/admin/Production' // Импорт страницы Production
 import { BotChat } from './pages/BotChat'
 import { Home } from './pages/Home'
 import { UserSettings } from './pages/UserSettings'
@@ -68,7 +67,6 @@ export const routes: RouteObject[] = [
       { path: 'groups', element: <AuthGuard><GroupsPage /></AuthGuard> },
       { path: 'group/:groupId', element: <AuthGuard><GroupChatView /></AuthGuard> },
       { path: 'admin/store-management', element: <AdminGuard><StoreManagement /></AdminGuard> },
-      { path: 'admin/production', element: <AdminGuard><Production /></AdminGuard> }, // Новый маршрут для страницы Production
       { path: 'bot-chat', element: <AuthGuard><BotChat /></AuthGuard> },
       { path: 'reset-database', element: <DatabaseReset /> },
       { path: 'verify-telegram-mock', element: <TelegramVerifyMock /> },
