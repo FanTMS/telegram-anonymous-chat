@@ -1,6 +1,28 @@
 import { db, telegramApi } from './database'
 import { MatchingStrategy } from './recommendations'
 import { storageAPI } from './storage-wrapper'
+import faunadb from 'faunadb'
+import { config, hasFaunaCredentials } from './config'
+
+// FaunaDB configuration
+const q = faunadb.query
+let faunaClient: faunadb.Client | null = null
+
+// Initialize FaunaDB client if FAUNA_SECRET is available
+try {
+  if (hasFaunaCredentials()) {
+    faunaClient = new faunadb.Client({
+      secret: config.faunaSecret!,
+      domain: 'db.fauna.com',
+      scheme: 'https',
+    })
+    console.log('FaunaDB client initialized in user.ts')
+  } else {
+    console.warn('No FaunaDB secret found in user.ts, falling back to local storage')
+  }
+} catch (error) {
+  console.error('Error initializing FaunaDB client in user.ts:', error)
+}
 
 // Тип для данных Telegram
 export interface TelegramData {
@@ -83,27 +105,31 @@ const CURRENT_USER_KEY = 'current_user_id'
 const ADMINS_KEY = 'admin_users'
 
 // Инициализация интеграции с Telegram при загрузке модуля
-telegramApi.initialize().then(success => {
+telegramApi.initialize().then(async success => {
   if (success) {
     console.log('Telegram API initialized successfully')
 
     // Если пользователь авторизован через Telegram, проверяем и создаем профиль
     const telegramId = telegramApi.getUserId()
     if (telegramId) {
-      const existingUser = getUserByTelegramId(telegramId)
+      try {
+        const existingUser = await getUserByTelegramId(telegramId)
 
-      if (!existingUser) {
-        // Создаем нового пользователя из данных Telegram
-        createUserFromTelegram(telegramId)
-          .then(user => console.log('Created new user from Telegram data'))
-          .catch(err => console.error('Failed to create user from Telegram data:', err))
-      } else {
-        // Обновляем текущего пользователя и его lastActive
-        setCurrentUser(existingUser.id)
-        existingUser.lastActive = Date.now()
-        saveUser(existingUser)
-          .then(() => console.log('Updated existing user session'))
-          .catch(err => console.error('Failed to update user session:', err))
+        if (!existingUser) {
+          // Создаем нового пользователя из данных Telegram
+          createUserFromTelegram(telegramId)
+            .then(user => console.log('Created new user from Telegram data'))
+            .catch(err => console.error('Failed to create user from Telegram data:', err))
+        } else {
+          // Обновляем текущего пользователя и его lastActive
+          setCurrentUser(existingUser.id)
+          existingUser.lastActive = Date.now()
+          await saveUser(existingUser)
+            .then(() => console.log('Updated existing user session'))
+            .catch(err => console.error('Failed to update user session:', err))
+        }
+      } catch (error) {
+        console.error('Error during Telegram user initialization:', error)
       }
     }
   } else {
@@ -117,9 +143,35 @@ telegramApi.initialize().then(success => {
   }
 })
 
-// Получение списка всех пользователей
-export const getUsers = (): User[] => {
+// Получение списка всех пользователей с FaunaDB поддержкой
+export const getUsers = async (): Promise<User[]> => {
   try {
+    // Попытка получить пользователей из FaunaDB
+    if (faunaClient) {
+      try {
+        const result: any = await faunaClient.query(
+          q.Map(
+            q.Paginate(q.Documents(q.Collection('users')), { size: 1000 }),
+            q.Lambda('ref', q.Get(q.Var('ref')))
+          )
+        );
+
+        if (result && result.data && Array.isArray(result.data)) {
+          const users = result.data.map((doc: any) => doc.data);
+          console.log('Получены пользователи из FaunaDB:', users.length);
+
+          // Сохраняем копию в localStorage
+          storageAPI.setItem('users', JSON.stringify(users));
+
+          return users as User[];
+        }
+      } catch (faunaError) {
+        console.error('Ошибка при получении пользователей из FaunaDB:', faunaError);
+        // Если произошла ошибка, используем локальное хранилище
+      }
+    }
+
+    // Резервный вариант: используем localStorage
     const usersData = storageAPI.getItem('users')
     if (!usersData) {
       return []
@@ -131,8 +183,8 @@ export const getUsers = (): User[] => {
   }
 }
 
-// Получение пользователя по ID - улучшенная версия с дополнительными проверками
-export const getUserById = (id: string): User | null => {
+// Получение пользователя по ID - улучшенная версия с FaunaDB поддержкой
+export const getUserById = async (id: string): Promise<User | null> => {
   try {
     console.log(`Поиск пользователя с ID ${id}`);
     if (!id) {
@@ -140,35 +192,72 @@ export const getUserById = (id: string): User | null => {
       return null;
     }
 
-    const usersData = storageAPI.getItem('users');
-    if (!usersData) {
-      console.log('Список пользователей пуст');
-      return null;
-    }
+    // Попытка получить пользователя из FaunaDB
+    if (faunaClient) {
+      try {
+        const result: any = await faunaClient.query(
+          q.Let(
+            {
+              userRef: q.Match(q.Index('user_by_id'), id)
+            },
+            q.If(
+              q.Exists(q.Var('userRef')),
+              q.Get(q.Var('userRef')),
+              null
+            )
+          )
+        );
 
-    let users: User[];
-    try {
-      users = JSON.parse(usersData);
+        if (result !== null) {
+          const user = result.data as User;
+          console.log(`Пользователь найден в FaunaDB: ${user.name} (${user.id})`);
 
-      if (!Array.isArray(users)) {
-        console.error('Данные пользователей повреждены (не массив)');
-        return null;
+          // Сохраняем в localStorage для кэширования
+          const key = `${USER_KEY_PREFIX}${id}`;
+          storageAPI.setItem(key, JSON.stringify(user));
+
+          return user;
+        }
+      } catch (faunaError) {
+        console.error(`Ошибка при получении пользователя из FaunaDB (ID: ${id}):`, faunaError);
+        // Если произошла ошибка, используем локальное хранилище
       }
-    } catch (e) {
-      console.error('Ошибка при парсинге данных пользователей', e);
-      return null;
     }
 
-    // Ищем пользователя по ID
-    const user = users.find(u => u && u.id === id);
+    // Резервный вариант: используем localStorage
+    const key = `${USER_KEY_PREFIX}${id}`;
+    const userData = storageAPI.getItem(key);
 
-    if (!user) {
-      console.log(`Пользователь с ID ${id} не найден`);
-      return null;
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        console.log(`Пользователь найден в localStorage: ${user.name} (${user.id})`);
+        return user;
+      } catch (parseError) {
+        console.error('Ошибка при парсинге данных пользователя:', parseError);
+      }
     }
 
-    console.log(`Пользователь найден: ${user.name} (${user.id})`);
-    return user;
+    // Если пользователь не найден в индивидуальном хранилище, ищем в общем списке
+    const usersData = storageAPI.getItem('users');
+    if (usersData) {
+      try {
+        const users = JSON.parse(usersData);
+        if (Array.isArray(users)) {
+          // Ищем пользователя по ID
+          const user = users.find(u => u && u.id === id);
+          if (user) {
+            console.log(`Пользователь найден в общем списке: ${user.name} (${user.id})`);
+            return user;
+          }
+        }
+      } catch (e) {
+        console.error('Ошибка при парсинге списка пользователей', e);
+      }
+    }
+
+    console.log(`Пользователь с ID ${id} не найден`);
+    return null;
   } catch (error) {
     console.error(`Ошибка при получении пользователя по ID (${id}):`, error);
     return null;
@@ -212,12 +301,48 @@ export const getUserByIdSync = (userId: string): User | null => {
   }
 }
 
-// Функция поиска пользователя по Telegram ID с улучшенной поддержкой многопользовательского режима
-export const getUserByTelegramId = (telegramId: string): User | null => {
+// Функция поиска пользователя по Telegram ID с поддержкой FaunaDB
+export const getUserByTelegramId = async (telegramId: string): Promise<User | null> => {
   try {
     if (!telegramId) {
       console.warn('getUserByTelegramId: telegramId не предоставлен');
       return null;
+    }
+
+    // Пытаемся найти пользователя в FaunaDB
+    if (faunaClient) {
+      try {
+        const result: any = await faunaClient.query(
+          q.Let(
+            {
+              userRef: q.Match(q.Index('user_by_telegram_id'), telegramId)
+            },
+            q.If(
+              q.Exists(q.Var('userRef')),
+              q.Get(q.Var('userRef')),
+              null
+            )
+          )
+        );
+
+        if (result !== null) {
+          const user = result.data as User;
+          console.log(`Пользователь с Telegram ID ${telegramId} найден в FaunaDB: ${user.name} (ID: ${user.id})`);
+
+          // Сохраняем в localStorage для кэширования
+          const userKey = `${USER_KEY_PREFIX}${user.id}`;
+          storageAPI.setItem(userKey, JSON.stringify(user));
+
+          // Создаем ссылку для быстрого поиска
+          const telegramUserKey = `telegram_user_${telegramId}`;
+          storageAPI.setItem(telegramUserKey, JSON.stringify({ userId: user.id, timestamp: Date.now() }));
+
+          return user;
+        }
+      } catch (faunaError) {
+        console.error(`Ошибка при поиске пользователя в FaunaDB по Telegram ID (${telegramId}):`, faunaError);
+        // Если произошла ошибка, используем локальное хранилище
+      }
     }
 
     // Сначала пробуем найти пользователя в индивидуальных записях пользователей (более быстрый поиск)
@@ -241,7 +366,7 @@ export const getUserByTelegramId = (telegramId: string): User | null => {
     }
 
     // Если не нашли в индивидуальных записях, ищем в общем списке пользователей
-    const users = getUsers();
+    const users = await getUsers();
 
     // Ищем пользователя с заданным Telegram ID
     const user = users.find(user =>
@@ -271,7 +396,7 @@ export const getUserByTelegramId = (telegramId: string): User | null => {
   }
 }
 
-// Сохранение пользователя
+// Сохранение пользователя с поддержкой FaunaDB
 export const saveUser = async (user: User): Promise<boolean> => {
   try {
     // Обновляем время последней активности
@@ -281,8 +406,35 @@ export const saveUser = async (user: User): Promise<boolean> => {
     // Сохраняем пользователя в хранилище напрямую для надежности
     storageAPI.setItem(key, JSON.stringify(user))
 
+    // Сохраняем в FaunaDB, если клиент инициализирован
+    if (faunaClient) {
+      try {
+        await faunaClient.query(
+          q.Let(
+            {
+              userRef: q.Match(q.Index('user_by_id'), user.id)
+            },
+            q.If(
+              q.Exists(q.Var('userRef')),
+              q.Update(
+                q.Select('ref', q.Get(q.Var('userRef'))),
+                { data: user }
+              ),
+              q.Create(q.Collection('users'), {
+                data: user
+              })
+            )
+          )
+        );
+        console.log(`Пользователь ${user.name} (${user.id}) сохранен в FaunaDB`);
+      } catch (faunaError) {
+        console.error('Ошибка при сохранении пользователя в FaunaDB:', faunaError);
+        // Продолжаем выполнение, так как данные уже сохранены в localStorage
+      }
+    }
+
     // Если используется db, также сохраняем там
-    const result = await db.saveData(key, user)
+    await db.saveData(key, user)
 
     // Если это текущий пользователь, обновляем ссылку на него
     const currentUserId = getCurrentUserId()
@@ -290,10 +442,31 @@ export const saveUser = async (user: User): Promise<boolean> => {
       setCurrentUser(user.id)
     }
 
-    return result
+    // Обновляем пользователя в общем списке
+    updateUserInUsersList(user);
+
+    return true;
   } catch (error) {
     console.error('Failed to save user', error)
     return false
+  }
+}
+
+// Обновление пользователя в общем списке пользователей
+const updateUserInUsersList = async (user: User): Promise<void> => {
+  try {
+    const users = await getUsers();
+    const userIndex = users.findIndex(u => u.id === user.id);
+
+    if (userIndex !== -1) {
+      users[userIndex] = user;
+    } else {
+      users.push(user);
+    }
+
+    storageAPI.setItem('users', JSON.stringify(users));
+  } catch (error) {
+    console.error('Ошибка при обновлении пользователя в общем списке:', error);
   }
 }
 
@@ -356,7 +529,7 @@ export const createUserFromTelegram = async (telegramId: string, preferredName?:
     }
 
     // Проверяем, существует ли уже пользователь с таким Telegram ID
-    const existingUser = getUserByTelegramId(telegramId);
+    const existingUser = await getUserByTelegramId(telegramId);
 
     if (existingUser) {
       console.log(`Пользователь с Telegram ID ${telegramId} уже существует, обновляем последнюю активность`);
@@ -510,15 +683,15 @@ export const createDemoUser = (customName?: string): User => {
 }
 
 // Создание администратора из данных Telegram
-export const createAdminUserFromTelegram = (telegramId: string, adminName: string): User | null => {
+export const createAdminUserFromTelegram = async (telegramId: string, adminName: string): Promise<User | null> => {
   try {
     // Проверяем, существует ли пользователь
-    const existingUser = getUserByTelegramId(telegramId)
+    const existingUser = await getUserByTelegramId(telegramId)
 
     if (existingUser) {
       // Если пользователь существует, делаем его администратором
       existingUser.isAdmin = true
-      saveUser(existingUser)
+      await saveUser(existingUser)
 
       // Добавляем в список администраторов
       addAdmin(telegramId)
@@ -551,7 +724,7 @@ export const createAdminUserFromTelegram = (telegramId: string, adminName: strin
         }
       }
 
-      saveUser(adminUser)
+      await saveUser(adminUser)
 
       // Добавляем в список администраторов
       addAdmin(telegramId)
@@ -590,13 +763,13 @@ export const getAdmins = (): string[] => {
 }
 
 // Установка статуса администратора по Telegram ID
-export const setAdminByTelegramId = (telegramId: string): boolean => {
+export const setAdminByTelegramId = async (telegramId: string): Promise<boolean> => {
   try {
-    const user = getUserByTelegramId(telegramId)
+    const user = await getUserByTelegramId(telegramId)
 
     if (user) {
       user.isAdmin = true
-      saveUser(user)
+      await saveUser(user)
 
       // Добавляем в список администраторов
       addAdmin(telegramId)

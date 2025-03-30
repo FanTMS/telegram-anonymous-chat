@@ -42,7 +42,7 @@ export const getTelegramUser = (): TelegramUser | null => {
 }
 
 // Создание или обновление пользователя на основе данных из Telegram
-export const initializeUserFromTelegram = (): User | null => {
+export const initializeUserFromTelegram = async (): Promise<User | null> => {
   try {
     // Получаем данные пользователя из Telegram
     const telegramUser = getTelegramUser()
@@ -55,7 +55,7 @@ export const initializeUserFromTelegram = (): User | null => {
     console.log(`Инициализация пользователя из Telegram с ID: ${telegramId}`);
 
     // Ищем пользователя по Telegram ID в локальном хранилище более эффективно
-    const existingUser = getUserByTelegramId(telegramId);
+    const existingUser = await getUserByTelegramId(telegramId);
 
     if (existingUser) {
       // Пользователь существует, обновляем время последней активности

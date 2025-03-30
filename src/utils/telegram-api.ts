@@ -53,10 +53,10 @@ export const getTelegramUserData = (): TelegramUserData | null => {
 }
 
 // Сохранить данные пользователя из Telegram и объединить с существующими данными
-export const saveTelegramUserData = (telegramUserData: TelegramUserData): User | null => {
+export const saveTelegramUserData = async (telegramUserData: TelegramUserData): Promise<User | null> => {
   try {
     // Сначала проверяем, есть ли пользователь с таким Telegram ID
-    const existingUserByTelegramId = getUserByTelegramId(telegramUserData.id)
+    const existingUserByTelegramId = await getUserByTelegramId(telegramUserData.id)
 
     // Если есть пользователь с таким Telegram ID, используем его
     if (existingUserByTelegramId) {
@@ -83,10 +83,10 @@ export const saveTelegramUserData = (telegramUserData: TelegramUserData): User |
       }
 
       // Сохраняем обновленного пользователя
-      saveUser(existingUserByTelegramId)
-
+      await saveUser(existingUserByTelegramId)
+  
       // Устанавливаем как текущего пользователя
-      setCurrentUser(existingUserByTelegramId.id)
+      await setCurrentUser(existingUserByTelegramId.id)
 
       // Показываем уведомление об успешной авторизации
       WebApp.showPopup({
@@ -99,7 +99,7 @@ export const saveTelegramUserData = (telegramUserData: TelegramUserData): User |
     }
 
     // Получаем текущего пользователя, если он есть
-    let currentUser = getCurrentUser()
+    let currentUser = await getCurrentUser()
 
     // Если пользователь не существует, создаем нового
     if (!currentUser) {
@@ -151,7 +151,7 @@ export const saveTelegramUserData = (telegramUserData: TelegramUserData): User |
     }
 
     // Сохраняем обновленного пользователя
-    saveUser(currentUser)
+    await saveUser(currentUser)
 
     // Показываем уведомление об успешной авторизации
     WebApp.showPopup({
@@ -187,13 +187,13 @@ export const getMockTelegramAuthUrl = (): string => {
 }
 
 // Начать процесс авторизации через Telegram
-export const startTelegramAuth = (): void => {
+export const startTelegramAuth = async (): Promise<void> => {
   // Если приложение запущено в Telegram WebApp
   if (isTelegramWebApp()) {
     const telegramUserData = getTelegramUserData()
 
     if (telegramUserData) {
-      saveTelegramUserData(telegramUserData)
+      await saveTelegramUserData(telegramUserData)
     } else {
       WebApp.showPopup({
         title: 'Ошибка авторизации',
@@ -257,7 +257,7 @@ export const initializeUserByTelegramId = async (telegramId: string): Promise<Us
     console.log(`Инициализация пользователя с Telegram ID: ${telegramId}`);
 
     // Проверяем, существует ли пользователь с таким Telegram ID
-    const existingUser = getUserByTelegramId(telegramId);
+    const existingUser = await getUserByTelegramId(telegramId);
 
     if (existingUser) {
       console.log(`Найден существующий пользователь: ${existingUser.name} (ID: ${existingUser.id})`);

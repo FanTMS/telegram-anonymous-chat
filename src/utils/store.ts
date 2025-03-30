@@ -1,7 +1,28 @@
 import WebApp from '@twa-dev/sdk'
 import { getCurrentUser, saveUser } from './user'
 import { storageAPI } from './storage-wrapper'
+import faunadb from 'faunadb'
 
+// FaunaDB configuration
+const q = faunadb.query
+let faunaClient: faunadb.Client | null = null
+
+// Initialize FaunaDB client if FAUNA_SECRET is available
+try {
+  const faunaSecret = process.env.FAUNA_SECRET || import.meta.env?.VITE_FAUNA_SECRET
+  if (faunaSecret) {
+    faunaClient = new faunadb.Client({
+      secret: faunaSecret,
+      domain: 'db.fauna.com',
+      scheme: 'https',
+    })
+    console.log('FaunaDB client initialized')
+  } else {
+    console.warn('No FaunaDB secret found, falling back to local storage')
+  }
+} catch (error) {
+  console.error('Error initializing FaunaDB client:', error)
+}
 
 // Типы для магазина
 export interface StoreItem {
@@ -23,26 +44,33 @@ export interface AvatarItem extends StoreItem {
   bgColor?: string;
 }
 
-export interface StickerPackItem extends StoreItem {
-  type: 'sticker_pack';
-  stickers: {
-    id: string;
-    url: string;
-  }[];
+// Interface for a sticker in a sticker pack
+export interface Sticker {
+  id: string;
+  url: string;
 }
 
+// Interface for sticker pack items
+export interface StickerPackItem extends StoreItem {
+  type: 'sticker_pack';
+  stickers: Sticker[];
+}
+
+// Interface for emoji pack items
 export interface EmojiPackItem extends StoreItem {
   type: 'emoji_pack';
   emojis: string[];
 }
 
+// Interface for premium features
 export interface PremiumFeatureItem extends StoreItem {
   type: 'premium_feature';
-  featureId: 'priority_search' | 'extended_profile' | 'advanced_filters' | 'ad_free' | 'custom_themes' | 'custom_feature';
-  duration: number; // длительность в днях
+  featureId: string;
+  duration: number; // Duration in days
   benefits: string[];
 }
 
+// Union type for all store items
 export type StoreItemUnion = AvatarItem | StickerPackItem | EmojiPackItem | PremiumFeatureItem;
 
 // Интерфейс для покупки
@@ -378,21 +406,82 @@ export const removeStoreItem = (itemId: string): void => {
   }
 };
 
-// Сохранение списка товаров в localStorage
-export const saveStoreItems = (): void => {
+// Сохранение списка товаров в localStorage и FaunaDB
+export const saveStoreItems = async (): Promise<void> => {
   try {
+    // Всегда сохраняем в localStorage для офлайн режима
     localStorage.setItem('store_items', JSON.stringify(allStoreItems));
+
+    // Если FaunaDB клиент инициализирован, сохраняем и там
+    if (faunaClient) {
+      try {
+        await faunaClient.query(
+          q.Let(
+            {
+              itemsRef: q.Match(q.Index('store_items_by_type'), 'store_items')
+            },
+            q.If(
+              q.Exists(q.Var('itemsRef')),
+              q.Update(q.Select('ref', q.Get(q.Var('itemsRef'))), {
+                data: { items: allStoreItems }
+              }),
+              q.Create(q.Collection('store_data'), {
+                data: {
+                  type: 'store_items',
+                  items: allStoreItems
+                }
+              })
+            )
+          )
+        );
+        console.log('Товары магазина сохранены в FaunaDB');
+      } catch (faunaError) {
+        console.error('Ошибка при сохранении товаров в FaunaDB:', faunaError);
+        // Продолжаем выполнение, так как у нас есть резервная копия в localStorage
+      }
+    }
   } catch (error) {
     console.error('Ошибка при сохранении списка товаров:', error);
   }
 };
 
-// Загрузка списка товаров из localStorage
-export const loadStoreItems = (): void => {
+// Загрузка списка товаров из FaunaDB с резервным вариантом из localStorage
+export const loadStoreItems = async (): Promise<void> => {
   try {
+    // Если FaunaDB клиент инициализирован, пытаемся загрузить оттуда
+    if (faunaClient) {
+      try {
+        const result = await faunaClient.query(
+          q.Let(
+            {
+              itemsRef: q.Match(q.Index('store_items_by_type'), 'store_items')
+            },
+            q.If(
+              q.Exists(q.Var('itemsRef')),
+              q.Select(['data', 'items'], q.Get(q.Var('itemsRef'))),
+              []
+            )
+          )
+        );
+
+        if (result && Array.isArray(result) && result.length > 0) {
+          allStoreItems = result;
+          console.log('Товары магазина загружены из FaunaDB');
+          // Обновляем localStorage для синхронизации
+          localStorage.setItem('store_items', JSON.stringify(allStoreItems));
+          return;
+        }
+      } catch (faunaError) {
+        console.error('Ошибка при загрузке товаров из FaunaDB:', faunaError);
+        // Продолжаем выполнение и пытаемся загрузить из localStorage
+      }
+    }
+
+    // Резервный вариант: загружаем из localStorage
     const savedItems = localStorage.getItem('store_items');
     if (savedItems) {
       allStoreItems = JSON.parse(savedItems);
+      console.log('Товары магазина загружены из localStorage');
     }
   } catch (error) {
     console.error('Ошибка при загрузке списка товаров:', error);
@@ -419,9 +508,38 @@ export const initializeStore = (): void => {
 // Инициализируем магазин при импорте модуля
 initializeStore();
 
-// Получение баланса пользователя
-export const getUserCurrency = (userId: string): Currency => {
+// Получение баланса пользователя из FaunaDB с резервным вариантом из localStorage
+export const getUserCurrency = async (userId: string): Promise<Currency> => {
   try {
+    // Пытаемся получить баланс из FaunaDB, если клиент инициализирован
+    if (faunaClient) {
+      try {
+        const result = await faunaClient.query(
+          q.Let(
+            {
+              userCurrencyRef: q.Match(q.Index('user_currency_by_id'), userId)
+            },
+            q.If(
+              q.Exists(q.Var('userCurrencyRef')),
+              q.Select(['data', 'currency'], q.Get(q.Var('userCurrencyRef'))),
+              { balance: 0, transactions: [] }
+            )
+          )
+        );
+
+        if (result) {
+          console.log(`Баланс пользователя ${userId} загружен из FaunaDB`);
+          // Обновляем localStorage для синхронизации
+          localStorage.setItem(`currency_${userId}`, JSON.stringify(result));
+          return result as Currency;
+        }
+      } catch (faunaError) {
+        console.error('Ошибка при получении баланса из FaunaDB:', faunaError);
+        // Продолжаем выполнение и пытаемся загрузить из localStorage
+      }
+    }
+
+    // Резервный вариант: загружаем из localStorage
     const key = `currency_${userId}`;
     const currencyData = localStorage.getItem(key);
 
@@ -443,20 +561,49 @@ export const getUserCurrency = (userId: string): Currency => {
   }
 };
 
-// Сохранение баланса пользователя
-export const saveCurrency = (userId: string, currency: Currency): void => {
+// Сохранение баланса пользователя в FaunaDB и localStorage
+export const saveCurrency = async (userId: string, currency: Currency): Promise<void> => {
   try {
+    // Всегда сохраняем в localStorage для офлайн режима
     localStorage.setItem(`currency_${userId}`, JSON.stringify(currency));
+
+    // Сохраняем в FaunaDB, если клиент инициализирован
+    if (faunaClient) {
+      try {
+        await faunaClient.query(
+          q.Let(
+            {
+              userCurrencyRef: q.Match(q.Index('user_currency_by_id'), userId)
+            },
+            q.If(
+              q.Exists(q.Var('userCurrencyRef')),
+              q.Update(q.Select('ref', q.Get(q.Var('userCurrencyRef'))), {
+                data: { currency }
+              }),
+              q.Create(q.Collection('user_currency'), {
+                data: {
+                  userId,
+                  currency
+                }
+              })
+            )
+          )
+        );
+        console.log(`Баланс пользователя ${userId} сохранен в FaunaDB`);
+      } catch (faunaError) {
+        console.error('Ошибка при сохранении баланса в FaunaDB:', faunaError);
+        // Продолжаем выполнение, так как у нас есть резервная копия в localStorage
+      }
+    }
   } catch (error) {
     console.error('Ошибка при сохранении баланса:', error);
   }
 };
 
-// Добавление валюты пользователю
-export const addCurrency = (userId: string, amount: number, description = 'Изменено администратором'): boolean => {
+// Добавление валюты пользователю с поддержкой FaunaDB
+export const addCurrency = async (userId: string, amount: number, description = 'Изменено администратором'): Promise<boolean> => {
   try {
-    const key = `currency_${userId}`;
-    const currency: Currency = getUserCurrency(userId);
+    const currency = await getUserCurrency(userId);
 
     // Добавляем или отнимаем указанную сумму
     currency.balance += amount;
@@ -471,19 +618,19 @@ export const addCurrency = (userId: string, amount: number, description = 'Из�
     currency.transactions.push(transaction);
 
     // Сохраняем обновленные данные
-    localStorage.setItem(key, JSON.stringify(currency));
+    await saveCurrency(userId, currency);
 
     return true;
   } catch (error) {
     console.error('Ошибка при обновлении баланса:', error);
     return false;
   }
-}
+};
 
-// Списание валюты у пользователя
-export const deductCurrency = (userId: string, amount: number, description: string): boolean => {
+// Списание валюты у пользователя с поддержкой FaunaDB
+export const deductCurrency = async (userId: string, amount: number, description: string): Promise<boolean> => {
   try {
-    const currency = getUserCurrency(userId);
+    const currency = await getUserCurrency(userId);
 
     // Проверяем достаточно ли средств
     if (currency.balance < amount) {
@@ -493,7 +640,7 @@ export const deductCurrency = (userId: string, amount: number, description: stri
     // Создаем новую транзакцию
     const transaction: Transaction = {
       id: `tr_${Date.now()}`,
-      amount,
+      amount: -amount, // Отрицательная сумма для списания
       description,
       date: Date.now()
     };
@@ -503,7 +650,7 @@ export const deductCurrency = (userId: string, amount: number, description: stri
     currency.transactions.push(transaction);
 
     // Сохраняем обновленные данные
-    saveCurrency(userId, currency);
+    await saveCurrency(userId, currency);
 
     return true;
   } catch (error) {
@@ -512,9 +659,38 @@ export const deductCurrency = (userId: string, amount: number, description: stri
   }
 };
 
-// Получение покупок пользователя
-export const getUserPurchases = (userId: string): Purchase[] => {
+// Получение покупок пользователя из FaunaDB или localStorage
+export const getUserPurchases = async (userId: string): Promise<Purchase[]> => {
   try {
+    // Пытаемся получить покупки из FaunaDB, если клиент инициализирован
+    if (faunaClient) {
+      try {
+        const result = await faunaClient.query(
+          q.Let(
+            {
+              userPurchasesRef: q.Match(q.Index('user_purchases_by_id'), userId)
+            },
+            q.If(
+              q.Exists(q.Var('userPurchasesRef')),
+              q.Select(['data', 'purchases'], q.Get(q.Var('userPurchasesRef'))),
+              []
+            )
+          )
+        );
+
+        if (result && Array.isArray(result)) {
+          console.log(`Покупки пользователя ${userId} загружены из FaunaDB`);
+          // Обновляем localStorage для синхронизации
+          localStorage.setItem(`purchases_${userId}`, JSON.stringify(result));
+          return result as Purchase[];
+        }
+      } catch (faunaError) {
+        console.error('Ошибка при получении покупок из FaunaDB:', faunaError);
+        // Продолжаем выполнение и пытаемся загрузить из localStorage
+      }
+    }
+
+    // Резервный вариант: загружаем из localStorage
     const purchasesData = localStorage.getItem(`purchases_${userId}`);
     return purchasesData ? JSON.parse(purchasesData) : [];
   } catch (error) {
@@ -523,19 +699,49 @@ export const getUserPurchases = (userId: string): Purchase[] => {
   }
 };
 
-// Сохранение покупок пользователя
-export const savePurchases = (userId: string, purchases: Purchase[]): void => {
+// Сохранение покупок пользователя в FaunaDB и localStorage
+export const savePurchases = async (userId: string, purchases: Purchase[]): Promise<void> => {
   try {
+    // Всегда сохраняем в localStorage для офлайн режима
     localStorage.setItem(`purchases_${userId}`, JSON.stringify(purchases));
+
+    // Сохраняем в FaunaDB, если клиент инициализирован
+    if (faunaClient) {
+      try {
+        await faunaClient.query(
+          q.Let(
+            {
+              userPurchasesRef: q.Match(q.Index('user_purchases_by_id'), userId)
+            },
+            q.If(
+              q.Exists(q.Var('userPurchasesRef')),
+              q.Update(q.Select('ref', q.Get(q.Var('userPurchasesRef'))), {
+                data: { purchases }
+              }),
+              q.Create(q.Collection('user_purchases'), {
+                data: {
+                  userId,
+                  purchases
+                }
+              })
+            )
+          )
+        );
+        console.log(`Покупки пользователя ${userId} сохранены в FaunaDB`);
+      } catch (faunaError) {
+        console.error('Ошибка при сохранении покупок в FaunaDB:', faunaError);
+        // Продолжаем выполнение, так как у нас есть резервная копия в localStorage
+      }
+    }
   } catch (error) {
     console.error('Ошибка при сохранении покупок:', error);
   }
 };
 
 // Проверка активности премиум-функции
-export const isPremiumFeatureActive = (userId: string, featureId: string): boolean => {
+export const isPremiumFeatureActive = async (userId: string, featureId: string): Promise<boolean> => {
   try {
-    const purchases = getUserPurchases(userId);
+    const purchases = await getUserPurchases(userId);
     const now = Date.now();
 
     // Ищем активную подписку на премиум-функцию
@@ -551,7 +757,7 @@ export const isPremiumFeatureActive = (userId: string, featureId: string): boole
 };
 
 // Покупка товара
-export const purchaseItem = (userId: string, itemId: string): boolean => {
+export const purchaseItem = async (userId: string, itemId: string): Promise<boolean> => {
   try {
     // Получаем данные пользователя, валюту и покупки
     const user = getCurrentUser();
@@ -567,7 +773,7 @@ export const purchaseItem = (userId: string, itemId: string): boolean => {
       : item.price;
 
     // Списываем валюту
-    const success = deductCurrency(userId, finalPrice, `Покупка: ${item.name}`);
+    const success = await deductCurrency(userId, finalPrice, `Покупка: ${item.name}`);
     if (!success) return false;
 
     // Создаем новую покупку
@@ -585,9 +791,9 @@ export const purchaseItem = (userId: string, itemId: string): boolean => {
     }
 
     // Сохраняем покупку в список покупок пользователя
-    const purchases = getUserPurchases(userId);
+    const purchases = await getUserPurchases(userId);
     purchases.push(purchase);
-    savePurchases(userId, purchases);
+    await savePurchases(userId, purchases);
 
     // Если это аватар, устанавливаем его пользователю
     if (item.type === 'avatar') {
@@ -612,9 +818,9 @@ export const getDiscountedPrice = (item: StoreItem): number => {
 };
 
 // Проверка, куплен ли товар пользователем
-export const isItemPurchased = (userId: string, itemId: string): boolean => {
+export const isItemPurchased = async (userId: string, itemId: string): Promise<boolean> => {
   try {
-    const purchases = getUserPurchases(userId);
+    const purchases = await getUserPurchases(userId);
     return purchases.some(purchase => purchase.itemId === itemId && purchase.isActive);
   } catch (error) {
     console.error('Ошибка при проверке покупки:', error);
@@ -623,9 +829,9 @@ export const isItemPurchased = (userId: string, itemId: string): boolean => {
 };
 
 // Получение всех активных премиум-функций пользователя
-export const getActivePremiumFeatures = (userId: string): PremiumFeatureItem[] => {
+export const getActivePremiumFeatures = async (userId: string): Promise<PremiumFeatureItem[]> => {
   try {
-    const purchases = getUserPurchases(userId);
+    const purchases = await getUserPurchases(userId);
     const now = Date.now();
 
     // Фильтруем покупки, чтобы получить только активные премиум-функции
@@ -645,9 +851,9 @@ export const getActivePremiumFeatures = (userId: string): PremiumFeatureItem[] =
 };
 
 // Проверить и обновить срок действия премиум-функций
-export const checkAndUpdatePremiumFeatures = (userId: string): void => {
+export const checkAndUpdatePremiumFeatures = async (userId: string): Promise<void> => {
   try {
-    const purchases = getUserPurchases(userId);
+    const purchases = await getUserPurchases(userId);
     const now = Date.now();
     let updated = false;
 
@@ -661,7 +867,7 @@ export const checkAndUpdatePremiumFeatures = (userId: string): void => {
 
     // Если были изменения, сохраняем обновленные покупки
     if (updated) {
-      savePurchases(userId, purchases);
+      await savePurchases(userId, purchases);
     }
   } catch (error) {
     console.error('Ошибка при обновлении премиум-функций:', error);
@@ -669,9 +875,9 @@ export const checkAndUpdatePremiumFeatures = (userId: string): void => {
 };
 
 // Добавление бонусной валюты
-export const addBonusCurrency = (userId: string, amount: number): boolean => {
+export const addBonusCurrency = async (userId: string, amount: number): Promise<boolean> => {
   try {
-    const currency = getUserCurrency(userId);
+    const currency = await getUserCurrency(userId);
 
     // Создаем новую транзакцию
     const transaction: Transaction = {
@@ -686,7 +892,7 @@ export const addBonusCurrency = (userId: string, amount: number): boolean => {
     currency.transactions.push(transaction);
 
     // Сохраняем обновленные данные
-    localStorage.setItem(`currency_${userId}`, JSON.stringify(currency));
+    await saveCurrency(userId, currency);
 
     return true;
   } catch (error) {

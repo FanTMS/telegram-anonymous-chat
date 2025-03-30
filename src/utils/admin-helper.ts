@@ -8,7 +8,6 @@ import {
     getCurrentUser,
     saveUser
 } from './user';
-import WebApp from '@twa-dev/sdk';
 
 /**
  * Специальная функция для добавления администратора по Telegram ID
@@ -16,7 +15,7 @@ import WebApp from '@twa-dev/sdk';
  * @param adminName Имя администратора (опционально)
  * @returns 
  */
-export const makeAdmin = (telegramId: string, adminName: string = 'Администратор'): boolean => {
+export const makeAdmin = async (telegramId: string, adminName: string = 'Администратор'): Promise<boolean> => {
     try {
         console.log(`Начало процесса назначения администратора для Telegram ID: ${telegramId}`);
 
@@ -39,12 +38,12 @@ export const makeAdmin = (telegramId: string, adminName: string = 'Админи�
         }
 
         // Пытаемся найти пользователя с этим Telegram ID
-        const existingUser = getUserByTelegramId(telegramId);
+        const existingUser = await getUserByTelegramId(telegramId);
 
         if (existingUser) {
             console.log(`Найден пользователь с Telegram ID ${telegramId}: ${existingUser.name}`);
             // Устанавливаем права администратора
-            const result = setAdminByTelegramId(telegramId);
+            const result = await setAdminByTelegramId(telegramId);
             console.log(`Установка прав администратора: ${result ? 'Успешно' : 'Ошибка'}`);
 
             // Проверяем текущего пользователя
@@ -59,15 +58,16 @@ export const makeAdmin = (telegramId: string, adminName: string = 'Админи�
         } else {
             // Создаем нового пользователя-администратора
             console.log(`Пользователь с Telegram ID ${telegramId} не найден, создаем нового администратора`);
-            const adminUser = createAdminUserFromTelegram(telegramId, adminName);
+            const adminUser = await createAdminUserFromTelegram(telegramId, adminName);
             console.log(`Создание нового администратора: ${adminUser ? 'Успешно' : 'Ошибка'}`);
             return !!adminUser;
         }
     } catch (error) {
         console.error('Ошибка при назначении администратора:', error);
+        console.error('Ошибка при назначении администратора:', error);
         return false;
     }
-};
+}
 
 // Функция отложенного добавления администратора - вызывается когда WebApp готов
 export const setupAdmin = () => {
@@ -95,10 +95,12 @@ export const setupAdmin = () => {
         } else {
             console.log('Текущего пользователя нет или у него другой Telegram ID');
             // Пытаемся создать или обновить пользователя
-            makeAdmin(targetTelegramId, 'Администратор');
+            makeAdmin(targetTelegramId, 'Администратор').catch(error => 
+                console.error('Ошибка при назначении администратора:', error)
+            );
         }
-    }, 1000); // Небольшая задержка для уверенности, что WebApp готов
-};
+    }, 1000); // Небольшая задержка для уверенности, что приложение готово
+}; // Close setupAdmin function
 
 // Экспортируем функцию для ручного использования
 export const addTelegramAdmin = (telegramId: string): boolean => {
