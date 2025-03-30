@@ -38,9 +38,7 @@
 [functions.setup-fauna]
   schedule = "0 1 * * *"
 
-[[plugins]]
-  package = "@netlify/plugin-functions"
-
+# Используем только рабочий плагин
 [[plugins]]
   package = "netlify-plugin-inline-functions-env"
   
