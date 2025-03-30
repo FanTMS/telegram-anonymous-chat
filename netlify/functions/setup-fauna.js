@@ -25,12 +25,11 @@ export const handler = async (event, context) => {
             }
         }
 
-        // Настраиваем клиент FaunaDB с явным указанием apiVersion
+        // Initialize FaunaDB client with the correct parameters
         const client = new faunadb.Client({
             secret: faunaSecret,
             domain: 'db.fauna.com',
-            scheme: 'https',
-            apiVersion: '1'  // Explicitly setting API version to 1
+            scheme: 'https'
         });
 
         const results = [];

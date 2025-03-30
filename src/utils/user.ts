@@ -14,8 +14,7 @@ try {
     faunaClient = new faunadb.Client({
       secret: config.faunaSecret!,
       domain: 'db.fauna.com',
-      scheme: 'https',
-      apiVersion: '1'  // Используем более старую версию API
+      scheme: 'https'
     })
     console.log('FaunaDB client initialized in user.ts')
   } else {

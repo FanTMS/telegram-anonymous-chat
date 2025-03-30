@@ -15,7 +15,6 @@ try {
       secret: config.faunaSecret!,
       domain: 'db.fauna.com',
       scheme: 'https',
-      apiVersion: '1'  // Using older API version
     })
     console.log('FaunaDB client initialized in store.ts')
   } else {
