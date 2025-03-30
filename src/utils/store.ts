@@ -2,6 +2,7 @@ import WebApp from '@twa-dev/sdk'
 import { getCurrentUser, saveUser } from './user'
 import { storageAPI } from './storage-wrapper'
 import faunadb from 'faunadb'
+import { config, hasFaunaCredentials } from './config'
 
 // FaunaDB configuration
 const q = faunadb.query
@@ -9,14 +10,14 @@ let faunaClient: faunadb.Client | null = null
 
 // Initialize FaunaDB client if FAUNA_SECRET is available
 try {
-  const faunaSecret = process.env.FAUNA_SECRET || import.meta.env?.VITE_FAUNA_SECRET
-  if (faunaSecret) {
+  if (hasFaunaCredentials()) {
     faunaClient = new faunadb.Client({
-      secret: faunaSecret,
+      secret: config.faunaSecret!,
       domain: 'db.fauna.com',
       scheme: 'https',
+      apiVersion: '1'  // Using older API version
     })
-    console.log('FaunaDB client initialized')
+    console.log('FaunaDB client initialized in store.ts')
   } else {
     console.warn('No FaunaDB secret found, falling back to local storage')
   }

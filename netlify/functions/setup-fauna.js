@@ -1,11 +1,11 @@
-const faunadb = require('faunadb');
+import faunadb from 'faunadb';
 const q = faunadb.query;
 
 /**
  * This function sets up the necessary FaunaDB resources (collections and indexes)
  * required for the Telegram Mini-app integration.
  */
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
     // Check authorization
     const authHeader = event.headers.authorization;
     if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_API_KEY}`) {
@@ -25,17 +25,21 @@ exports.handler = async (event, context) => {
             }
         }
 
+        // Настраиваем клиент FaunaDB с явным указанием apiVersion
         const client = new faunadb.Client({
             secret: faunaSecret,
             domain: 'db.fauna.com',
             scheme: 'https',
+            apiVersion: '1'  // Explicitly setting API version to 1
         });
 
         const results = [];
 
-        // Create Collections
+        // Create Collections - modified to use FQL v1 syntax
         try {
-            await client.query(q.CreateCollection({ name: 'store_data' }));
+            await client.query(
+                q.CreateCollection({ name: 'store_data' })
+            );
             results.push('Created collection: store_data');
         } catch (err) {
             if (err.description === 'Collection already exists.') {
@@ -46,7 +50,9 @@ exports.handler = async (event, context) => {
         }
 
         try {
-            await client.query(q.CreateCollection({ name: 'user_currency' }));
+            await client.query(
+                q.CreateCollection({ name: 'user_currency' })
+            );
             results.push('Created collection: user_currency');
         } catch (err) {
             if (err.description === 'Collection already exists.') {
@@ -57,7 +63,9 @@ exports.handler = async (event, context) => {
         }
 
         try {
-            await client.query(q.CreateCollection({ name: 'user_purchases' }));
+            await client.query(
+                q.CreateCollection({ name: 'user_purchases' })
+            );
             results.push('Created collection: user_purchases');
         } catch (err) {
             if (err.description === 'Collection already exists.') {
@@ -68,7 +76,9 @@ exports.handler = async (event, context) => {
         }
 
         try {
-            await client.query(q.CreateCollection({ name: 'users' }));
+            await client.query(
+                q.CreateCollection({ name: 'users' })
+            );
             results.push('Created collection: users');
         } catch (err) {
             if (err.description === 'Collection already exists.') {
@@ -79,7 +89,9 @@ exports.handler = async (event, context) => {
         }
 
         try {
-            await client.query(q.CreateCollection({ name: 'chats' }));
+            await client.query(
+                q.CreateCollection({ name: 'chats' })
+            );
             results.push('Created collection: chats');
         } catch (err) {
             if (err.description === 'Collection already exists.') {
@@ -89,7 +101,33 @@ exports.handler = async (event, context) => {
             }
         }
 
-        // Create Indexes
+        try {
+            await client.query(
+                q.CreateCollection({ name: 'user_data' })
+            );
+            results.push('Created collection: user_data');
+        } catch (err) {
+            if (err.description === 'Collection already exists.') {
+                results.push('Collection already exists: user_data');
+            } else {
+                throw err;
+            }
+        }
+
+        try {
+            await client.query(
+                q.CreateCollection({ name: 'games' })
+            );
+            results.push('Created collection: games');
+        } catch (err) {
+            if (err.description === 'Collection already exists.') {
+                results.push('Collection already exists: games');
+            } else {
+                throw err;
+            }
+        }
+
+        // Create Indexes - FQL v1 syntax
         try {
             await client.query(
                 q.CreateIndex({
@@ -192,6 +230,40 @@ exports.handler = async (event, context) => {
             }
         }
 
+        try {
+            await client.query(
+                q.CreateIndex({
+                    name: 'chat_by_participant',
+                    source: q.Collection('chats'),
+                    terms: [{ field: ['data', 'participants'] }]
+                })
+            );
+            results.push('Created index: chat_by_participant');
+        } catch (err) {
+            if (err.description === 'Index already exists.') {
+                results.push('Index already exists: chat_by_participant');
+            } else {
+                throw err;
+            }
+        }
+
+        try {
+            await client.query(
+                q.CreateIndex({
+                    name: 'user_data_by_key',
+                    source: q.Collection('user_data'),
+                    terms: [{ field: ['data', 'key'] }]
+                })
+            );
+            results.push('Created index: user_data_by_key');
+        } catch (err) {
+            if (err.description === 'Index already exists.') {
+                results.push('Index already exists: user_data_by_key');
+            } else {
+                throw err;
+            }
+        }
+
         return {
             statusCode: 200,
             body: JSON.stringify({
@@ -205,7 +277,8 @@ exports.handler = async (event, context) => {
             statusCode: 500,
             body: JSON.stringify({
                 message: 'Error setting up FaunaDB',
-                error: error.message
+                error: error.message,
+                description: error.description || 'No description available'
             })
         };
     }
