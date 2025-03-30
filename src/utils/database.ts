@@ -1,4 +1,5 @@
 import WebApp from '@twa-dev/sdk'
+import { storage, storageAPI } from './storage-wrapper'
 
 // Перечисление типов хранилищ данных
 export enum StorageType {
@@ -75,18 +76,18 @@ export class UserDatabase {
 
       switch (this.config.storageType) {
         case StorageType.LOCAL_STORAGE:
-          localStorage.setItem(key, serializedData)
+          storageAPI.setItem(key, serializedData)
           break
 
         case StorageType.INDEXED_DB:
           // Здесь будет реализация для IndexedDB
           console.warn('IndexedDB storage not fully implemented yet')
-          localStorage.setItem(key, serializedData)
+          storageAPI.setItem(key, serializedData)
           break
 
         case StorageType.REMOTE_API:
           // Сохраняем локально
-          localStorage.setItem(key, serializedData)
+          storageAPI.setItem(key, serializedData)
           // Отмечаем для последующей синхронизации
           this.pendingChanges.add(key)
           break
@@ -108,8 +109,8 @@ export class UserDatabase {
         case StorageType.LOCAL_STORAGE:
         case StorageType.INDEXED_DB:
         case StorageType.REMOTE_API:
-          // Для всех типов хранилищ пробуем получить данные из localStorage
-          serializedData = localStorage.getItem(key)
+          // Для всех типов хранилищ пробуем получить данные через storageAPI
+          serializedData = storageAPI.getItem(key)
           break
       }
 
@@ -129,17 +130,17 @@ export class UserDatabase {
     try {
       switch (this.config.storageType) {
         case StorageType.LOCAL_STORAGE:
-          localStorage.removeItem(key)
+          storageAPI.removeItem(key)
           break
 
         case StorageType.INDEXED_DB:
           // Здесь будет реализация для IndexedDB
-          localStorage.removeItem(key)
+          storageAPI.removeItem(key)
           break
 
         case StorageType.REMOTE_API:
           // Удаляем локально
-          localStorage.removeItem(key)
+          storageAPI.removeItem(key)
           // Отмечаем для синхронизации (для удаления на сервере)
           this.pendingChanges.add(`delete:${key}`)
           break
@@ -159,7 +160,7 @@ export class UserDatabase {
         case StorageType.LOCAL_STORAGE:
         case StorageType.INDEXED_DB:
         case StorageType.REMOTE_API:
-          return localStorage.getItem(key) !== null
+          return storageAPI.getItem(key) !== null
       }
 
       return false
@@ -174,17 +175,17 @@ export class UserDatabase {
     try {
       switch (this.config.storageType) {
         case StorageType.LOCAL_STORAGE:
-          localStorage.clear()
+          storageAPI.clear()
           break
 
         case StorageType.INDEXED_DB:
           // Здесь будет реализация для IndexedDB
-          localStorage.clear()
+          storageAPI.clear()
           break
 
         case StorageType.REMOTE_API:
           // Очищаем локальное хранилище
-          localStorage.clear()
+          storageAPI.clear()
           // Отмечаем для синхронизации (полная очистка на сервере)
           this.pendingChanges.add('clearAll')
           break
@@ -256,8 +257,8 @@ export class TelegramIntegration {
             };
 
             // Сохраняем telegram ID и другие данные для восстановления сессии
-            localStorage.setItem('telegram_user_id', this.userId);
-            localStorage.setItem('telegram_user_data', JSON.stringify(this.userData));
+            storageAPI.setItem('telegram_user_id', this.userId);
+            storageAPI.setItem('telegram_user_data', JSON.stringify(this.userData));
 
             this.isInitialized = true;
             return true;
@@ -265,9 +266,9 @@ export class TelegramIntegration {
         }
       }
 
-      // Если нет прямых данных WebApp, пробуем восстановить из localStorage
-      const savedTelegramId = localStorage.getItem('telegram_user_id');
-      const savedUserData = localStorage.getItem('telegram_user_data');
+      // Если нет прямых данных WebApp, пробуем восстановить из хранилища
+      const savedTelegramId = storageAPI.getItem('telegram_user_id');
+      const savedUserData = storageAPI.getItem('telegram_user_data');
 
       if (savedTelegramId) {
         this.userId = savedTelegramId;
@@ -284,7 +285,7 @@ export class TelegramIntegration {
         }
 
         this.isInitialized = true;
-        console.log('Restored Telegram session from localStorage');
+        console.log('Restored Telegram session from storage');
         return true;
       }
 
@@ -336,64 +337,64 @@ export class TelegramIntegration {
 // Базовый модуль для работы с локальным хранилищем
 
 /**
- * Проверяет и исправляет структуру данных в localStorage
+ * Проверяет и исправляет структуру данных в хранилище
  */
 export const validateLocalStorage = (): boolean => {
   try {
-    console.log('Проверка структуры данных в localStorage...');
+    console.log('Проверка структуры данных в хранилище...');
 
     // Проверяем структуру users
-    if (!localStorage.getItem('users')) {
-      localStorage.setItem('users', JSON.stringify([]));
+    if (!storageAPI.getItem('users')) {
+      storageAPI.setItem('users', JSON.stringify([]));
       console.log('Инициализирован пустой массив пользователей');
     } else {
       try {
-        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        const users = JSON.parse(storageAPI.getItem('users') || '[]');
         if (!Array.isArray(users)) {
           console.warn('Некорректные данные пользователей, сбрасываем');
-          localStorage.setItem('users', JSON.stringify([]));
+          storageAPI.setItem('users', JSON.stringify([]));
         }
       } catch (e) {
         console.error('Ошибка при парсинге данных пользователей:', e);
-        localStorage.setItem('users', JSON.stringify([]));
+        storageAPI.setItem('users', JSON.stringify([]));
       }
     }
 
     // Проверяем структуру chats
-    if (!localStorage.getItem('chats')) {
-      localStorage.setItem('chats', JSON.stringify([]));
+    if (!storageAPI.getItem('chats')) {
+      storageAPI.setItem('chats', JSON.stringify([]));
       console.log('Инициализирован пустой массив чатов');
     } else {
       try {
-        const chats = JSON.parse(localStorage.getItem('chats') || '[]');
+        const chats = JSON.parse(storageAPI.getItem('chats') || '[]');
         if (!Array.isArray(chats)) {
           console.warn('Некорректные данные чатов, сбрасываем');
-          localStorage.setItem('chats', JSON.stringify([]));
+          storageAPI.setItem('chats', JSON.stringify([]));
         }
       } catch (e) {
         console.error('Ошибка при парсинге данных чатов:', e);
-        localStorage.setItem('chats', JSON.stringify([]));
+        storageAPI.setItem('chats', JSON.stringify([]));
       }
     }
 
     // Проверяем структуру searching_users
-    if (!localStorage.getItem('searching_users')) {
-      localStorage.setItem('searching_users', JSON.stringify([]));
+    if (!storageAPI.getItem('searching_users')) {
+      storageAPI.setItem('searching_users', JSON.stringify([]));
       console.log('Инициализирован пустой массив ищущих пользователей');
     } else {
       try {
-        const searchingUsers = JSON.parse(localStorage.getItem('searching_users') || '[]');
+        const searchingUsers = JSON.parse(storageAPI.getItem('searching_users') || '[]');
         if (!Array.isArray(searchingUsers)) {
           console.warn('Некорректные данные поиска, сбрасываем');
-          localStorage.setItem('searching_users', JSON.stringify([]));
+          storageAPI.setItem('searching_users', JSON.stringify([]));
         }
       } catch (e) {
         console.error('Ошибка при парсинге данных поиска:', e);
-        localStorage.setItem('searching_users', JSON.stringify([]));
+        storageAPI.setItem('searching_users', JSON.stringify([]));
       }
     }
 
-    console.log('Проверка структуры данных в localStorage завершена успешно');
+    console.log('Проверка структуры данных в хранилище завершена успешно');
     return true;
   } catch (error) {
     console.error('Ошибка при проверке структуры данных:', error);
@@ -405,7 +406,7 @@ export const validateLocalStorage = (): boolean => {
 export const db = {
   async getData(key: string): Promise<any> {
     try {
-      const data = localStorage.getItem(key);
+      const data = storageAPI.getItem(key);
       return data ? JSON.parse(data) : null;
     } catch (error) {
       console.error(`Ошибка при получении данных для ${key}:`, error);
@@ -415,7 +416,7 @@ export const db = {
 
   async saveData(key: string, data: any): Promise<boolean> {
     try {
-      localStorage.setItem(key, JSON.stringify(data));
+      storageAPI.setItem(key, JSON.stringify(data));
       return true;
     } catch (error) {
       console.error(`Ошибка при сохранении данных для ${key}:`, error);
@@ -425,7 +426,7 @@ export const db = {
 
   async removeData(key: string): Promise<boolean> {
     try {
-      localStorage.removeItem(key);
+      storageAPI.removeItem(key);
       return true;
     } catch (error) {
       console.error(`Ошибка при удалении данных для ${key}:`, error);
@@ -435,7 +436,7 @@ export const db = {
 
   async clearAllData(): Promise<boolean> {
     try {
-      localStorage.clear();
+      storageAPI.clear();
       return true;
     } catch (error) {
       console.error('Ошибка при очистке всех данных:', error);
@@ -459,10 +460,10 @@ export const telegramApi = {
         return true;
       }
 
-      // Если не в WebApp, восстанавливаем из localStorage для отладки
-      const savedTelegramId = localStorage.getItem('telegram_user_id');
+      // Если не в WebApp, восстанавливаем из хранилища для отладки
+      const savedTelegramId = storageAPI.getItem('telegram_user_id');
       if (savedTelegramId) {
-        console.log('Restored Telegram session from localStorage');
+        console.log('Restored Telegram session from storage');
         this.isInitialized = true;
         return true;
       }
@@ -483,8 +484,8 @@ export const telegramApi = {
         return WebApp.initDataUnsafe.user.id.toString();
       }
 
-      // Если нет, пробуем восстановить из localStorage
-      const savedTelegramId = localStorage.getItem('telegram_user_id');
+      // Если нет, пробуем восстановить из хранилища
+      const savedTelegramId = storageAPI.getItem('telegram_user_id');
       if (savedTelegramId) {
         return savedTelegramId;
       }
@@ -511,8 +512,8 @@ export const telegramApi = {
         };
       }
 
-      // Если нет, пробуем восстановить из localStorage
-      const savedUserData = localStorage.getItem('telegram_user_data');
+      // Если нет, пробуем восстановить из хранилища
+      const savedUserData = storageAPI.getItem('telegram_user_data');
       if (savedUserData) {
         try {
           return JSON.parse(savedUserData);

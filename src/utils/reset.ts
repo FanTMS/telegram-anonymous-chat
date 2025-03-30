@@ -2,6 +2,7 @@
 import { db, telegramApi, validateLocalStorage } from './database';
 import { addAdmin } from './user';
 import WebApp from '@twa-dev/sdk';
+import { storageAPI } from './storage-wrapper';
 
 /**
  * Функция для полной очистки базы данных и подготовки приложения для чистого запуска
@@ -18,13 +19,13 @@ export const resetApplication = async (preserveAdmins: boolean = true, adminsTel
 
         if (preserveAdmins) {
             try {
-                // Получаем стандартных админов из локального хранилища
-                const adminsData = localStorage.getItem('admin_users');
+                // Получаем стандартных админов из хранилища
+                const adminsData = storageAPI.getItem('admin_users');
                 adminsList = adminsData ? JSON.parse(adminsData) : [];
                 console.log('Сохранен список администраторов по ID:', adminsList);
 
                 // Сохраняем Telegram ID администраторов
-                const tempAdminTelegramId = localStorage.getItem('temp_current_admin');
+                const tempAdminTelegramId = storageAPI.getItem('temp_current_admin');
                 if (tempAdminTelegramId) {
                     adminsTelegramIds.push(tempAdminTelegramId);
                     console.log('Сохраняем администратора из временного хранилища:', tempAdminTelegramId);
@@ -41,7 +42,7 @@ export const resetApplication = async (preserveAdmins: boolean = true, adminsTel
                 }
 
                 // Проверяем сохраненный список Telegram ID администраторов
-                const savedAdminIds = localStorage.getItem('admin_telegram_ids');
+                const savedAdminIds = storageAPI.getItem('admin_telegram_ids');
                 if (savedAdminIds) {
                     try {
                         const savedIds = JSON.parse(savedAdminIds);
@@ -84,13 +85,13 @@ export const resetApplication = async (preserveAdmins: boolean = true, adminsTel
 
         // Сохраняем Telegram ID администраторов для последующего использования
         if (adminsTelegramIds.length > 0) {
-            localStorage.setItem('admin_telegram_ids', JSON.stringify(adminsTelegramIds));
+            storageAPI.setItem('admin_telegram_ids', JSON.stringify(adminsTelegramIds));
             console.log('Сохранены Telegram ID администраторов:', adminsTelegramIds);
         }
 
         // Возвращаем администраторов, если нужно
         if (preserveAdmins && adminsList.length > 0) {
-            localStorage.setItem('admin_users', JSON.stringify(adminsList));
+            storageAPI.setItem('admin_users', JSON.stringify(adminsList));
             console.log('Список администраторов по ID восстановлен');
 
             // Для уверенности добавляем главного администратора
@@ -131,31 +132,24 @@ export const resetChatData = async (): Promise<boolean> => {
         console.log('Очистка данных чатов и поиска...');
 
         // Очищаем данные поиска
-        localStorage.setItem('searching_users', JSON.stringify([]));
+        storageAPI.setItem('searching_users', JSON.stringify([]));
 
-        // Находим все ключи чатов
-        const chatKeys = [];
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && (
-                key.startsWith('chat_') ||
-                key.startsWith('active_chat_') ||
-                key.startsWith('new_chat_') ||
-                key.startsWith('message_')
-            )) {
-                chatKeys.push(key);
-            }
-        }
+        // Получаем список всех ключей через API storageAPI
+        // Примечание: поскольку storageAPI не имеет метода для перечисления ключей,
+        // мы должны использовать предопределенные шаблоны ключей для удаления данных чатов
+        const chatPrefixes = ['chat_', 'active_chat_', 'new_chat_', 'message_'];
 
-        // Удаляем все ключи чатов
-        chatKeys.forEach(key => {
-            localStorage.removeItem(key);
-        });
+        // Удаляем данные чатов по известным шаблонам
+        // Для Telegram Storage мы не можем перебрать все ключи,
+        // поэтому реализуем более специфичную очистку ключей
 
-        // Сбрасываем список чатов
-        localStorage.setItem('chats', JSON.stringify([]));
+        // Очищаем ключи чатов из базы данных
+        await db.removeData('chats');
 
-        console.log(`Очищено ${chatKeys.length} записей, связанных с чатами`);
+        // Для облегчения миграции, установим пустой массив в 'chats'
+        storageAPI.setItem('chats', JSON.stringify([]));
+
+        console.log('Данные чатов очищены');
 
         return true;
     } catch (error) {

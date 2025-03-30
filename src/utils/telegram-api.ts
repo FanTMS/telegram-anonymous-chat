@@ -1,5 +1,6 @@
 import WebApp from '@twa-dev/sdk'
 import { User, saveUser, getCurrentUser, getUserByTelegramId, setCurrentUser } from './user'
+import { storageAPI } from './storage-wrapper'
 
 // Интерфейс для данных пользователя из Telegram
 export interface TelegramUserData {
@@ -216,7 +217,7 @@ export const getUserDataById = async (telegramId: string): Promise<TelegramUserD
 
     // Проверяем, есть ли сохраненные данные для этого ID
     const key = `telegram_user_data_${telegramId}`;
-    const savedData = localStorage.getItem(key);
+    const savedData = storageAPI.getItem(key);
 
     if (savedData) {
       // Если есть сохраненные данные, возвращаем их
@@ -236,7 +237,7 @@ export const getUserDataById = async (telegramId: string): Promise<TelegramUserD
     };
 
     // Сохраняем данные для последующего использования
-    localStorage.setItem(key, JSON.stringify(mockUserData));
+    storageAPI.setItem(key, JSON.stringify(mockUserData));
 
     return mockUserData;
   } catch (error) {

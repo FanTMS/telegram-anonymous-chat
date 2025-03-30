@@ -1,10 +1,11 @@
 import WebApp from '@twa-dev/sdk'
 import React from 'react'
+import { storageAPI } from './storage-wrapper'
 
 // Экспортируем тип Theme для согласованности
 export type Theme = 'light' | 'dark' | 'system'
 
-// Определение ключа для хранения темы в localStorage
+// Определение ключа для хранения темы в хранилище
 const THEME_KEY = 'app_theme'
 
 // Функция для получения системной темы
@@ -19,10 +20,10 @@ export const getSystemTheme = (): 'light' | 'dark' => {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-// Получение сохраненной пользовательской темы из localStorage
+// Получение сохраненной пользовательской темы из хранилища
 export const getSavedTheme = (): Theme => {
   try {
-    const saved = localStorage.getItem(THEME_KEY)
+    const saved = storageAPI.getItem(THEME_KEY)
     return (saved as Theme) || 'system'
   } catch (error) {
     console.error('Error getting saved theme:', error)
@@ -30,10 +31,10 @@ export const getSavedTheme = (): Theme => {
   }
 }
 
-// Сохранение темы в localStorage
+// Сохранение темы в хранилище
 export const saveTheme = (theme: Theme): void => {
   try {
-    localStorage.setItem(THEME_KEY, theme)
+    storageAPI.setItem(THEME_KEY, theme)
   } catch (error) {
     console.error('Error saving theme:', error)
   }
@@ -42,13 +43,11 @@ export const saveTheme = (theme: Theme): void => {
 // Применяет тему
 export const applyTheme = (theme: Theme): 'light' | 'dark' => {
   const actualTheme = theme === 'system' ? getSystemTheme() : theme;
-
   if (actualTheme === 'dark') {
     document.documentElement.classList.add('dark')
   } else {
     document.documentElement.classList.remove('dark')
   }
-
   return actualTheme;
 }
 

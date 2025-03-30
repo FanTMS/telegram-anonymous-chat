@@ -1,5 +1,6 @@
 import { db, telegramApi } from './database'
 import { MatchingStrategy } from './recommendations'
+import { storageAPI } from './storage-wrapper'
 
 // Тип для данных Telegram
 export interface TelegramData {
@@ -76,7 +77,7 @@ export interface User {
   favorites?: string[]        // Список ID избранных пользователей
 }
 
-// Ключ для localStorage
+// Ключ для хранилища
 const USER_KEY_PREFIX = 'user_'
 const CURRENT_USER_KEY = 'current_user_id'
 const ADMINS_KEY = 'admin_users'
@@ -119,7 +120,7 @@ telegramApi.initialize().then(success => {
 // Получение списка всех пользователей
 export const getUsers = (): User[] => {
   try {
-    const usersData = localStorage.getItem('users')
+    const usersData = storageAPI.getItem('users')
     if (!usersData) {
       return []
     }
@@ -139,7 +140,7 @@ export const getUserById = (id: string): User | null => {
       return null;
     }
 
-    const usersData = localStorage.getItem('users');
+    const usersData = storageAPI.getItem('users');
     if (!usersData) {
       console.log('Список пользователей пуст');
       return null;
@@ -180,7 +181,7 @@ export const getUserByIdSync = (userId: string): User | null => {
 
   try {
     const key = `${USER_KEY_PREFIX}${userId}`;
-    const userData = localStorage.getItem(key);
+    const userData = storageAPI.getItem(key);
 
     if (!userData) {
       return {
@@ -221,7 +222,7 @@ export const getUserByTelegramId = (telegramId: string): User | null => {
 
     // Сначала пробуем найти пользователя в индивидуальных записях пользователей (более быстрый поиск)
     const telegramUserKey = `telegram_user_${telegramId}`;
-    const linkedUserData = localStorage.getItem(telegramUserKey);
+    const linkedUserData = storageAPI.getItem(telegramUserKey);
 
     if (linkedUserData) {
       try {
@@ -229,7 +230,7 @@ export const getUserByTelegramId = (telegramId: string): User | null => {
         const userId = JSON.parse(linkedUserData).userId;
         if (userId) {
           const userKey = `${USER_KEY_PREFIX}${userId}`;
-          const userData = localStorage.getItem(userKey);
+          const userData = storageAPI.getItem(userKey);
           if (userData) {
             return JSON.parse(userData);
           }
@@ -252,9 +253,9 @@ export const getUserByTelegramId = (telegramId: string): User | null => {
     if (user) {
       console.log(`Найден пользователь с Telegram ID ${telegramId}: ${user.name} (ID: ${user.id})`);
 
-      // Создаем ссылку в localStorage для ускорения будущих поисков
+      // Создаем ссылку в хранилище для ускорения будущих поисков
       try {
-        localStorage.setItem(telegramUserKey, JSON.stringify({ userId: user.id, timestamp: Date.now() }));
+        storageAPI.setItem(telegramUserKey, JSON.stringify({ userId: user.id, timestamp: Date.now() }));
       } catch (e) {
         console.warn('Не удалось создать ссылку Telegram ID -> User ID:', e);
       }
@@ -277,8 +278,8 @@ export const saveUser = async (user: User): Promise<boolean> => {
     user.lastActive = Date.now()
 
     const key = `${USER_KEY_PREFIX}${user.id}`
-    // Сохраняем пользователя в localStorage напрямую для надежности
-    localStorage.setItem(key, JSON.stringify(user))
+    // Сохраняем пользователя в хранилище напрямую для надежности
+    storageAPI.setItem(key, JSON.stringify(user))
 
     // Если используется db, также сохраняем там
     const result = await db.saveData(key, user)
@@ -299,7 +300,7 @@ export const saveUser = async (user: User): Promise<boolean> => {
 // Установка текущего пользователя
 export const setCurrentUser = (userId: string): void => {
   try {
-    localStorage.setItem(CURRENT_USER_KEY, userId)
+    storageAPI.setItem(CURRENT_USER_KEY, userId)
   } catch (error) {
     console.error('Failed to set current user', error)
   }
@@ -308,7 +309,7 @@ export const setCurrentUser = (userId: string): void => {
 // Получение ID текущего пользователя
 export const getCurrentUserId = (): string | null => {
   try {
-    return localStorage.getItem(CURRENT_USER_KEY)
+    return storageAPI.getItem(CURRENT_USER_KEY)
   } catch (error) {
     console.error('Failed to get current user ID', error)
     return null
@@ -318,14 +319,14 @@ export const getCurrentUserId = (): string | null => {
 // Более надежная функция получения текущего пользователя
 export const getCurrentUser = (): User | null => {
   try {
-    const userId = localStorage.getItem(CURRENT_USER_KEY);
+    const userId = storageAPI.getItem(CURRENT_USER_KEY);
     if (!userId) {
       console.log('No current user ID found');
       return null;
     }
 
     const key = `${USER_KEY_PREFIX}${userId}`;
-    const userData = localStorage.getItem(key);
+    const userData = storageAPI.getItem(key);
     if (!userData) {
       console.log(`User data not found for ID ${userId}`);
       return null;
@@ -402,7 +403,7 @@ export const createUserFromTelegram = async (telegramId: string, preferredName?:
     };
 
     // Проверяем, является ли пользователь администратором
-    const adminTelegramIds = localStorage.getItem('admin_telegram_ids');
+    const adminTelegramIds = storageAPI.getItem('admin_telegram_ids');
     if (adminTelegramIds) {
       try {
         const adminIds = JSON.parse(adminTelegramIds);
@@ -421,9 +422,9 @@ export const createUserFromTelegram = async (telegramId: string, preferredName?:
     // Сохраняем пользователя в индивидуальной записи
     await saveUser(newUser);
 
-    // Создаем ссылку в localStorage для ускорения будущих поисков
+    // Создаем ссылку в хранилище для ускорения будущих поисков
     try {
-      localStorage.setItem(`telegram_user_${telegramId}`, JSON.stringify({
+      storageAPI.setItem(`telegram_user_${telegramId}`, JSON.stringify({
         userId: newUser.id,
         timestamp: Date.now()
       }));
@@ -433,10 +434,10 @@ export const createUserFromTelegram = async (telegramId: string, preferredName?:
 
     // Добавляем в общий список пользователей
     try {
-      const usersData = localStorage.getItem('users');
+      const usersData = storageAPI.getItem('users');
       const users = usersData ? JSON.parse(usersData) : [];
       users.push(newUser);
-      localStorage.setItem('users', JSON.stringify(users));
+      storageAPI.setItem('users', JSON.stringify(users));
     } catch (e) {
       console.error('Ошибка при добавлении пользователя в общий список:', e);
     }
@@ -570,7 +571,7 @@ export const addAdmin = (telegramId: string): void => {
 
     if (!admins.includes(telegramId)) {
       admins.push(telegramId)
-      localStorage.setItem(ADMINS_KEY, JSON.stringify(admins))
+      storageAPI.setItem(ADMINS_KEY, JSON.stringify(admins))
     }
   } catch (error) {
     console.error('Failed to add admin', error)
@@ -580,7 +581,7 @@ export const addAdmin = (telegramId: string): void => {
 // Получение списка Telegram ID администраторов
 export const getAdmins = (): string[] => {
   try {
-    const admins = localStorage.getItem(ADMINS_KEY)
+    const admins = storageAPI.getItem(ADMINS_KEY)
     return admins ? JSON.parse(admins) : []
   } catch (error) {
     console.error('Failed to get admins list', error)
@@ -694,12 +695,12 @@ export const isAdmin = (): boolean => {
 export const blockUser = (userId: string): boolean => {
   try {
     const key = `${USER_KEY_PREFIX}${userId}`
-    const userData = localStorage.getItem(key)
+    const userData = storageAPI.getItem(key)
 
     if (userData) {
       const user: User = JSON.parse(userData)
       user.isBlocked = true
-      localStorage.setItem(key, JSON.stringify(user))
+      storageAPI.setItem(key, JSON.stringify(user))
       return true
     }
 
@@ -714,12 +715,12 @@ export const blockUser = (userId: string): boolean => {
 export const unblockUser = (userId: string): boolean => {
   try {
     const key = `${USER_KEY_PREFIX}${userId}`
-    const userData = localStorage.getItem(key)
+    const userData = storageAPI.getItem(key)
 
     if (userData) {
       const user: User = JSON.parse(userData)
       user.isBlocked = false
-      localStorage.setItem(key, JSON.stringify(user))
+      storageAPI.setItem(key, JSON.stringify(user))
       return true
     }
 
@@ -779,15 +780,15 @@ export const updateUserStatus = async (userId: string, status: string): Promise<
 // Обновление пользовательских настроек
 export const updateUserSettings = async (userId: string, settings: Partial<UserSettings>): Promise<boolean> => {
   try {
-    // Сначала получаем текущего пользователя напрямую из localStorage для надежности
+    // Сначала получаем текущего пользователя напрямую из хранилища для надежности
     let user: User | null = null;
     const key = `${USER_KEY_PREFIX}${userId}`;
-    const userData = localStorage.getItem(key);
+    const userData = storageAPI.getItem(key);
 
     if (userData) {
       user = JSON.parse(userData);
     } else {
-      // Если нет в localStorage, пробуем получить через db
+      // Если нет в хранилище, пробуем получить через db
       user = await getUserById(userId);
     }
 
@@ -802,8 +803,8 @@ export const updateUserSettings = async (userId: string, settings: Partial<UserS
       ...settings
     };
 
-    // Сохраняем напрямую в localStorage для надежности
-    localStorage.setItem(key, JSON.stringify(user));
+    // Сохраняем напрямую в хранилище для надежности
+    storageAPI.setItem(key, JSON.stringify(user));
 
     // И также через абстракцию db
     return await saveUser(user);
@@ -831,10 +832,10 @@ export const createTestUser = (name: string = "Тест"): User | null => {
     };
 
     // Сохраняем пользователя
-    const usersData = localStorage.getItem('users');
+    const usersData = storageAPI.getItem('users');
     const users = usersData ? JSON.parse(usersData) : [];
     users.push(newUser);
-    localStorage.setItem('users', JSON.stringify(users));
+    storageAPI.setItem('users', JSON.stringify(users));
 
     console.log(`Создан тестовый пользователь: ${name} (${id})`);
     return newUser;

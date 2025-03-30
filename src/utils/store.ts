@@ -1,5 +1,7 @@
 import WebApp from '@twa-dev/sdk'
 import { getCurrentUser, saveUser } from './user'
+import { storageAPI } from './storage-wrapper'
+
 
 // Типы для магазина
 export interface StoreItem {

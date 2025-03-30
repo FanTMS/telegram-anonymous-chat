@@ -1,5 +1,6 @@
 import WebApp from '@twa-dev/sdk'
 import { User, saveUser, getCurrentUser, getUserByTelegramId, setCurrentUser } from './user'
+import { storageAPI } from './storage-wrapper'
 
 // Интерфейс для пользователя Telegram
 interface TelegramUser {
@@ -139,10 +140,10 @@ export const initializeUserFromTelegram = (): User | null => {
 
       // Также добавляем в список пользователей для быстрого поиска
       try {
-        const usersData = localStorage.getItem('users');
+        const usersData = storageAPI.getItem('users');
         const users = usersData ? JSON.parse(usersData) : [];
         users.push(newUser);
-        localStorage.setItem('users', JSON.stringify(users));
+        storageAPI.setItem('users', JSON.stringify(users));
       } catch (err) {
         console.error('Ошибка при добавлении пользователя в общий список:', err);
       }

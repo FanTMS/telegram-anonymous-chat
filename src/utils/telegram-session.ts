@@ -4,6 +4,7 @@
 import { User } from './user';
 import { initializeUserByTelegramId } from './telegram-api';
 import { saveUser, getUserByTelegramId, setCurrentUser } from './user';
+import { storageAPI } from './storage-wrapper';
 
 // Интерфейс сессии пользователя
 export interface UserSession {
@@ -415,7 +416,7 @@ export class TelegramSessionManager {
     }
 
     /**
-     * Сохранить сессии в localStorage
+     * Сохранить сессии в хранилище
      */
     private saveSessions(): void {
         try {
@@ -425,25 +426,25 @@ export class TelegramSessionManager {
                 sessions[telegramId] = session;
             });
 
-            localStorage.setItem('telegram_sessions', JSON.stringify(sessions));
+            storageAPI.setItem('telegram_sessions', JSON.stringify(sessions));
 
             // Сохраняем также индекс sessionId -> telegramId
             const sessionIdMap: Record<string, string> = {};
             this.sessionIdToTelegramId.forEach((telegramId, sessionId) => {
                 sessionIdMap[sessionId] = telegramId;
             });
-            localStorage.setItem('telegram_session_ids', JSON.stringify(sessionIdMap));
+            storageAPI.setItem('telegram_session_ids', JSON.stringify(sessionIdMap));
         } catch (error) {
             console.error('Ошибка при сохранении сессий:', error);
         }
     }
 
     /**
-     * Загрузить сессии из localStorage
+     * Загрузить сессии из хранилища
      */
     private loadSessions(): void {
         try {
-            const sessionsJson = localStorage.getItem('telegram_sessions');
+            const sessionsJson = storageAPI.getItem('telegram_sessions');
 
             if (sessionsJson) {
                 const sessions = JSON.parse(sessionsJson);
@@ -462,7 +463,7 @@ export class TelegramSessionManager {
                 });
 
                 // Для совместимости со старыми версиями проверяем наличие сохраненного индекса
-                const sessionIdMapJson = localStorage.getItem('telegram_session_ids');
+                const sessionIdMapJson = storageAPI.getItem('telegram_session_ids');
                 if (sessionIdMapJson) {
                     const sessionIdMap = JSON.parse(sessionIdMapJson);
                     for (const sessionId in sessionIdMap) {
