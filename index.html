@@ -56,6 +56,33 @@
     // Записываем начальную ширину вьюпорта для отслеживания изменений
     document.documentElement.style.setProperty('--initial-viewport-width', `${window.innerWidth}px`);
   </script>
+  <!-- Скрипт для предотвращения бесконечной загрузки в Telegram WebApp -->
+  <script type="text/javascript">
+    // Устанавливаем таймер безопасности для предотвращения бесконечной загрузки
+    window.telegramAppInitTimeout = setTimeout(function () {
+      console.log('⚠️ Таймаут инициализации приложения - принудительно продолжаем');
+
+      // Пытаемся вызвать WebApp.ready() напрямую
+      if (window.Telegram && window.Telegram.WebApp) {
+        try {
+          window.Telegram.WebApp.ready();
+          console.log('✅ WebApp.ready() вызван из таймаута безопасности');
+        } catch (e) {
+          console.error('❌ Ошибка при вызове WebApp.ready() из таймаута:', e);
+        }
+      }
+    }, 3000); // 3 секунды максимальное время ожидания
+
+    // Предварительный вызов WebApp.ready() для немедленной сигнализации Telegram
+    if (window.Telegram && window.Telegram.WebApp) {
+      try {
+        window.Telegram.WebApp.ready();
+        console.log('✅ WebApp.ready() вызван из предварительного скрипта');
+      } catch (e) {
+        console.log('❌ Ошибка при предварительном вызове WebApp.ready():', e);
+      }
+    }
+  </script>
 </head>
 
 <body>

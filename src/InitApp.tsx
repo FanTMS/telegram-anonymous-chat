@@ -1,65 +1,53 @@
 import React, { useState, useEffect } from 'react';
 import App from './App';
 import WebApp from '@twa-dev/sdk';
-import { createWebAppMock } from './utils/telegramMock';
+import { initializeTelegramWebApp } from './utils/telegramSetup';
+
+// Глобальный флаг для отслеживания вызова ready()
+let readyCalled = false;
 
 const InitApp: React.FC = () => {
     const [isReady, setIsReady] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Устанавливаем таймер безопасности на случай зависания инициализации
+        // Максимально короткий таймаут безопасности
         const timeoutId = setTimeout(() => {
             if (!isReady) {
-                console.warn('🚨 Инициализация не завершилась вовремя, принудительно продолжаем');
+                console.warn('🚨 Таймаут инициализации, принудительно запускаем приложение');
                 setIsReady(true);
             }
-        }, 3000); // 3 секунды максимальное время ожидания
+        }, 1500); // Уменьшаем до 1.5 секунд
 
+        // Инициализация с немедленным показом приложения
         const initializeApp = async () => {
             try {
-                console.log('🚀 Начало инициализации приложения...');
-
-                // Проверяем доступность Telegram API
-                const isTelegramAvailable = typeof window !== 'undefined' &&
-                    typeof window.Telegram !== 'undefined' &&
-                    typeof window.Telegram.WebApp !== 'undefined';
-
-                console.log(`📱 Telegram WebApp ${isTelegramAvailable ? 'доступен' : 'недоступен'}`);
-
-                // Если не доступен, пытаемся создать мок еще раз
-                if (!isTelegramAvailable) {
-                    console.log('⚠️ Telegram WebApp недоступен, создаем мок');
-                    createWebAppMock();
-                }
-
-                // Вызываем ready() с небольшой задержкой для стабильности
-                setTimeout(() => {
+                // Вызываем ready() только если еще не вызывали
+                if (!readyCalled && typeof WebApp !== 'undefined') {
                     try {
-                        if (typeof WebApp !== 'undefined') {
-                            console.log('📣 Вызываем WebApp.ready()');
-                            WebApp.ready();
-                            console.log('✅ WebApp.ready() вызван успешно');
-                        } else {
-                            console.warn('⚠️ WebApp не определен, не вызываем ready()');
-                        }
+                        console.log('📣 Вызываем WebApp.ready() из InitApp');
+                        WebApp.ready();
+                        readyCalled = true;
+                        console.log('✅ WebApp.ready() вызван успешно');
                     } catch (err) {
                         console.error('❌ Ошибка при вызове WebApp.ready():', err);
                     }
+                }
 
-                    // Завершаем инициализацию в любом случае
-                    console.log('✅ Инициализация успешно завершена');
-                    setIsReady(true);
-                    clearTimeout(timeoutId);
-                }, 300); // Небольшая задержка для стабильности
+                // Инициализируем через наш вспомогательный модуль
+                initializeTelegramWebApp();
+
+                // Завершаем инициализацию немедленно
+                setIsReady(true);
+                clearTimeout(timeoutId);
+
             } catch (error) {
-                console.error('❌ Критическая ошибка при инициализации:', error);
-                setError('Не удалось инициализировать приложение');
+                console.error('❌ Ошибка:', error);
                 setIsReady(true); // Продолжаем в любом случае
                 clearTimeout(timeoutId);
             }
         };
 
+        // Запускаем инициализацию
         initializeApp();
 
         // Очищаем таймер при размонтировании
@@ -73,15 +61,9 @@ const InitApp: React.FC = () => {
                 <div className="text-center">
                     <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
                     <p className="mt-4 text-lg text-gray-700 dark:text-gray-300">Загрузка приложения...</p>
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Пожалуйста, подождите</p>
                 </div>
             </div>
         );
-    }
-
-    // Если есть ошибка, показываем уведомление, но все равно рендерим приложение
-    if (error) {
-        console.warn(`⚠️ Ошибка инициализации: ${error}, но продолжаем работу`);
     }
 
     // Рендерим основное приложение
