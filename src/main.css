@@ -7,6 +7,19 @@ body {
     overflow-x: hidden;
     max-width: 100vw;
     width: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: var(--tg-theme-bg-color, #ffffff);
+    color: var(--tg-theme-text-color, #000000);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Для поддержки safe-area в iOS */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
 }
 
 html,
@@ -42,4 +55,26 @@ body,
     padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+}
+
+/* Добавим поддержку темы Telegram WebApp */
+:root {
+    --tg-theme-bg-color: #ffffff;
+    --tg-theme-text-color: #000000;
+    --tg-theme-hint-color: #999999;
+    --tg-theme-link-color: #2481cc;
+    --tg-theme-button-color: #50a8eb;
+    --tg-theme-button-text-color: #ffffff;
+    --tg-theme-secondary-bg-color: #f1f1f1;
+}
+
+/* При наличии данных от телеграм заменяем на реальные переменные */
+[data-theme="dark"] {
+    --tg-theme-bg-color: #1d1d1d;
+    --tg-theme-text-color: #ffffff;
+    --tg-theme-hint-color: #aaaaaa;
+    --tg-theme-link-color: #64beff;
+    --tg-theme-button-color: #2ea6ff;
+    --tg-theme-button-text-color: #ffffff;
+    --tg-theme-secondary-bg-color: #2c2c2c;
 }

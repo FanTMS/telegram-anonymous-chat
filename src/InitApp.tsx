@@ -1,73 +1,77 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter } from 'react-router-dom';
 import App from './App';
+import { isTelegramWebApp } from './utils/telegramWebAppHelper';
+import { secureStorage } from './utils/secureStorage';
+import { debugUtils } from './utils/debug';
 import WebApp from '@twa-dev/sdk';
-import { initializeTelegramWebApp } from './utils/telegramSetup';
-
-// Глобальный флаг для отслеживания вызова ready()
-let readyCalled = false;
 
 const InitApp: React.FC = () => {
-    const [isReady, setIsReady] = useState(false);
+    const [initialized, setInitialized] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Максимально короткий таймаут безопасности
-        const timeoutId = setTimeout(() => {
-            if (!isReady) {
-                console.warn('🚨 Таймаут инициализации, принудительно запускаем приложение');
-                setIsReady(true);
-            }
-        }, 1500); // Уменьшаем до 1.5 секунд
-
-        // Инициализация с немедленным показом приложения
         const initializeApp = async () => {
             try {
-                // Вызываем ready() только если еще не вызывали
-                if (!readyCalled && typeof WebApp !== 'undefined') {
-                    try {
-                        console.log('📣 Вызываем WebApp.ready() из InitApp');
-                        WebApp.ready();
-                        readyCalled = true;
-                        console.log('✅ WebApp.ready() вызван успешно');
-                    } catch (err) {
-                        console.error('❌ Ошибка при вызове WebApp.ready():', err);
-                    }
+                console.log('Инициализация приложения...');
+
+                // Инициализируем хранилище данных пользователя
+                if (isTelegramWebApp() && WebApp.initDataUnsafe?.user) {
+                    // Используем Telegram User ID для инициализации хранилища
+                    const telegramUserId = WebApp.initDataUnsafe.user.id;
+                    secureStorage.initialize(telegramUserId);
+                    console.log(`Хранилище инициализировано с ID пользователя Telegram: ${telegramUserId}`);
+                } else {
+                    // Для локальной разработки используем временный ID
+                    const devUserId = localStorage.getItem('dev_user_id') || `dev_${Date.now()}`;
+                    localStorage.setItem('dev_user_id', devUserId);
+                    secureStorage.initialize(devUserId);
+                    console.log(`Хранилище инициализировано с временным ID: ${devUserId}`);
                 }
 
-                // Инициализируем через наш вспомогательный модуль
-                initializeTelegramWebApp();
+                // Запускаем отладочные утилиты при необходимости
+                if (process.env.NODE_ENV === 'development') {
+                    setTimeout(() => {
+                        debugUtils.runFullDebug();
+                    }, 1000);
+                }
 
-                // Завершаем инициализацию немедленно
-                setIsReady(true);
-                clearTimeout(timeoutId);
-
+                // Завершаем инициализацию
+                setInitialized(true);
             } catch (error) {
-                console.error('❌ Ошибка:', error);
-                setIsReady(true); // Продолжаем в любом случае
-                clearTimeout(timeoutId);
+                console.error('Ошибка при инициализации приложения:', error);
+                setError('Произошла ошибка при инициализации приложения');
+                setInitialized(true); // Все равно показываем приложение
             }
         };
 
-        // Запускаем инициализацию
         initializeApp();
-
-        // Очищаем таймер при размонтировании
-        return () => clearTimeout(timeoutId);
     }, []);
 
-    // Экран загрузки
-    if (!isReady) {
+    if (!initialized) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-white dark:bg-gray-900">
-                <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p className="mt-4 text-lg text-gray-700 dark:text-gray-300">Загрузка приложения...</p>
-                </div>
+            <div className="app-loading">
+                <div className="spinner"></div>
+                <p>Загрузка приложения...</p>
             </div>
         );
     }
 
-    // Рендерим основное приложение
-    return <App />;
+    if (error) {
+        return (
+            <div className="app-error">
+                <h1>Ошибка</h1>
+                <p>{error}</p>
+                <button onClick={() => window.location.reload()}>Перезагрузить</button>
+            </div>
+        );
+    }
+
+    return (
+        <BrowserRouter>
+            <App />
+        </BrowserRouter>
+    );
 };
 
 export default InitApp;
