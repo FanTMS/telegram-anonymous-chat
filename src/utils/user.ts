@@ -1,6 +1,7 @@
 import { db, telegramApi } from './database'
 import { MatchingStrategy } from './recommendations'
-import { getItem, setItem, getAllItems, removeItem } from './dbService';
+import { userStorage } from './userStorage';
+import WebApp from '@twa-dev/sdk';
 
 // Тип для данных Telegram
 export interface TelegramData {
@@ -79,87 +80,79 @@ const CURRENT_USER_KEY = 'current_user_id'
 const ADMINS_KEY = 'admin_users'
 
 // Инициализация интеграции с Telegram при загрузке модуля
-telegramApi.initialize().then(async success => {
+telegramApi.initialize().then(success => {
   if (success) {
-    console.log('Telegram API initialized successfully');
+    console.log('Telegram API initialized successfully')
 
     // Если пользователь авторизован через Telegram, проверяем и создаем профиль
-    const telegramId = telegramApi.getUserId();
+    const telegramId = telegramApi.getUserId()
     if (telegramId) {
-      try {
-        const existingUser = await getUserByTelegramId(telegramId);
+      const existingUser = getUserByTelegramId(telegramId)
 
-        if (!existingUser) {
-          // Создаем нового пользователя из данных Telegram
-          await createUserFromTelegram(telegramId);
-          console.log('Created new user from Telegram data');
-        } else {
-          // Обновляем текущего пользователя и его lastActive
-          await setCurrentUser(existingUser.id);
-          existingUser.lastActive = Date.now();
-          await saveUser(existingUser);
-          console.log('Updated existing user session');
-        }
-      } catch (err) {
-        console.error('Error in Telegram initialization:', err);
+      if (!existingUser) {
+        // Создаем нового пользователя из данных Telegram
+        createUserFromTelegram()
+      } else {
+        // Обновляем текущего пользователя и его lastActive
+        setCurrentUser(existingUser.id)
+        existingUser.lastActive = Date.now()
+        saveUser(existingUser)
       }
     }
   } else {
     // Проверяем, был ли пользователь уже авторизован
-    try {
-      const currentUserId = await getCurrentUserId();
-      if (currentUserId) {
-        console.log('Using existing user session');
-      } else {
-        console.warn('Telegram API initialization failed, using local mode');
-      }
-    } catch (err) {
-      console.error('Error checking current user:', err);
+    const currentUserId = getCurrentUserId()
+    if (currentUserId) {
+      console.log('Using existing user session')
+    } else {
+      console.warn('Telegram API initialization failed, using local mode')
     }
   }
-});
+})
 
 // Получение списка всех пользователей
-export const getUsers = async (): Promise<User[]> => {
+export const getUsers = (): User[] => {
   try {
-    const users = await getAllItems('users', {});
-    return users || [];
+    const usersData = localStorage.getItem('users')
+    if (!usersData) {
+      return []
+    }
+    return JSON.parse(usersData)
   } catch (error) {
-    console.error('Error getting users:', error);
-    return [];
+    console.error('Error getting users:', error)
+    return [] // Возвращаем пустой массив вместо ошибки
   }
 }
 
 // Получение пользователя по ID - улучшенная версия с дополнительными проверками
-export const getUserById = async (id: string): Promise<User | null> => {
+export const getUserById = (userId: string): User | null => {
   try {
-    console.log(`Поиск пользователя с ID ${id}`);
-    if (!id) {
-      console.error('getUserById получил пустой ID');
-      return null;
+    if (!userId) return null;
+
+    // Проверяем, не является ли запрашиваемый пользователь текущим
+    const currentUser = userStorage.getItem<User>('currentUser', null);
+    if (currentUser && currentUser.id === userId) {
+      return currentUser;
     }
 
-    const user = await getItem(`user_${id}`);
-    if (!user) {
-      console.log(`Пользователь с ID ${id} не найден`);
-      return null;
-    }
-
-    console.log(`Пользователь найден: ${user.name} (${user.id})`);
-    return user;
+    // Иначе ищем среди всех пользователей
+    const users = userStorage.getItem<User[]>('users', []);
+    return users.find(user => user.id === userId) || null;
   } catch (error) {
-    console.error(`Ошибка при получении пользователя по ID (${id}):`, error);
+    console.error(`Ошибка при получении пользователя ${userId}:`, error);
     return null;
   }
 }
 
 // Упрощенная синхронная функция получения пользователя
-export const getUserByIdSync = async (userId: string): Promise<User | null> => {
+export const getUserByIdSync = (userId: string): User | null => {
   if (!userId) return null;
 
   try {
-    const user = await getItem(`user_${userId}`);
-    if (!user) {
+    const key = `${USER_KEY_PREFIX}${userId}`;
+    const userData = localStorage.getItem(key);
+
+    if (!userData) {
       return {
         id: userId,
         name: 'Собеседник',
@@ -169,7 +162,7 @@ export const getUserByIdSync = async (userId: string): Promise<User | null> => {
       };
     }
 
-    return user;
+    return JSON.parse(userData);
   } catch (error) {
     console.error(`Error in getUserByIdSync for ${userId}:`, error);
     return {
@@ -183,157 +176,131 @@ export const getUserByIdSync = async (userId: string): Promise<User | null> => {
 }
 
 // Получение пользователя по Telegram ID
-export const getUserByTelegramId = async (telegramId: string): Promise<User | null> => {
+export const getUserByTelegramId = (telegramId: string): User | null => {
   try {
-    const users = await getUsers();
-    return users.find(user => user.telegramData?.telegramId === telegramId) || null;
+    const users = getUsers()
+    return users.find(user => user.telegramData?.telegramId === telegramId) || null
   } catch (error) {
-    console.error(`Failed to get user by Telegram ID ${telegramId}`, error);
-    return null;
+    console.error(`Failed to get user by Telegram ID ${telegramId}`, error)
+    return null
   }
 }
 
-// Сохранение пользователя - исправленная версия с поддержкой Promise
-export const saveUser = async (user: User): Promise<boolean> => {
+// Сохранение пользователя
+export const saveUser = (user: User): boolean => {
   try {
-    // Обновляем время последней активности
-    user.lastActive = Date.now();
+    if (!user) return false;
 
-    const key = `${USER_KEY_PREFIX}${user.id}`;
+    // Сохраняем в изолированное хранилище
+    userStorage.setItem('currentUser', user);
 
-    // Сохраняем пользователя в MongoDB
-    await setItem(key, user);
+    // Также сохраняем в список пользователей, если есть
+    const users = userStorage.getItem<User[]>('users', []);
+    const userIndex = users.findIndex(u => u.id === user.id);
 
-    // Если используется db, также сохраняем там для обратной совместимости
-    try {
-      // Сохраняем пользователя в localStorage напрямую для надежности
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(key, JSON.stringify(user));
-      }
-
-      const result = await db.saveData(key, user);
-
-      // Если это текущий пользователь, обновляем ссылку на него
-      const currentUserId = await getCurrentUserId();
-      if (currentUserId === user.id || !currentUserId) {
-        await setCurrentUser(user.id);
-      }
-
-      return !!result;
-    } catch (e) {
-      console.warn('Failed to save user to legacy storage', e);
-      return true; // Считаем успешным, так как в MongoDB сохранили
+    if (userIndex === -1) {
+      // Добавляем нового пользователя
+      users.push(user);
+    } else {
+      // Обновляем существующего
+      users[userIndex] = user;
     }
+
+    userStorage.setItem('users', users);
+    return true;
   } catch (error) {
-    console.error('Failed to save user', error);
+    console.error('Ошибка при сохранении пользователя:', error);
     return false;
   }
 }
 
 // Установка текущего пользователя
-export const setCurrentUser = async (userId: string): Promise<void> => {
+export const setCurrentUser = (userId: string): void => {
   try {
-    await setItem(CURRENT_USER_KEY, userId);
+    localStorage.setItem(CURRENT_USER_KEY, userId)
   } catch (error) {
-    console.error('Failed to set current user', error);
+    console.error('Failed to set current user', error)
   }
 }
 
 // Получение ID текущего пользователя
-export const getCurrentUserId = async (): Promise<string | null> => {
+export const getCurrentUserId = (): string | null => {
   try {
-    return await getItem(CURRENT_USER_KEY);
+    return localStorage.getItem(CURRENT_USER_KEY)
   } catch (error) {
-    console.error('Failed to get current user ID', error);
-    return null;
+    console.error('Failed to get current user ID', error)
+    return null
   }
 }
 
 // Более надежная функция получения текущего пользователя
-export const getCurrentUser = async (): Promise<User | null> => {
+export const getCurrentUser = (): User | null => {
   try {
-    const userId = await getItem(CURRENT_USER_KEY);
-    if (!userId) {
-      return null;
+    // Проверяем, инициализировано ли хранилище
+    if (!userStorage.isInitialized()) {
+      // Пытаемся инициализировать из Telegram WebApp
+      if (WebApp && WebApp.initDataUnsafe && WebApp.initDataUnsafe.user) {
+        const telegramId = WebApp.initDataUnsafe.user.id;
+        userStorage.initialize(telegramId);
+        console.log(`Автоматическая инициализация хранилища для пользователя ${telegramId}`);
+      } else {
+        // Для локальной разработки
+        const devUserId = localStorage.getItem('dev_user_id');
+        if (devUserId) {
+          userStorage.initialize(devUserId);
+          console.log(`Автоматическая инициализация хранилища для разработки с ID ${devUserId}`);
+        } else {
+          console.warn('Невозможно инициализировать хранилище: нет ID пользователя');
+          return null;
+        }
+      }
     }
 
-    const user = await getItem(`user_${userId}`);
-
-    // Если пользователя не найдено в базе, но это локальная разработка, создадим демо-пользователя
-    if (!user && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      console.log('Создание демо-пользователя для локальной разработки');
-      const demoUser = createDemoUser();
-      await setCurrentUser(demoUser.id);
-      return demoUser;
-    }
-
-    return user;
+    // Используем изолированное хранилище
+    return userStorage.getItem<User>('currentUser', null);
   } catch (error) {
-    console.error('Failed to get current user', error);
+    console.error('Ошибка при получении текущего пользователя:', error);
     return null;
   }
 }
 
 // Создание пользователя из данных Telegram
-export const createUserFromTelegram = async (telegramId: string, customName?: string): Promise<User | null> => {
+export const createUserFromTelegram = (): User | null => {
   try {
-    // Инициализируем API если еще не сделано
-    if (!telegramApi.isReady()) {
-      await telegramApi.initialize()
+    // Проверяем доступность Telegram WebApp
+    if (!WebApp || !WebApp.initDataUnsafe || !WebApp.initDataUnsafe.user) {
+      console.error('Данные пользователя Telegram недоступны');
+      return null;
     }
 
-    // Получаем данные пользователя
-    const telegramData = telegramApi.getUserData()
-    const userId = `user_${Date.now()}`
-
-    // Формируем имя из данных Telegram или используем переданное имя
-    const name = customName || (telegramData.firstName || 'Пользователь')
+    const tgUser = WebApp.initDataUnsafe.user;
 
     const newUser: User = {
-      id: userId,
-      name,
-      rating: 5.0,
-      interests: [],
-      isAnonymous: false,
+      id: tgUser.id.toString(),
+      name: tgUser.first_name,
+      telegramData: {
+        telegramId: tgUser.id.toString(),
+        username: tgUser.username || '',
+      },
       createdAt: Date.now(),
       lastActive: Date.now(),
-      telegramData: {
-        telegramId,
-        username: telegramData.username,
-        firstName: telegramData.firstName,
-        lastName: telegramData.lastName,
-        languageCode: telegramData.languageCode
-      },
-      // Добавляем базовые настройки
-      settings: {
-        privacyLevel: 'medium',
-        showOnlineStatus: true,
-        showLastSeen: false,
-        allowProfileSearch: true,
-        matchingPreference: 'similar',
-        notifications: {
-          newMessages: true,
-          chatRequests: true,
-          systemUpdates: true,
-          sounds: true
-        },
-        theme: 'system'
-      }
+      interests: [],
+      isAnonymous: false,
+      rating: 5
+    };
+
+    // Сохраняем пользователя в изолированное хранилище
+    userStorage.setItem('currentUser', newUser);
+
+    // Инициализируем хранилище с ID пользователя если ещё не инициализировано
+    if (!userStorage.isInitialized()) {
+      userStorage.initialize(tgUser.id);
     }
 
-    // Сохраняем нового пользователя
-    const saved = await saveUser(newUser)
-
-    if (saved) {
-      // Устанавливаем как текущего пользователя
-      setCurrentUser(userId)
-      return newUser
-    }
-
-    return null
+    return newUser;
   } catch (error) {
-    console.error('Failed to create user from Telegram', error)
-    return null
+    console.error('Ошибка при создании пользователя из данных Telegram:', error);
+    return null;
   }
 }
 
@@ -390,23 +357,23 @@ export const createDemoUser = (customName?: string): User => {
 }
 
 // Создание администратора из данных Telegram
-export const createAdminUserFromTelegram = async (telegramId: string, adminName: string): Promise<User | null> => {
+export const createAdminUserFromTelegram = (telegramId: string, adminName: string): User | null => {
   try {
     // Проверяем, существует ли пользователь
-    const existingUser = await getUserByTelegramId(telegramId);
+    const existingUser = getUserByTelegramId(telegramId)
 
     if (existingUser) {
       // Если пользователь существует, делаем его администратором
-      existingUser.isAdmin = true;
-      await saveUser(existingUser);
+      existingUser.isAdmin = true
+      saveUser(existingUser)
 
       // Добавляем в список администраторов
-      await addAdmin(telegramId);
+      addAdmin(telegramId)
 
-      return existingUser;
+      return existingUser
     } else {
       // Создаем нового пользователя-администратора
-      const userId = `user_${Date.now()}`;
+      const userId = `user_${Date.now()}`
       const adminUser: User = {
         id: userId,
         name: adminName,
@@ -426,70 +393,70 @@ export const createAdminUserFromTelegram = async (telegramId: string, adminName:
           allowProfileSearch: false,
           theme: 'system'
         }
-      };
+      }
 
-      await saveUser(adminUser);
+      saveUser(adminUser)
 
       // Добавляем в список администраторов
-      await addAdmin(telegramId);
+      addAdmin(telegramId)
 
-      return adminUser;
+      return adminUser
     }
   } catch (error) {
-    console.error('Failed to create admin user', error);
-    return null;
+    console.error('Failed to create admin user', error)
+    return null
   }
 }
 
 // Добавление Telegram ID в список администраторов
-export const addAdmin = async (telegramId: string): Promise<void> => {
+export const addAdmin = (telegramId: string): void => {
   try {
-    const admins = await getAdmins();
+    const admins = getAdmins()
 
     if (!admins.includes(telegramId)) {
-      admins.push(telegramId);
-      await setItem(ADMINS_KEY, admins);
+      admins.push(telegramId)
+      localStorage.setItem(ADMINS_KEY, JSON.stringify(admins))
     }
   } catch (error) {
-    console.error('Failed to add admin', error);
+    console.error('Failed to add admin', error)
   }
 }
 
 // Получение списка Telegram ID администраторов
-export const getAdmins = async (): Promise<string[]> => {
+export const getAdmins = (): string[] => {
   try {
-    const admins = await getItem(ADMINS_KEY);
-    return admins || [];
+    const admins = localStorage.getItem(ADMINS_KEY)
+    return admins ? JSON.parse(admins) : []
   } catch (error) {
-    console.error('Failed to get admins list', error);
-    return [];
+    console.error('Failed to get admins list', error)
+    return []
   }
 }
 
 // Установка статуса администратора по Telegram ID
-export const setAdminByTelegramId = async (telegramId: string): Promise<boolean> => {
+export const setAdminByTelegramId = (telegramId: string): boolean => {
   try {
-    const user = await getUserByTelegramId(telegramId);
+    const user = getUserByTelegramId(telegramId)
 
     if (user) {
-      user.isAdmin = true;
-      await saveUser(user);
+      user.isAdmin = true
+      saveUser(user)
 
       // Добавляем в список администраторов
-      await addAdmin(telegramId);
+      addAdmin(telegramId)
 
-      return true;
+      return true
     }
 
-    return false;
+    return false
   } catch (error) {
-    console.error('Failed to set admin by Telegram ID', error);
-    return false;
+    console.error('Failed to set admin by Telegram ID', error)
+    return false
   }
 }
 
 // Модифицируем функцию для проверки админских прав с учетом локальной разработки
-export const isAdmin = async (): Promise<boolean> => {
+export const isAdmin = (): boolean => {
   try {
     // Проверяем, запущено ли приложение локально
     const isLocalhost =
@@ -504,15 +471,15 @@ export const isAdmin = async (): Promise<boolean> => {
     }
 
     // Стандартная проверка для не-локальных запусков
-    const currentUser = await getCurrentUser();
+    const currentUser = getCurrentUser();
 
-    if (currentUser && currentUser.isAdmin) {
+    if (currentUser?.isAdmin) {
       return true;
     }
 
     // Проверяем через Telegram ID, если есть
-    if (currentUser && currentUser.telegramData && currentUser.telegramData.telegramId) {
-      const admins = await getAdmins();
+    if (currentUser?.telegramData?.telegramId) {
+      const admins = getAdmins();
       return admins.includes(currentUser.telegramData.telegramId);
     }
 
@@ -524,38 +491,42 @@ export const isAdmin = async (): Promise<boolean> => {
 }
 
 // Блокировка пользователя
-export const blockUser = async (userId: string): Promise<boolean> => {
+export const blockUser = (userId: string): boolean => {
   try {
-    const user = await getItem(`user_${userId}`);
+    const key = `${USER_KEY_PREFIX}${userId}`
+    const userData = localStorage.getItem(key)
 
-    if (user) {
-      user.isBlocked = true;
-      await setItem(`user_${userId}`, user);
-      return true;
+    if (userData) {
+      const user: User = JSON.parse(userData)
+      user.isBlocked = true
+      localStorage.setItem(key, JSON.stringify(user))
+      return true
     }
 
-    return false;
+    return false
   } catch (error) {
-    console.error('Failed to block user', error);
-    return false;
+    console.error('Failed to block user', error)
+    return false
   }
 }
 
 // Разблокировка пользователя
-export const unblockUser = async (userId: string): Promise<boolean> => {
+export const unblockUser = (userId: string): boolean => {
   try {
-    const user = await getItem(`user_${userId}`);
+    const key = `${USER_KEY_PREFIX}${userId}`
+    const userData = localStorage.getItem(key)
 
-    if (user) {
-      user.isBlocked = false;
-      await setItem(`user_${userId}`, user);
-      return true;
+    if (userData) {
+      const user: User = JSON.parse(userData)
+      user.isBlocked = false
+      localStorage.setItem(key, JSON.stringify(user))
+      return true
     }
 
-    return false;
+    return false
   } catch (error) {
-    console.error('Failed to unblock user', error);
-    return false;
+    console.error('Failed to unblock user', error)
+    return false
   }
 }
 
@@ -570,10 +541,10 @@ export const clearDatabase = async (): Promise<boolean> => {
 }
 
 // Обновление рейтинга пользователя
-export const updateUserRating = async (userId: string, newRating: number): Promise<boolean> => {
+export const updateUserRating = (userId: string, newRating: number): boolean => {
   try {
     // Получаем текущего пользователя
-    const user = await getUserById(userId)
+    const user = getUserById(userId)
     if (!user) {
       return false
     }
@@ -582,7 +553,7 @@ export const updateUserRating = async (userId: string, newRating: number): Promi
     user.rating = newRating
 
     // Сохраняем пользователя
-    return await saveUser(user)
+    return saveUser(user)
   } catch (error) {
     console.error('Failed to update user rating:', error)
     return false
@@ -590,15 +561,15 @@ export const updateUserRating = async (userId: string, newRating: number): Promi
 }
 
 // Обновление статуса пользователя
-export const updateUserStatus = async (userId: string, status: string): Promise<boolean> => {
+export const updateUserStatus = (userId: string, status: string): boolean => {
   try {
-    const user = await getUserById(userId)
+    const user = getUserById(userId)
     if (!user) {
       return false
     }
 
     user.status = status
-    return await saveUser(user)
+    return saveUser(user)
   } catch (error) {
     console.error('Failed to update user status:', error)
     return false
@@ -606,10 +577,22 @@ export const updateUserStatus = async (userId: string, status: string): Promise<
 }
 
 // Обновление пользовательских настроек
-export const updateUserSettings = async (userId: string, settings: any): Promise<boolean> => {
+export const updateUserSettings = (userId: string, settings: Partial<UserSettings>): boolean => {
   try {
-    const user = await getItem(`user_${userId}`);
+    // Сначала получаем текущего пользователя напрямую из localStorage для надежности
+    let user: User | null = null;
+    const key = `${USER_KEY_PREFIX}${userId}`;
+    const userData = localStorage.getItem(key);
+
+    if (userData) {
+      user = JSON.parse(userData);
+    } else {
+      // Если нет в localStorage, пробуем получить через db
+      user = getUserById(userId);
+    }
+
     if (!user) {
+      console.error('User not found for settings update');
       return false;
     }
 
@@ -619,7 +602,11 @@ export const updateUserSettings = async (userId: string, settings: any): Promise
       ...settings
     };
 
-    return await setItem(`user_${userId}`, user);
+    // Сохраняем напрямую в localStorage для надежности
+    localStorage.setItem(key, JSON.stringify(user));
+
+    // И также через абстракцию db
+    return saveUser(user);
   } catch (error) {
     console.error('Failed to update user settings:', error);
     return false;
@@ -627,7 +614,7 @@ export const updateUserSettings = async (userId: string, settings: any): Promise
 }
 
 // Функция для создания тестового пользователя (для отладки)
-export const createTestUser = async (name: string = "Тест"): Promise<User | null> => {
+export const createTestUser = (name: string = "Тест"): User | null => {
   try {
     const id = `test_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const newUser: User = {
@@ -641,16 +628,15 @@ export const createTestUser = async (name: string = "Тест"): Promise<User | 
     };
 
     // Сохраняем пользователя
-    const users = await getAllItems('users') || [];
+    const usersData = localStorage.getItem('users');
+    const users = usersData ? JSON.parse(usersData) : [];
     users.push(newUser);
-    await setItem('users', users);
+    localStorage.setItem('users', JSON.stringify(users));
 
-    // Сохраняем отдельно для быстрого доступа
-    await setItem(`user_${id}`, newUser);
-
+    console.log(`Создан тестовый пользователь: ${name} (${id})`);
     return newUser;
   } catch (error) {
-    console.error('Error creating test user:', error);
+    console.error('Ошибка при создании тестового пользователя:', error);
     return null;
   }
 }

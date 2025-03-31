@@ -1,6 +1,5 @@
 import WebApp from '@twa-dev/sdk'
 import { getCurrentUser, saveUser } from './user'
-import { getItem, setItem } from './dbService';
 
 // Типы для магазина
 export interface StoreItem {
@@ -377,21 +376,21 @@ export const removeStoreItem = (itemId: string): void => {
   }
 };
 
-// Сохранение списка товаров
-export const saveStoreItems = async (): Promise<void> => {
+// Сохранение списка товаров в localStorage
+export const saveStoreItems = (): void => {
   try {
-    await setItem('store_items', allStoreItems);
+    localStorage.setItem('store_items', JSON.stringify(allStoreItems));
   } catch (error) {
     console.error('Ошибка при сохранении списка товаров:', error);
   }
 };
 
-// Загрузка списка товаров
-export const loadStoreItems = async (): Promise<void> => {
+// Загрузка списка товаров из localStorage
+export const loadStoreItems = (): void => {
   try {
-    const savedItems = await getItem('store_items');
+    const savedItems = localStorage.getItem('store_items');
     if (savedItems) {
-      allStoreItems = savedItems;
+      allStoreItems = JSON.parse(savedItems);
     }
   } catch (error) {
     console.error('Ошибка при загрузке списка товаров:', error);
@@ -399,16 +398,16 @@ export const loadStoreItems = async (): Promise<void> => {
 };
 
 // Инициализация списка товаров при загрузке страницы
-export const initializeStore = async (): Promise<void> => {
+export const initializeStore = (): void => {
   try {
     // Проверяем, есть ли сохраненные товары
-    const savedItems = await getItem('store_items');
+    const savedItems = localStorage.getItem('store_items');
     if (!savedItems) {
       // Если нет, сохраняем дефолтные товары
-      await saveStoreItems();
+      saveStoreItems();
     } else {
       // Если есть, загружаем их
-      allStoreItems = savedItems;
+      loadStoreItems();
     }
   } catch (error) {
     console.error('Ошибка при инициализации магазина:', error);
@@ -419,12 +418,13 @@ export const initializeStore = async (): Promise<void> => {
 initializeStore();
 
 // Получение баланса пользователя
-export const getUserCurrency = async (userId: string): Promise<Currency> => {
+export const getUserCurrency = (userId: string): Currency => {
   try {
-    const currency = await getItem(`currency.${userId}`);
+    const key = `currency_${userId}`;
+    const currencyData = localStorage.getItem(key);
 
-    if (currency) {
-      return currency;
+    if (currencyData) {
+      return JSON.parse(currencyData);
     }
 
     // Если данных нет, возвращаем начальное значение
@@ -442,18 +442,19 @@ export const getUserCurrency = async (userId: string): Promise<Currency> => {
 };
 
 // Сохранение баланса пользователя
-export const saveCurrency = async (userId: string, currency: Currency): Promise<void> => {
+export const saveCurrency = (userId: string, currency: Currency): void => {
   try {
-    await setItem(`currency.${userId}`, currency);
+    localStorage.setItem(`currency_${userId}`, JSON.stringify(currency));
   } catch (error) {
     console.error('Ошибка при сохранении баланса:', error);
   }
 };
 
 // Добавление валюты пользователю
-export const addCurrency = async (userId: string, amount: number, description = 'Изменено администратором'): Promise<boolean> => {
+export const addCurrency = (userId: string, amount: number, description = 'Изменено администратором'): boolean => {
   try {
-    const currency = await getUserCurrency(userId);
+    const key = `currency_${userId}`;
+    const currency: Currency = getUserCurrency(userId);
 
     // Добавляем или отнимаем указанную сумму
     currency.balance += amount;
@@ -468,7 +469,7 @@ export const addCurrency = async (userId: string, amount: number, description = 
     currency.transactions.push(transaction);
 
     // Сохраняем обновленные данные
-    await saveCurrency(userId, currency);
+    localStorage.setItem(key, JSON.stringify(currency));
 
     return true;
   } catch (error) {
@@ -478,9 +479,9 @@ export const addCurrency = async (userId: string, amount: number, description = 
 }
 
 // Списание валюты у пользователя
-export const deductCurrency = async (userId: string, amount: number, description: string): Promise<boolean> => {
+export const deductCurrency = (userId: string, amount: number, description: string): boolean => {
   try {
-    const currency = await getUserCurrency(userId);
+    const currency = getUserCurrency(userId);
 
     // Проверяем достаточно ли средств
     if (currency.balance < amount) {
@@ -500,7 +501,7 @@ export const deductCurrency = async (userId: string, amount: number, description
     currency.transactions.push(transaction);
 
     // Сохраняем обновленные данные
-    await saveCurrency(userId, currency);
+    saveCurrency(userId, currency);
 
     return true;
   } catch (error) {
@@ -510,10 +511,10 @@ export const deductCurrency = async (userId: string, amount: number, description
 };
 
 // Получение покупок пользователя
-export const getUserPurchases = async (userId: string): Promise<Purchase[]> => {
+export const getUserPurchases = (userId: string): Purchase[] => {
   try {
-    const purchases = await getItem(`purchases.${userId}`);
-    return purchases || [];
+    const purchasesData = localStorage.getItem(`purchases_${userId}`);
+    return purchasesData ? JSON.parse(purchasesData) : [];
   } catch (error) {
     console.error('Ошибка при получении покупок:', error);
     return [];
@@ -521,18 +522,18 @@ export const getUserPurchases = async (userId: string): Promise<Purchase[]> => {
 };
 
 // Сохранение покупок пользователя
-export const savePurchases = async (userId: string, purchases: Purchase[]): Promise<void> => {
+export const savePurchases = (userId: string, purchases: Purchase[]): void => {
   try {
-    await setItem(`purchases.${userId}`, purchases);
+    localStorage.setItem(`purchases_${userId}`, JSON.stringify(purchases));
   } catch (error) {
     console.error('Ошибка при сохранении покупок:', error);
   }
 };
 
 // Проверка активности премиум-функции
-export const isPremiumFeatureActive = async (userId: string, featureId: string): Promise<boolean> => {
+export const isPremiumFeatureActive = (userId: string, featureId: string): boolean => {
   try {
-    const purchases = await getUserPurchases(userId);
+    const purchases = getUserPurchases(userId);
     const now = Date.now();
 
     // Ищем активную подписку на премиум-функцию
@@ -548,10 +549,10 @@ export const isPremiumFeatureActive = async (userId: string, featureId: string):
 };
 
 // Покупка товара
-export const purchaseItem = async (userId: string, itemId: string): Promise<boolean> => {
+export const purchaseItem = (userId: string, itemId: string): boolean => {
   try {
     // Получаем данные пользователя, валюту и покупки
-    const user = await getCurrentUser();
+    const user = getCurrentUser();
     if (!user) return false;
 
     // Находим товар в магазине
@@ -564,7 +565,7 @@ export const purchaseItem = async (userId: string, itemId: string): Promise<bool
       : item.price;
 
     // Списываем валюту
-    const success = await deductCurrency(userId, finalPrice, `Покупка: ${item.name}`);
+    const success = deductCurrency(userId, finalPrice, `Покупка: ${item.name}`);
     if (!success) return false;
 
     // Создаем новую покупку
@@ -582,14 +583,14 @@ export const purchaseItem = async (userId: string, itemId: string): Promise<bool
     }
 
     // Сохраняем покупку в список покупок пользователя
-    const purchases = await getUserPurchases(userId);
+    const purchases = getUserPurchases(userId);
     purchases.push(purchase);
-    await savePurchases(userId, purchases);
+    savePurchases(userId, purchases);
 
     // Если это аватар, устанавливаем его пользователю
     if (item.type === 'avatar') {
       user.avatar = (item as AvatarItem).avatarUrl;
-      await saveUser(user);
+      saveUser(user);
     }
 
     // Уведомляем пользователя о покупке через интерфейс Telegram
@@ -609,9 +610,9 @@ export const getDiscountedPrice = (item: StoreItem): number => {
 };
 
 // Проверка, куплен ли товар пользователем
-export const isItemPurchased = async (userId: string, itemId: string): Promise<boolean> => {
+export const isItemPurchased = (userId: string, itemId: string): boolean => {
   try {
-    const purchases = await getUserPurchases(userId);
+    const purchases = getUserPurchases(userId);
     return purchases.some(purchase => purchase.itemId === itemId && purchase.isActive);
   } catch (error) {
     console.error('Ошибка при проверке покупки:', error);
@@ -620,9 +621,9 @@ export const isItemPurchased = async (userId: string, itemId: string): Promise<b
 };
 
 // Получение всех активных премиум-функций пользователя
-export const getActivePremiumFeatures = async (userId: string): Promise<PremiumFeatureItem[]> => {
+export const getActivePremiumFeatures = (userId: string): PremiumFeatureItem[] => {
   try {
-    const purchases = await getUserPurchases(userId);
+    const purchases = getUserPurchases(userId);
     const now = Date.now();
 
     // Фильтруем покупки, чтобы получить только активные премиум-функции
@@ -642,9 +643,9 @@ export const getActivePremiumFeatures = async (userId: string): Promise<PremiumF
 };
 
 // Проверить и обновить срок действия премиум-функций
-export const checkAndUpdatePremiumFeatures = async (userId: string): Promise<void> => {
+export const checkAndUpdatePremiumFeatures = (userId: string): void => {
   try {
-    const purchases = await getUserPurchases(userId);
+    const purchases = getUserPurchases(userId);
     const now = Date.now();
     let updated = false;
 
@@ -658,7 +659,7 @@ export const checkAndUpdatePremiumFeatures = async (userId: string): Promise<voi
 
     // Если были изменения, сохраняем обновленные покупки
     if (updated) {
-      await savePurchases(userId, purchases);
+      savePurchases(userId, purchases);
     }
   } catch (error) {
     console.error('Ошибка при обновлении премиум-функций:', error);
@@ -666,9 +667,9 @@ export const checkAndUpdatePremiumFeatures = async (userId: string): Promise<voi
 };
 
 // Добавление бонусной валюты
-export const addBonusCurrency = async (userId: string, amount: number): Promise<boolean> => {
+export const addBonusCurrency = (userId: string, amount: number): boolean => {
   try {
-    const currency = await getUserCurrency(userId);
+    const currency = getUserCurrency(userId);
 
     // Создаем новую транзакцию
     const transaction: Transaction = {
@@ -683,7 +684,7 @@ export const addBonusCurrency = async (userId: string, amount: number): Promise<
     currency.transactions.push(transaction);
 
     // Сохраняем обновленные данные
-    await saveCurrency(userId, currency);
+    localStorage.setItem(`currency_${userId}`, JSON.stringify(currency));
 
     return true;
   } catch (error) {

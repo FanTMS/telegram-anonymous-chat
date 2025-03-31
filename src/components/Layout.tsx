@@ -1,24 +1,25 @@
 import { useState, useEffect } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import WebApp from '@twa-dev/sdk'
-import { isAdmin as checkAdmin, getCurrentUser, saveUser, User } from '../utils/user'
+import { isAdmin as checkAdmin, getCurrentUser, saveUser, User, createUserFromTelegram } from '../utils/user'
 import { NavButton } from './NavButton'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChatRedirectHandler } from './ChatRedirectHandler'
 import { hasNewChat, getNewChatNotification, markChatNotificationAsRead } from '../utils/matchmaking'
+import { userStorage } from '../utils/userStorage'
 
 export const Layout = () => {
   const location = useLocation()
   const navigate = useNavigate()
   const [isAdminUser, setIsAdminUser] = useState(false)
   const [hasNewMessage, setHasNewMessage] = useState(false)
-  const [isLoading, setIsLoading] = useState(true) // Добавляем состояние загрузки
+  const [isLoading, setIsLoading] = useState(true)
   const [loadingTimeout, setLoadingTimeout] = useState<NodeJS.Timeout | null>(null)
   const [isDevMode, setIsDevMode] = useState(false)
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
 
   // Инициализация с таймаутом
   useEffect(() => {
-    // Устанавливаем таймаут, чтобы избежать бесконечной загрузки
     const timeout = setTimeout(() => {
       setIsLoading(false);
       console.log("Layout forced loading completion after timeout");
@@ -31,47 +32,114 @@ export const Layout = () => {
     };
   }, []);
 
-  // Проверяем, является ли пользователь администратором
   useEffect(() => {
-    try {
-      const checkAdminStatus = async () => {
-        // Проверяем админские права
-        const isUserAdmin = await checkAdmin();
-        setIsAdminUser(isUserAdmin);
-        setIsLoading(false); // Завершаем загрузку после проверки
-      };
-
-      checkAdminStatus();
-    } catch (error) {
-      console.error('Error in Layout admin check:', error);
-      setIsLoading(false); // Завершаем загрузку в случае ошибки
-    }
-  }, []);
-
-  // Эффект для проверки новых сообщений
-  useEffect(() => {
-    const checkForNewChat = async () => {
+    const checkUserAndAuthenticate = async () => {
       try {
-        const currentUser = await getCurrentUser();
-        if (currentUser) {
-          const newChatExists = await hasNewChat(currentUser.id);
-          setHasNewMessage(newChatExists);
+        // Проверяем, инициализировано ли хранилище пользователя
+        if (WebApp && WebApp.initDataUnsafe && WebApp.initDataUnsafe.user) {
+          const userId = WebApp.initDataUnsafe.user.id;
+          if (!userStorage.isInitialized() || userStorage.getUserId() !== String(userId)) {
+            console.log(`Инициализация хранилища для Telegram пользователя ${userId}`);
+            userStorage.initialize(userId);
+          }
+        } else if (localStorage.getItem('dev_user_id')) {
+          const devUserId = localStorage.getItem('dev_user_id');
+          if (!userStorage.isInitialized() || userStorage.getUserId() !== devUserId) {
+            console.log(`Инициализация хранилища для разработки с ID ${devUserId}`);
+            userStorage.initialize(devUserId!);
+          }
+        }
+
+        let user = getCurrentUser();
+
+        if (!user && WebApp && WebApp.initDataUnsafe && WebApp.initDataUnsafe.user) {
+          userStorage.initialize(WebApp.initDataUnsafe.user.id);
+
+          user = getCurrentUser();
+
+          if (!user) {
+            if (!location.pathname.includes('/registration')) {
+              navigate('/registration');
+            }
+            return;
+          }
+        } else if (!user) {
+          if (!location.pathname.includes('/registration')) {
+            navigate('/registration');
+          }
+          return;
+        }
+
+        setCurrentUser(user);
+
+        const isAdmin = await checkAdmin();
+        setIsAdminUser(isAdmin);
+
+        if (user) {
+          user.lastActive = Date.now();
+          saveUser(user);
         }
       } catch (error) {
-        console.error('Failed to check for new chats', error);
+        console.error('Ошибка при проверке пользователя:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    // Проверяем при монтировании
-    checkForNewChat();
+    checkUserAndAuthenticate();
+  }, [navigate, location.pathname]);
 
-    // Настраиваем интервал для проверки
-    const interval = setInterval(checkForNewChat, 5000);
+  useEffect(() => {
+    try {
+      const currentUserID = localStorage.getItem('current_user_id');
+      if (currentUserID) {
+        const userKey = `user_${currentUserID}`;
+        const userData = localStorage.getItem(userKey);
 
-    return () => clearInterval(interval);
+        if (!userData) {
+          console.warn('Layout: current_user_id exists but user data not found');
+        }
+      }
+
+      const isUserAdmin = checkAdmin();
+      setIsAdminUser(isUserAdmin);
+
+      setIsLoading(false);
+      if (loadingTimeout) clearTimeout(loadingTimeout);
+    } catch (error) {
+      console.error('Layout initialization error:', error);
+      setIsLoading(false);
+      if (loadingTimeout) clearTimeout(loadingTimeout);
+    }
+
+    let checkAttemptsCount = 0;
+    const maxAttempts = 5;
+
+    const checkNewChats = () => {
+      try {
+        checkAttemptsCount++;
+        const currentUser = getCurrentUser();
+        if (currentUser) {
+          const newChat = hasNewChat(currentUser.id);
+          setHasNewMessage(newChat);
+        }
+
+        if (checkAttemptsCount >= maxAttempts) {
+          console.log(`Reached max check attempts (${maxAttempts}), stopping new chat checks`);
+          return;
+        }
+      } catch (error) {
+        console.error('Ошибка при проверке новых чатов:', error);
+      }
+    };
+
+    checkNewChats();
+
+    const intervalId = setInterval(checkNewChats, 10000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
-  // Функция создания демо-пользователя
   const createDemoUser = () => {
     const userId = `user_${Date.now()}`
     const demoUser: User = {
@@ -84,9 +152,9 @@ export const Layout = () => {
       isAnonymous: false,
       createdAt: Date.now(),
       lastActive: Date.now(),
-      isAdmin: true, // По умолчанию пользователь является администратором
+      isAdmin: true,
       telegramData: {
-        telegramId: '5394381166' // ID из запроса
+        telegramId: '5394381166'
       }
     }
 
@@ -94,7 +162,6 @@ export const Layout = () => {
     return demoUser
   }
 
-  // Определяем заголовок в зависимости от текущего маршрута
   const getTitle = () => {
     const pathSegments = location.pathname.split('/').filter(Boolean)
     const mainPath = pathSegments[0] || 'home'
@@ -114,14 +181,12 @@ export const Layout = () => {
     return titles[mainPath] || 'Анонимный чат'
   }
 
-  // Адаптируем Telegram WebApp при монтировании компонента
   useEffect(() => {
     try {
       if (typeof WebApp !== 'undefined') {
         WebApp.ready()
         WebApp.expand()
 
-        // Определяем тип для параметров темы
         type ThemeParams = {
           bg_color?: string;
           text_color?: string;
@@ -132,10 +197,8 @@ export const Layout = () => {
           secondary_bg_color?: string;
         }
 
-        // Безопасно получаем параметры темы
         const themeParams: ThemeParams = WebApp.themeParams || {}
 
-        // Устанавливаем фоновой цвет и цвет текста из Telegram
         document.documentElement.style.setProperty('--tg-theme-bg-color', themeParams.bg_color || '#ffffff')
         document.documentElement.style.setProperty('--tg-theme-text-color', themeParams.text_color || '#000000')
         document.documentElement.style.setProperty('--tg-theme-hint-color', themeParams.hint_color || '#999999')
@@ -144,22 +207,18 @@ export const Layout = () => {
         document.documentElement.style.setProperty('--tg-theme-button-text-color', themeParams.button_text_color || '#ffffff')
         document.documentElement.style.setProperty('--tg-theme-secondary-bg-color', themeParams.secondary_bg_color || '#f0f0f0')
 
-        // Для правильной работы фона с прозрачностью
         const bgColor = themeParams.bg_color || '#ffffff'
-        // Преобразуем цвет в RGB для использования с rgba
         const rgb = hexToRgb(bgColor)
         if (rgb) {
           document.documentElement.style.setProperty('--tg-theme-bg-color-rgb', `${rgb.r}, ${rgb.g}, ${rgb.b}`)
         }
 
-        // Установка цветовой схемы
         if (WebApp.colorScheme === 'dark') {
           document.documentElement.classList.add('dark')
         } else {
           document.documentElement.classList.remove('dark')
         }
 
-        // Устанавливаем заголовок в MainButton Telegram
         if (WebApp.MainButton && WebApp.MainButton.setText) {
           WebApp.MainButton.setText(getTitle())
         }
@@ -169,17 +228,13 @@ export const Layout = () => {
     }
   }, [location])
 
-  // Функция для преобразования HEX цвета в RGB
   const hexToRgb = (hex: string) => {
-    // Убираем # если он есть
     hex = hex.replace(/^#/, '')
 
-    // Обрабатываем 3-символьный формат
     if (hex.length === 3) {
       hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2]
     }
 
-    // Преобразуем в RGB
     const bigint = parseInt(hex, 16)
     return {
       r: (bigint >> 16) & 255,
@@ -188,47 +243,35 @@ export const Layout = () => {
     }
   }
 
-  // Оптимизируем обработку чатов
   useEffect(() => {
-    // Функция для проверки новых чатов
-    const checkNewChats = async () => {
-      try {
-        const currentUser = await getCurrentUser();
-        if (currentUser) {
-          const newChat = await hasNewChat(currentUser.id);
-          setHasNewMessage(newChat);
-        }
-      } catch (error) {
-        console.error('Failed to check for new chats', error);
+    const checkNewChats = () => {
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        const newChat = hasNewChat(currentUser.id);
+        setHasNewMessage(newChat);
       }
     };
 
-    // Проверяем при монтировании и запускаем интервал
     checkNewChats();
     const intervalId = setInterval(checkNewChats, 3000);
 
     return () => clearInterval(intervalId);
-  }, [location.pathname]); // Добавляем зависимость от маршрута
+  }, [location.pathname]);
 
-  // Добавляем проверку для перенаправления чатов
   useEffect(() => {
-    // Функция для проверки новых чатов
-    const checkForNewChats = async () => {
-      try {
-        const currentUser = await getCurrentUser();
-        if (!currentUser) return;
+    const checkForNewChats = () => {
+      const currentUser = getCurrentUser();
+      if (!currentUser) return;
 
-        // Проверяем, есть ли новый чат
-        if (await hasNewChat(currentUser.id)) {
-          const notification = await getNewChatNotification(currentUser.id);
+      try {
+        if (hasNewChat(currentUser.id)) {
+          const notification = getNewChatNotification(currentUser.id);
 
           if (notification && !notification.isRead) {
             console.log(`Новый чат обнаружен: ${notification.chatId}`, notification);
 
-            // Сохраняем ID чата для использования в компоненте чата
             localStorage.setItem('active_chat_id', notification.chatId);
 
-            // Отмечаем уведомление как прочитанное только при переходе в чат
             if (!location.pathname.includes(`/chat/${notification.chatId}`)) {
               console.log(`Перенаправляем на чат: /chat/${notification.chatId}`);
               navigate(`/chat/${notification.chatId}`);
@@ -240,10 +283,8 @@ export const Layout = () => {
       }
     };
 
-    // Проверяем сразу после монтирования
     checkForNewChats();
 
-    // Запускаем периодическую проверку
     const intervalId = setInterval(checkForNewChats, 3000);
 
     return () => {
@@ -251,7 +292,6 @@ export const Layout = () => {
     };
   }, [navigate, location.pathname]);
 
-  // Показать/скрыть индикатор режима разработки
   const renderDevModeIndicator = () => {
     if (!isDevMode) return null;
 
@@ -265,7 +305,6 @@ export const Layout = () => {
     );
   };
 
-  // Отображаем индикатор загрузки, если Layout всё еще инициализируется
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -276,10 +315,8 @@ export const Layout = () => {
 
   return (
     <div className="tg-container">
-      {/* Компонент для перенаправления при появлении нового чата */}
       <ChatRedirectHandler enabled={true} />
 
-      {/* Основной контент */}
       <AnimatePresence mode="wait">
         <motion.div
           key={location.pathname}
@@ -287,13 +324,12 @@ export const Layout = () => {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
-          className="pt-2 pb-20" // Отступ снизу для навигации
+          className="pt-2 pb-20"
         >
           <Outlet />
         </motion.div>
       </AnimatePresence>
 
-      {/* Нижняя навигация с оригинальными кнопками */}
       <motion.nav
         className="tg-navbar"
         initial={{ y: 100 }}
@@ -349,7 +385,6 @@ export const Layout = () => {
         </div>
       </motion.nav>
 
-      {/* Индикатор режима разработки */}
       {renderDevModeIndicator()}
     </div>
   );

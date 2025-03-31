@@ -3,53 +3,52 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "netlify": {
-    "functions": {
-      "mongodb": {
-        "type": "commonjs"
-      },
-      "setup-bot": {
-        "type": "commonjs"
-      },
-      "telegram-webhook": {
-        "type": "commonjs"
-      }
-    }
-  },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "prebuild": "node clean-functions.js",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview",
-    "start": "netlify dev",
-    "clean": "node clean-functions.js",
-    "prestart": "node clean-functions.js"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@twa-dev/sdk": "^6.9.1",
-    "axios": "^1.6.7",
-    "framer-motion": "^11.0.3",
-    "mongodb": "^6.3.0",
+    "@twa-dev/sdk": "6.9.2",
+    "autoprefixer": "^10.4.16",
+    "axios": "^1.6.2",
+    "date-fns": "^4.1.0",
+    "framer-motion": "^10.16.16",
+    "postcss": "^8.4.32",
     "react": "^18.2.0",
+    "react-confetti": "^6.1.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.21.3",
-    "uuid": "^9.0.1"
+    "react-router-dom": "^6.20.1",
+    "react-use": "^17.4.0",
+    "tailwindcss": "^3.3.6"
   },
   "devDependencies": {
-    "@types/react": "^18.2.43",
-    "@types/react-dom": "^18.2.17",
-    "@typescript-eslint/eslint-plugin": "^6.14.0",
-    "@typescript-eslint/parser": "^6.14.0",
+    "@types/node": "22.13.13",
+    "@types/react": "18.3.20",
+    "@types/react-dom": "18.3.5",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
     "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "^10.4.17",
-    "eslint": "^8.55.0",
+    "eslint": "^8.56.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
-    "netlify-cli": "^17.15.5",
-    "postcss": "^8.4.33",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5.2.2",
-    "vite": "^5.0.8"
+    "typescript": "^5.3.3",
+    "vite": "^6.2.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }

@@ -13,6 +13,40 @@ interface UserRegistrationProps {
   onComplete?: () => void;
 }
 
+// Расширяем интерфейс ButtonProps, чтобы добавить поддержку isLoading
+interface ExtendedButtonProps {
+  children: React.ReactNode;
+  onClick?: () => void;
+  isLoading?: boolean;
+  fullWidth?: boolean;
+  className?: string;
+  variant?: 'primary' | 'secondary' | 'outline';
+  size?: 'small' | 'medium' | 'large';
+}
+
+// Создаем расширенный компонент кнопки
+const LoadingButton: React.FC<ExtendedButtonProps> = ({
+  children,
+  onClick,
+  isLoading = false,
+  ...props
+}) => {
+  return (
+    <Button
+      onClick={onClick}
+      disabled={isLoading}
+      {...props}
+    >
+      {isLoading ? (
+        <div className="flex items-center justify-center">
+          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+          Загрузка...
+        </div>
+      ) : children}
+    </Button>
+  );
+};
+
 export const UserRegistration: React.FC<UserRegistrationProps> = ({ onComplete }) => {
   const navigate = useNavigate()
   const [name, setName] = useState('')
@@ -83,50 +117,50 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onComplete }
   const handleCompleteRegistration = async () => {
     // Проверка валидации формы
     if (!validateForm()) {
-      return
+      return;
     }
 
-    setIsLoading(true)
-    setError('')
+    setIsLoading(true);
+    setError('');
 
     try {
-      let user: User | null = null
+      let user: User | null = null;
 
       // Проверяем, есть ли данные Telegram
       if (telegramApi.isReady() && telegramApi.getUserId()) {
         // Создаем пользователя из данных Telegram
-        user = await createUserFromTelegram(telegramApi.getUserId() as string, name || randomName)
+        user = createUserFromTelegram();
       } else {
         // Создаем демо-пользователя
-        user = createDemoUser()
-        user.name = name || randomName // Обновляем имя
+        user = createDemoUser();
+        user.name = name || randomName; // Обновляем имя
       }
 
       if (!user) {
-        throw new Error('Не удалось создать пользователя')
+        throw new Error('Не удалось создать пользователя');
       }
 
       // Обновляем данные пользователя
-      user.age = age ? parseInt(age) : undefined
-      user.interests = selectedInterests
+      user.age = age ? parseInt(age) : undefined;
+      user.interests = selectedInterests;
 
       // Сохраняем пользователя
-      await saveUser(user)
+      saveUser(user);
 
       // Вызываем callback если он есть
       if (onComplete) {
-        onComplete()
+        onComplete();
       } else {
         // Перенаправляем на главную
-        navigate('/')
+        navigate('/');
       }
     } catch (error) {
-      console.error('Ошибка при регистрации:', error)
-      setError('Произошла ошибка при регистрации. Пожалуйста, попробуйте еще раз.')
+      console.error('Ошибка при регистрации:', error);
+      setError('Произошла ошибка при регистрации. Пожалуйста, попробуйте еще раз.');
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <motion.div
@@ -239,14 +273,14 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onComplete }
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6 }}
           >
-            <Button
+            <LoadingButton
               onClick={handleCompleteRegistration}
               isLoading={isLoading}
               fullWidth
               className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-md transition-all transform hover:scale-[1.02] active:scale-[0.98]"
             >
               Завершить регистрацию
-            </Button>
+            </LoadingButton>
           </motion.div>
         </div>
       </Card>

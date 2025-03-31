@@ -1,29 +1,43 @@
-# Logs
-logs
-*.log
+# Зависимости
+node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+package-lock.json
+yarn.lock
 
-# Dependencies
-node_modules
-.pnp
-.pnp.js
-
-# Build
+# Сборка
 dist
 dist-ssr
 build
 .netlify
-.netlify/functions
 
-# Editor directories and files
+# Среда разработки
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.local
+.env.production
+
+# Кэш и временные файлы
+.cache
+.DS_Store
+.parcel-cache
+.rts2_cache_*
+.history
+
+# Логи
+logs
+*.log
+
+# IDE и редакторы
+.idea/
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
 *.sublime-project
 *.sublime-workspace
 .project
@@ -35,28 +49,6 @@ build
 *.njsproj
 *.sln
 *.sw?
-
-# Env files
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env.production
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Временные файлы
-.cache
-.temp
-.tmp
-.parcel-cache
-.rts2_cache_*
-.history
 
 # Тестирование
 /coverage

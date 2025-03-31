@@ -1,5 +1,5 @@
-import { User, getCurrentUser, getUsers } from './user'
-import { getItem, setItem, getAllItems, removeItem } from './dbService';
+import { User, getCurrentUser } from './user'
+import { userStorage } from './userStorage'
 
 // Типы участников группы
 export enum GroupMemberRole {
@@ -43,103 +43,175 @@ export interface Group {
   maxMembers: number
   tags: string[]
   avatarUrl?: string
+  inviteCode?: string // Добавляем это поле
+  imageUrl?: string // Оставляем для совместимости
 }
 
+// Константы для ключей
+const GROUP_KEY_PREFIX = 'group_';
+const GROUP_MEMBERS_KEY_PREFIX = 'group_members_';
+const GROUP_MESSAGES_KEY_PREFIX = 'group_messages_';
+const USER_GROUPS_KEY_PREFIX = 'user_groups_';
+
 // Получить список всех групп
-export const getAllGroups = async (): Promise<Group[]> => {
+export const getAllGroups = (): Group[] => {
   try {
-    const groups = await getAllItems('groups', {});
+    const groups: Group[] = []
+
+    // Получаем все группы из изолированного хранилища текущего пользователя
+    const groupKeys = userStorage.getAllUserKeys().filter(key =>
+      key.startsWith(GROUP_KEY_PREFIX) &&
+      !key.includes('_members_') &&
+      !key.includes('_messages_'));
+
+    for (const key of groupKeys) {
+      try {
+        const groupData = userStorage.getItem<Group>(key, null);
+        if (groupData) {
+          groups.push(groupData);
+        }
+      } catch (error) {
+        console.error(`Ошибка при обработке группы ${key}:`, error);
+      }
+    }
+
     return groups.sort((a, b) => b.updatedAt - a.updatedAt);
   } catch (error) {
     console.error('Ошибка при получении списка групп:', error);
     return [];
   }
-}
+};
 
 // Создать новую группу
-export const createGroup = async (
+export const createGroup = (
   name: string,
   description = '',
   isAnonymous = false,
   isPrivate = false,
   tags: string[] = [],
   avatarUrl?: string
-): Promise<Group | null> => {
+): Group | null => {
   try {
-    const currentUser = await getCurrentUser();
+    const currentUser = getCurrentUser();
 
     if (!currentUser) {
       console.error('Не удалось создать группу: пользователь не авторизован');
       return null;
     }
 
-    const groupId = `group_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const now = Date.now();
+    const groupId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
-    // Создаем группу
-    const group: Group = {
+    // Создаем новую группу
+    const newGroup: Group = {
       id: groupId,
       name,
       description,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
       createdBy: currentUser.id,
+      memberCount: 1, // Создатель автоматически становится первым участником
+      maxMembers: 100,
       isAnonymous,
       isPrivate,
-      memberCount: 1, // создатель уже в группе
-      maxMembers: 100, // максимум по умолчанию
-      tags,
-      avatarUrl
+      inviteCode: isPrivate ? `invite_${Math.random().toString(36).substring(2, 10)}` : undefined,
+      imageUrl: avatarUrl,
+      tags
     };
 
-    // Сохраняем группу
-    await setItem(`groups.${groupId}`, group);
+    // Сохраняем группу в изолированное хранилище
+    userStorage.setItem(GROUP_KEY_PREFIX + groupId, newGroup);
 
-    // Добавляем создателя как администратора группы
-    const member: GroupMember = {
-      userId: currentUser.id,
-      joinedAt: now,
-      role: GroupMemberRole.ADMIN,
-      isAnonymous: false // создатель по умолчанию не анонимен
-    };
+    // Создаем список участников группы с создателем в качестве администратора
+    const members: GroupMember[] = [
+      {
+        userId: currentUser.id,
+        joinedAt: Date.now(),
+        role: GroupMemberRole.ADMIN,
+        isAnonymous: false
+      }
+    ];
 
-    // Сохраняем члена группы
-    const groupMembers: GroupMember[] = [member];
-    await setItem(`group_members.${groupId}`, groupMembers);
+    // Сохраняем список участников
+    userStorage.setItem(GROUP_MEMBERS_KEY_PREFIX + groupId, members);
 
-    // Создаем системное сообщение о создании группы
-    const systemMessage: GroupMessage = {
-      id: `msg_${Date.now()}`,
-      groupId,
-      senderId: 'system',
-      text: `Группа "${name}" создана.`,
-      timestamp: now,
-      isAnonymous: false,
-      isSystem: true
-    };
-
-    // Сохраняем сообщение
-    const messages: GroupMessage[] = [systemMessage];
-    await setItem(`group_messages.${groupId}`, messages);
+    // Инициализируем пустой список сообщений
+    userStorage.setItem(GROUP_MESSAGES_KEY_PREFIX + groupId, []);
 
     // Добавляем группу в список групп пользователя
-    await addGroupToUsersList(currentUser.id, groupId);
+    addGroupToUsersList(currentUser.id, groupId);
 
-    return group;
+    return newGroup;
   } catch (error) {
     console.error('Ошибка при создании группы:', error);
     return null;
   }
-}
+};
+
+// Получить группу по идентификатору
+export const getGroupById = (groupId: string): Group | null => {
+  try {
+    return userStorage.getItem<Group>(GROUP_KEY_PREFIX + groupId, null);
+  } catch (error) {
+    console.error(`Ошибка при получении группы ${groupId}:`, error);
+    return null;
+  }
+};
+
+// Добавить группу в список групп пользователя
+export const addGroupToUsersList = (userId: string, groupId: string): boolean => {
+  try {
+    const userGroupsKey = USER_GROUPS_KEY_PREFIX + userId;
+    const userGroups = userStorage.getItem<string[]>(userGroupsKey, []);
+
+    if (!userGroups.includes(groupId)) {
+      userGroups.push(groupId);
+      userStorage.setItem(userGroupsKey, userGroups);
+    }
+
+    return true;
+  } catch (error) {
+    console.error(`Ошибка при добавлении группы ${groupId} в список пользователя ${userId}:`, error);
+    return false;
+  }
+};
+
+// Получить группы пользователя
+export const getUserGroups = (): Group[] => {
+  try {
+    const currentUser = getCurrentUser();
+
+    if (!currentUser) {
+      console.error('Не удалось получить группы: пользователь не авторизован');
+      return [];
+    }
+
+    const userGroupsKey = USER_GROUPS_KEY_PREFIX + currentUser.id;
+    const userGroupIds = userStorage.getItem<string[]>(userGroupsKey, []);
+
+    const groups: Group[] = [];
+
+    for (const groupId of userGroupIds) {
+      const group = getGroupById(groupId);
+      if (group) {
+        groups.push(group);
+      }
+    }
+
+    return groups.sort((a, b) => b.updatedAt - a.updatedAt);
+  } catch (error) {
+    console.error('Ошибка при получении групп пользователя:', error);
+    return [];
+  }
+};
 
 // Присоединиться к группе
-export const joinGroup = async (
+export const joinGroup = (
   groupId: string,
   isAnonymous = false,
   anonymousName?: string
-): Promise<boolean> => {
+): boolean => {
   try {
-    const currentUser = await getCurrentUser();
+    const currentUser = getCurrentUser();
 
     if (!currentUser) {
       console.error('Не удалось присоединиться к группе: пользователь не авторизован');
@@ -147,7 +219,8 @@ export const joinGroup = async (
     }
 
     // Получаем данные о группе
-    const group = await getItem(`groups.${groupId}`);
+    const group = getGroupById(groupId);
+
     if (!group) {
       console.error(`Группа ${groupId} не найдена`);
       return false;
@@ -160,7 +233,7 @@ export const joinGroup = async (
     }
 
     // Получаем список участников группы
-    const members: GroupMember[] = await getItem(`group_members.${groupId}`) || [];
+    const members = userStorage.getItem<GroupMember[]>(GROUP_MEMBERS_KEY_PREFIX + groupId, []);
 
     // Проверяем, не является ли пользователь уже участником группы
     const existingMember = members.find(m => m.userId === currentUser.id);
@@ -181,15 +254,15 @@ export const joinGroup = async (
     members.push(member);
 
     // Обновляем список участников
-    await setItem(`group_members.${groupId}`, members);
+    userStorage.setItem(GROUP_MEMBERS_KEY_PREFIX + groupId, members);
 
     // Обновляем количество участников группы
     group.memberCount = members.length;
     group.updatedAt = Date.now();
-    await setItem(`groups.${groupId}`, group);
+    userStorage.setItem(GROUP_KEY_PREFIX + groupId, group);
 
     // Добавляем группу в список групп пользователя
-    await addGroupToUsersList(currentUser.id, groupId);
+    addGroupToUsersList(currentUser.id, groupId);
 
     // Создаем системное сообщение о присоединении пользователя
     const now = Date.now();
@@ -208,23 +281,23 @@ export const joinGroup = async (
     };
 
     // Получаем текущие сообщения группы
-    const messages: GroupMessage[] = await getItem(`group_messages.${groupId}`) || [];
+    const messages = userStorage.getItem<GroupMessage[]>(GROUP_MESSAGES_KEY_PREFIX + groupId, []);
 
     // Добавляем системное сообщение
     messages.push(systemMessage);
-    await setItem(`group_messages.${groupId}`, messages);
+    userStorage.setItem(GROUP_MESSAGES_KEY_PREFIX + groupId, messages);
 
     return true;
   } catch (error) {
     console.error('Ошибка при присоединении к группе:', error);
     return false;
   }
-}
+};
 
 // Покинуть группу
-export const leaveGroup = async (groupId: string): Promise<boolean> => {
+export const leaveGroup = (groupId: string): boolean => {
   try {
-    const currentUser = await getCurrentUser();
+    const currentUser = getCurrentUser();
 
     if (!currentUser) {
       console.error('Не удалось покинуть группу: пользователь не авторизован');
@@ -232,101 +305,103 @@ export const leaveGroup = async (groupId: string): Promise<boolean> => {
     }
 
     // Получаем данные о группе
-    const group = await getItem(`groups.${groupId}`);
+    const group = getGroupById(groupId);
+
     if (!group) {
       console.error(`Группа ${groupId} не найдена`);
       return false;
     }
 
     // Получаем список участников группы
-    const members: GroupMember[] = await getItem(`group_members.${groupId}`);
-    if (!members) {
-      console.error(`Список участников группы ${groupId} не найден`);
-      return false;
-    }
+    const members = userStorage.getItem<GroupMember[]>(GROUP_MEMBERS_KEY_PREFIX + groupId, []);
 
-    // Ищем участника для удаления
+    // Ищем пользователя в списке участников
     const memberIndex = members.findIndex(m => m.userId === currentUser.id);
+
     if (memberIndex === -1) {
-      console.error(`Пользователь ${currentUser.id} не является участником группы ${groupId}`);
+      console.error(`Пользователь ${currentUser.id} не найден в списке участников группы ${groupId}`);
       return false;
     }
 
-    // Если пользователь - единственный администратор, нельзя покинуть группу
-    const isAdmin = members[memberIndex].role === GroupMemberRole.ADMIN;
-    const hasOtherAdmins = members.filter(m => m.role === GroupMemberRole.ADMIN && m.userId !== currentUser.id).length > 0;
+    // Проверяем, является ли пользователь единственным администратором
+    const isLastAdmin =
+      members[memberIndex].role === GroupMemberRole.ADMIN &&
+      members.filter(m => m.role === GroupMemberRole.ADMIN).length === 1;
 
-    if (isAdmin && !hasOtherAdmins && members.length > 1) {
-      console.error('Нельзя покинуть группу: вы единственный администратор');
-      return false;
+    if (isLastAdmin && members.length > 1) {
+      // Находим другого участника для передачи прав администратора
+      const newAdminIndex = members.findIndex(m => m.userId !== currentUser.id);
+
+      if (newAdminIndex !== -1) {
+        members[newAdminIndex].role = GroupMemberRole.ADMIN;
+      }
     }
 
-    // Если пользователь - единственный участник, удаляем группу
-    if (members.length === 1) {
-      // Удаляем группу
-      await removeItem(`groups.${groupId}`);
-      await removeItem(`group_members.${groupId}`);
-      await removeItem(`group_messages.${groupId}`);
-
-      // Удаляем группу из списка групп пользователя
-      await removeGroupFromUsersList(currentUser.id, groupId);
-
-      return true;
-    }
-
-    // Удаляем пользователя из группы
-    const member = members[memberIndex];
+    // Удаляем пользователя из списка участников
+    const userInfo = members[memberIndex];
     members.splice(memberIndex, 1);
 
-    // Обновляем список участников
-    await setItem(`group_members.${groupId}`, members);
+    // Обновляем список участников группы
+    userStorage.setItem(GROUP_MEMBERS_KEY_PREFIX + groupId, members);
 
-    // Обновляем количество участников группы
-    group.memberCount = members.length;
-    group.updatedAt = Date.now();
-    await setItem(`groups.${groupId}`, group);
+    // Обновляем информацию о группе
+    if (members.length === 0) {
+      // Если группа осталась пустой, удаляем её
+      userStorage.removeItem(GROUP_KEY_PREFIX + groupId);
+      userStorage.removeItem(GROUP_MEMBERS_KEY_PREFIX + groupId);
+      userStorage.removeItem(GROUP_MESSAGES_KEY_PREFIX + groupId);
+    } else {
+      // Иначе обновляем количество участников
+      group.memberCount = members.length;
+      group.updatedAt = Date.now();
+      userStorage.setItem(GROUP_KEY_PREFIX + groupId, group);
+    }
 
     // Удаляем группу из списка групп пользователя
-    await removeGroupFromUsersList(currentUser.id, groupId);
+    const userGroupsKey = USER_GROUPS_KEY_PREFIX + currentUser.id;
+    const userGroups = userStorage.getItem<string[]>(userGroupsKey, []);
+    const updatedUserGroups = userGroups.filter(id => id !== groupId);
+    userStorage.setItem(userGroupsKey, updatedUserGroups);
 
-    // Создаем системное сообщение о выходе пользователя
-    const now = Date.now();
-    const userName = member.isAnonymous
-      ? (member.anonymousName || 'Анонимный пользователь')
-      : currentUser.name;
+    // Если группа не была удалена, добавляем системное сообщение о выходе пользователя
+    if (members.length > 0) {
+      const userName = userInfo.isAnonymous
+        ? (userInfo.anonymousName || 'Анонимный пользователь')
+        : currentUser.name || 'Пользователь';
 
-    const systemMessage: GroupMessage = {
-      id: `msg_${now}`,
-      groupId,
-      senderId: 'system',
-      text: `${userName} покинул группу.`,
-      timestamp: now,
-      isAnonymous: false,
-      isSystem: true
-    };
+      const systemMessage: GroupMessage = {
+        id: `msg_${Date.now()}`,
+        groupId,
+        senderId: 'system',
+        text: `${userName} покинул группу.`,
+        timestamp: Date.now(),
+        isAnonymous: false,
+        isSystem: true
+      };
 
-    // Получаем текущие сообщения группы
-    const messages: GroupMessage[] = await getItem(`group_messages.${groupId}`) || [];
+      // Получаем текущие сообщения группы
+      const messages = userStorage.getItem<GroupMessage[]>(GROUP_MESSAGES_KEY_PREFIX + groupId, []);
 
-    // Добавляем системное сообщение
-    messages.push(systemMessage);
-    await setItem(`group_messages.${groupId}`, messages);
+      // Добавляем системное сообщение о выходе пользователя
+      messages.push(systemMessage);
+      userStorage.setItem(GROUP_MESSAGES_KEY_PREFIX + groupId, messages);
+    }
 
     return true;
   } catch (error) {
     console.error('Ошибка при выходе из группы:', error);
     return false;
   }
-}
+};
 
 // Отправить сообщение в группу
-export const sendGroupMessage = async (
+export const sendGroupMessage = (
   groupId: string,
   text: string,
   isAnonymous = false
-): Promise<GroupMessage | null> => {
+): GroupMessage | null => {
   try {
-    const currentUser = await getCurrentUser();
+    const currentUser = getCurrentUser();
 
     if (!currentUser) {
       console.error('Не удалось отправить сообщение: пользователь не авторизован');
@@ -334,18 +409,14 @@ export const sendGroupMessage = async (
     }
 
     // Получаем группу
-    const group = await getItem(`groups.${groupId}`);
+    const group = getGroupById(groupId);
     if (!group) {
       console.error(`Группа ${groupId} не найдена`);
       return null;
     }
 
     // Получаем список участников
-    const members: GroupMember[] = await getItem(`group_members.${groupId}`);
-    if (!members) {
-      console.error(`Список участников группы ${groupId} не найден`);
-      return null;
-    }
+    const members = userStorage.getItem<GroupMember[]>(GROUP_MEMBERS_KEY_PREFIX + groupId, []);
 
     // Проверяем, является ли пользователь участником группы
     const member = members.find(m => m.userId === currentUser.id);
@@ -369,207 +440,83 @@ export const sendGroupMessage = async (
     };
 
     // Получаем текущие сообщения группы
-    const messages: GroupMessage[] = await getItem(`group_messages.${groupId}`) || [];
+    const messages = userStorage.getItem<GroupMessage[]>(GROUP_MESSAGES_KEY_PREFIX + groupId, []);
 
     // Добавляем сообщение
     messages.push(message);
-    await setItem(`group_messages.${groupId}`, messages);
+    userStorage.setItem(GROUP_MESSAGES_KEY_PREFIX + groupId, messages);
 
     // Обновляем время последнего обновления группы
     group.updatedAt = now;
-    await setItem(`groups.${groupId}`, group);
+    userStorage.setItem(GROUP_KEY_PREFIX + groupId, group);
 
     return message;
   } catch (error) {
     console.error('Ошибка при отправке сообщения в группу:', error);
     return null;
   }
-}
+};
 
 // Получить сообщения группы
-export const getGroupMessages = async (groupId: string): Promise<GroupMessage[]> => {
+export const getGroupMessages = (groupId: string): GroupMessage[] => {
   try {
-    const messages = await getItem(`group_messages.${groupId}`);
-    return messages || [];
+    return userStorage.getItem<GroupMessage[]>(GROUP_MESSAGES_KEY_PREFIX + groupId, []);
   } catch (error) {
     console.error(`Ошибка при получении сообщений группы ${groupId}:`, error);
     return [];
   }
-}
+};
 
 // Получить участников группы
-export const getGroupMembers = async (groupId: string): Promise<GroupMember[]> => {
+export const getGroupMembers = (groupId: string): GroupMember[] => {
   try {
-    const members = await getItem(`group_members.${groupId}`);
-    return members || [];
+    return userStorage.getItem<GroupMember[]>(GROUP_MEMBERS_KEY_PREFIX + groupId, []);
   } catch (error) {
     console.error(`Ошибка при получении участников группы ${groupId}:`, error);
     return [];
   }
-}
+};
 
-// Добавить группу в список групп пользователя
-const addGroupToUsersList = async (userId: string, groupId: string): Promise<boolean> => {
+// Найти и присоединиться к случайной группе
+export const findAndJoinRandomGroup = (): Group | null => {
   try {
-    const userGroups: string[] = await getItem(`user_groups.${userId}`) || [];
-
-    if (!userGroups.includes(groupId)) {
-      userGroups.push(groupId);
-      await setItem(`user_groups.${userId}`, userGroups);
-    }
-
-    return true;
-  } catch (error) {
-    console.error(`Ошибка при добавлении группы ${groupId} в список групп пользователя ${userId}:`, error);
-    return false;
-  }
-}
-
-// Удалить группу из списка групп пользователя
-const removeGroupFromUsersList = async (userId: string, groupId: string): Promise<boolean> => {
-  try {
-    const userGroups: string[] = await getItem(`user_groups.${userId}`);
-
-    if (!userGroups) {
-      return true;
-    }
-
-    const updatedGroups = userGroups.filter(id => id !== groupId);
-    await setItem(`user_groups.${userId}`, updatedGroups);
-
-    return true;
-  } catch (error) {
-    console.error(`Ошибка при удалении группы ${groupId} из списка групп пользователя ${userId}:`, error);
-    return false;
-  }
-}
-
-// Получить группы пользователя
-export const getUserGroups = async (userId?: string): Promise<Group[]> => {
-  try {
-    const currentUser = userId ? { id: userId } : await getCurrentUser();
+    const currentUser = getCurrentUser();
 
     if (!currentUser) {
-      console.error('Не удалось получить группы: пользователь не авторизован');
-      return [];
-    }
-
-    const userGroupIds: string[] = await getItem(`user_groups.${currentUser.id}`) || [];
-    const groups: Group[] = [];
-
-    for (const groupId of userGroupIds) {
-      const group = await getItem(`groups.${groupId}`);
-      if (group) {
-        groups.push(group);
-      }
-    }
-
-    return groups.sort((a, b) => b.updatedAt - a.updatedAt);
-  } catch (error) {
-    console.error('Ошибка при получении групп пользователя:', error);
-    return [];
-  }
-}
-
-// Найти случайную группу для присоединения
-export const findRandomGroup = async (): Promise<Group | null> => {
-  try {
-    const currentUser = await getCurrentUser();
-
-    if (!currentUser) {
-      console.error('Не удалось найти случайную группу: пользователь не авторизован');
+      console.error('Не удалось найти группу: пользователь не авторизован');
       return null;
     }
 
-    const allGroups = await getAllGroups();
+    // Получаем все группы
+    const allGroups = getAllGroups();
 
-    // Фильтрация групп по критериям:
-    // - группа не должна быть приватной
-    // - группа не должна быть заполнена
-    // - пользователь не должен быть уже участником группы
-
-    const userGroups = await getUserGroups();
-    const userGroupIds = userGroups.map(g => g.id);
-
+    // Фильтруем только публичные группы с доступными местами
     const availableGroups = allGroups.filter(group =>
       !group.isPrivate &&
       group.memberCount < group.maxMembers &&
-      !userGroupIds.includes(group.id)
+      group.createdBy !== currentUser.id // Исключаем группы, созданные текущим пользователем
     );
 
     if (availableGroups.length === 0) {
-      // Если нет доступных групп, создаем новую
-      return createAnonymousGroup();
+      console.log('Не найдено доступных групп');
+      return null;
     }
 
     // Выбираем случайную группу
     const randomIndex = Math.floor(Math.random() * availableGroups.length);
-    return availableGroups[randomIndex];
+    const randomGroup = availableGroups[randomIndex];
+
+    // Присоединяемся к группе
+    const joined = joinGroup(randomGroup.id);
+
+    if (!joined) {
+      console.error(`Не удалось присоединиться к группе ${randomGroup.id}`);
+      return null;
+    }
+
+    return randomGroup;
   } catch (error) {
     console.error('Ошибка при поиске случайной группы:', error);
     return null;
   }
-}
-
-// Создать анонимную группу
-export const createAnonymousGroup = async (): Promise<Group | null> => {
-  try {
-    const currentUser = await getCurrentUser();
-
-    if (!currentUser) {
-      console.error('Не удалось создать анонимную группу: пользователь не авторизован');
-      return null;
-    }
-
-    // Генерируем случайное название для группы
-    const randomId = Math.floor(Math.random() * 10000);
-    const name = `Анонимный чат #${randomId}`;
-
-    // Создаем группу
-    return createGroup(
-      name,
-      'Анонимный групповой чат для общения',
-      true, // isAnonymous
-      false, // isPrivate
-      ['анонимный', 'общение'],
-    );
-  } catch (error) {
-    console.error('Ошибка при создании анонимной группы:', error);
-    return null;
-  }
-}
-
-// Найти и присоединиться к случайной группе
-export const findAndJoinRandomGroup = async (): Promise<{ group: Group | null, success: boolean }> => {
-  try {
-    const currentUser = await getCurrentUser();
-
-    if (!currentUser) {
-      console.error('Не удалось найти и присоединиться к случайной группе: пользователь не авторизован');
-      return { group: null, success: false };
-    }
-
-    // Ищем случайную группу
-    const group = await findRandomGroup();
-
-    if (!group) {
-      return { group: null, success: false };
-    }
-
-    // Генерируем анонимное имя
-    const anonymousNames = [
-      'Анонимный кот', 'Таинственный гость', 'Незнакомец', 'Инкогнито',
-      'Тайный собеседник', 'Анонимус', 'Скрытый пользователь', 'Неизвестный'
-    ];
-    const randomNameIndex = Math.floor(Math.random() * anonymousNames.length);
-    const anonymousName = `${anonymousNames[randomNameIndex]} ${Math.floor(Math.random() * 100)}`;
-
-    // Присоединяемся к группе
-    const success = await joinGroup(group.id, true, anonymousName);
-
-    return { group, success };
-  } catch (error) {
-    console.error('Ошибка при поиске и присоединении к случайной группе:', error);
-    return { group: null, success: false };
-  }
-}
+};

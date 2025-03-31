@@ -1,10 +1,10 @@
 import WebApp from '@twa-dev/sdk'
 import React from 'react'
-import { getItem, setItem } from './dbService'
 
 // Экспортируем тип Theme для согласованности
 export type Theme = 'light' | 'dark' | 'system'
-// Определение ключа для хранения темы
+
+// Определение ключа для хранения темы в localStorage
 const THEME_KEY = 'app_theme'
 
 // Функция для получения системной темы
@@ -19,23 +19,23 @@ export const getSystemTheme = (): 'light' | 'dark' => {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-// Получение сохраненной пользовательской темы из хранилища
-export const getSavedTheme = async (): Promise<Theme> => {
+// Получение сохраненной пользовательской темы из localStorage
+export const getSavedTheme = (): Theme => {
   try {
-    const saved = await getItem(THEME_KEY);
-    return (saved as Theme) || 'system';
+    const saved = localStorage.getItem(THEME_KEY)
+    return (saved as Theme) || 'system'
   } catch (error) {
-    console.error('Error getting saved theme:', error);
-    return 'system';
+    console.error('Error getting saved theme:', error)
+    return 'system'
   }
 }
 
-// Сохранение темы в хранилище
-export const saveTheme = async (theme: Theme): Promise<void> => {
+// Сохранение темы в localStorage
+export const saveTheme = (theme: Theme): void => {
   try {
-    await setItem(THEME_KEY, theme);
+    localStorage.setItem(THEME_KEY, theme)
   } catch (error) {
-    console.error('Error saving theme:', error);
+    console.error('Error saving theme:', error)
   }
 }
 
@@ -52,18 +52,16 @@ export const applyTheme = (theme: Theme): 'light' | 'dark' => {
   return actualTheme;
 }
 
-// Создаем и экспортируем контекст темы
+// Создаем и экспортируем контекст темы здесь, чтобы избежать циклической зависимости
 export const ThemeContext = React.createContext<{
   theme: Theme;
   currentTheme: 'light' | 'dark';
   changeTheme: (theme: Theme) => void;
 }>({
-  theme: 'system', // Начальное значение
+  theme: getSavedTheme(),
   currentTheme: getSystemTheme(),
-  changeTheme: async (theme) => {
-    await saveTheme(theme);
-  }
-});
+  changeTheme: saveTheme
+})
 
 // Простой хук для использования контекста темы
-export const useTheme = () => React.useContext(ThemeContext);
+export const useTheme = () => React.useContext(ThemeContext)

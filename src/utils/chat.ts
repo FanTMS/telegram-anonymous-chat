@@ -1,179 +1,161 @@
-import { getItem, setItem, getAllItems, removeItem } from './dbService';
-import { Message } from './moderation';
-import { User, getCurrentUser, getUserById } from './user';
+import { User } from './user';
+import { getCurrentUser } from './user';
+import { userStorage } from './userStorage';
 
-// Интерфейс для чата
-export interface Chat {
+// Интерфейс для сообщения
+export interface Message {
   id: string;
-  participants: string[];
-  lastMessage?: Message;
-  createdAt: number;
-  updatedAt: number;
-  isActive: boolean;
-  isModerated?: boolean;
-  gameData?: any; // Для игровых данных
-  gameRequestAccepted?: boolean; // Для отслеживания принятия запроса на игру
-  title?: string; // Название чата, если оно есть
-  ended?: boolean; // Флаг, указывающий, что чат завершен
-  isFavorite?: boolean; // Флаг, указывающий, что чат в избранном
+  chatId: string;
+  senderId: string;
+  text: string;
+  timestamp: number;
+  isRead: boolean;
+  isSystem?: boolean; // Флаг для системных сообщений
 }
 
-// Создание нового чата
-export const createChat = async (participants: string[]): Promise<Chat> => {
+// Интерфейс для чата с дополнительными полями
+export interface Chat {
+  ended: any;
+  id: string;
+  participants: string[]; // ID участников
+  messages: Message[];
+  isActive: boolean;
+  startedAt: number;
+  endedAt?: number;
+  userId: string;
+  partnerId: string;
+  createdAt: Date;
+  lastActivity: Date;
+  isFavorite?: boolean; // Добавлено для отметки избранных чатов
+  friendRequestSent?: boolean; // Был ли отправлен запрос в друзья
+  friendRequestAccepted?: boolean; // Принят ли запрос в друзья
+  gameRequestSent?: boolean; // Был ли отправлен запрос на игру
+  gameRequestAccepted?: boolean; // Принят ли запрос на игру
+  gameData?: GameResult; // Данные текущей или последней игры
+}
+
+// Интерфейс для результатов игры "Камень-ножницы-бумага"
+export type GameChoice = 'rock' | 'paper' | 'scissors';
+
+export interface GameResult {
+  chatId: string;
+  player1Id: string;
+  player2Id: string;
+  player1Choice?: GameChoice;
+  player2Choice?: GameChoice;
+  winner?: string; // ID победителя, undefined если ничья
+  timestamp: number;
+  isCompleted: boolean;
+}
+
+/**
+ * Получить чат по идентификатору
+ */
+export const getChatById = (chatId: string): Chat | null => {
   try {
-    const chatId = `chat_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    const currentUser = await getCurrentUser();
-
-    const now = Date.now();
-    const newChat: Chat = {
-      id: chatId,
-      participants,
-      createdAt: now,
-      updatedAt: now,
-      isActive: true,
-      isModerated: false,
-    };
-
-    // Добавляем системное сообщение о создании чата
-    const systemMessage: Message = {
-      id: `msg_${now}_system`,
-      chatId,
-      senderId: 'system',
-      text: 'Чат создан. Теперь вы можете общаться!',
-      timestamp: now,
-      isRead: false,
-      isSystem: true
-    };
-
-    // Сохраняем чат в базу данных
-    await setItem(`chats.${chatId}`, newChat);
-
-    // Сохраняем первое сообщение
-    await setItem(`messages.${chatId}`, [systemMessage]);
-
-    // Обновляем список чатов каждого пользователя
-    for (const userId of participants) {
-      const userChats = await getUserChats(userId);
-      if (!userChats.includes(chatId)) {
-        userChats.push(chatId);
-        await setItem(`user_chats.${userId}`, userChats);
-      }
+    if (!chatId) {
+      console.error('getChatById: ID чата не указан');
+      return null;
     }
 
-    return newChat;
+    // Используем изолированное хранилище пользователя
+    const userChats = userStorage.getItem<Chat[]>('chats', []);
+    return userChats.find(chat => chat.id === chatId) || null;
   } catch (error) {
-    console.error('Ошибка при создании чата:', error);
-    throw error;
-  }
-};
-
-// Получение чата по идентификатору
-export const getChatById = async (chatId: string): Promise<Chat | null> => {
-  try {
-    const chat = await getItem(`chats.${chatId}`);
-    return chat;
-  } catch (error) {
-    console.error(`Ошибка при получении чата с ID ${chatId}:`, error);
+    console.error(`Ошибка при получении чата ${chatId}:`, error);
     return null;
   }
 };
 
-// Отправка сообщения в чат
-export const sendMessage = async (chatId: string, text: string, senderId: string): Promise<Message> => {
+/**
+ * Получить все чаты пользователя
+ */
+export const getUserChats = (): Chat[] => {
   try {
-    const chat = await getChatById(chatId);
-    if (!chat) {
-      throw new Error(`Чат с ID ${chatId} не найден`);
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      console.error('Не удалось получить чаты: пользователь не авторизован');
+      return [];
     }
 
-    // Создаем новое сообщение
-    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    const now = Date.now();
-
-    const newMessage: Message = {
-      id: messageId,
-      chatId,
-      senderId,
-      text,
-      timestamp: now,
-      isRead: false
-    };
-
-    // Получаем текущие сообщения чата
-    let messages: Message[] = await getItem(`messages.${chatId}`) || [];
-    messages.push(newMessage);
-
-    // Обновляем список сообщений
-    await setItem(`messages.${chatId}`, messages);
-
-    // Обновляем информацию о чате
-    chat.lastMessage = newMessage;
-    chat.updatedAt = now;
-    await setItem(`chats.${chatId}`, chat);
-
-    return newMessage;
+    // Используем изолированное хранилище пользователя
+    return userStorage.getItem<Chat[]>('chats', []);
   } catch (error) {
-    console.error(`Ошибка при отправке сообщения в чат ${chatId}:`, error);
-    throw error;
-  }
-};
-
-// Получение сообщений из чата
-export const getChatMessages = async (chatId: string): Promise<Message[]> => {
-  try {
-    const messages = await getItem(`messages.${chatId}`);
-    return messages || [];
-  } catch (error) {
-    console.error(`Ошибка при получении сообщений из чата ${chatId}:`, error);
+    console.error('Ошибка при получении чатов:', error);
     return [];
   }
 };
 
-// Отметить сообщения как прочитанные
-export const markMessagesAsRead = async (chatId: string, userId: string): Promise<void> => {
+/**
+ * Сохранить новый чат
+ */
+export const saveChat = (chat: Chat): boolean => {
   try {
-    const messages = await getChatMessages(chatId);
-
-    let updated = false;
-    for (const message of messages) {
-      // Отмечаем как прочитанные только сообщения, которые НЕ отправлены текущим пользователем
-      if (!message.isRead && message.senderId !== userId) {
-        message.isRead = true;
-        updated = true;
-      }
-    }
-
-    if (updated) {
-      await setItem(`messages.${chatId}`, messages);
-    }
-  } catch (error) {
-    console.error(`Ошибка при отметке сообщений как прочитанных в чате ${chatId}:`, error);
-  }
-};
-
-// Получение списка чатов пользователя
-export const getUserChats = async (userId: string): Promise<string[]> => {
-  try {
-    const userChats = await getItem(`user_chats.${userId}`);
-    return userChats || [];
-  } catch (error) {
-    console.error(`Ошибка при получении списка чатов пользователя ${userId}:`, error);
-    return [];
-  }
-};
-
-// Обновление данных чата
-export const updateChat = async (chatId: string, updates: Partial<Chat>): Promise<boolean> => {
-  try {
-    const chat = await getChatById(chatId);
-    if (!chat) {
+    if (!chat || !chat.id) {
+      console.error('saveChat: Невалидный объект чата');
       return false;
     }
 
-    // Объединяем текущие данные с обновлениями
-    const updatedChat = { ...chat, ...updates, updatedAt: Date.now() };
-    await setItem(`chats.${chatId}`, updatedChat);
+    // Получаем текущие чаты из изолированного хранилища
+    const chats = userStorage.getItem<Chat[]>('chats', []);
 
+    // Проверяем, существует ли чат с таким ID
+    const existingChatIndex = chats.findIndex(c => c.id === chat.id);
+
+    if (existingChatIndex !== -1) {
+      // Обновляем существующий чат
+      chats[existingChatIndex] = chat;
+    } else {
+      // Добавляем новый чат
+      chats.push(chat);
+    }
+
+    // Сохраняем обновленный список чатов
+    userStorage.setItem('chats', chats);
+    return true;
+  } catch (error) {
+    console.error('Ошибка при сохранении чата:', error);
+    return false;
+  }
+};
+
+/**
+ * Удалить чат по ID
+ */
+export const deleteChat = (chatId: string): boolean => {
+  try {
+    // Получаем чаты из изолированного хранилища
+    const chats = userStorage.getItem<Chat[]>('chats', []);
+    const updatedChats = chats.filter(chat => chat.id !== chatId);
+
+    // Сохраняем обновленный список
+    userStorage.setItem('chats', updatedChats);
+    return true;
+  } catch (error) {
+    console.error(`Ошибка при удалении чата ${chatId}:`, error);
+    return false;
+  }
+};
+
+/**
+ * Обновить чат
+ */
+export const updateChat = (chatId: string, updates: Partial<Chat>): boolean => {
+  try {
+    // Получаем чаты из изолированного хранилища
+    const chats = userStorage.getItem<Chat[]>('chats', []);
+    const chatIndex = chats.findIndex(chat => chat.id === chatId);
+
+    if (chatIndex === -1) {
+      console.error(`Чат ${chatId} не найден`);
+      return false;
+    }
+
+    // Обновляем чат
+    chats[chatIndex] = { ...chats[chatIndex], ...updates };
+
+    // Сохраняем обновленный список
+    userStorage.setItem('chats', chats);
     return true;
   } catch (error) {
     console.error(`Ошибка при обновлении чата ${chatId}:`, error);
@@ -181,197 +163,214 @@ export const updateChat = async (chatId: string, updates: Partial<Chat>): Promis
   }
 };
 
-// Добавление системного сообщения в чат
-export const addSystemMessage = async (chatId: string, text: string): Promise<boolean> => {
-  try {
-    const chat = await getChatById(chatId);
-    if (!chat) {
-      return false;
-    }
+/**
+ * Игра "Камень-ножницы-бумага"
+ */
+export const playGame = (
+  chatId: string,
+  player1Id: string,
+  player2Id: string,
+  player1Choice: GameChoice,
+  player2Choice: GameChoice
+): GameResult => {
+  // Определяем победителя
+  let winner: string | undefined;
 
-    // Создаем системное сообщение
-    const messageId = `msg_${Date.now()}_system`;
-    const now = Date.now();
+  if (player1Choice === player2Choice) {
+    winner = undefined; // Ничья
+  } else if (
+    (player1Choice === 'rock' && player2Choice === 'scissors') ||
+    (player1Choice === 'paper' && player2Choice === 'rock') ||
+    (player1Choice === 'scissors' && player2Choice === 'paper')
+  ) {
+    winner = player1Id;
+  } else {
+    winner = player2Id;
+  }
+
+  const result: GameResult = {
+    chatId,
+    player1Id,
+    player2Id,
+    player1Choice,
+    player2Choice,
+    winner,
+    timestamp: Date.now(),
+    isCompleted: true
+  };
+
+  // Сохраняем результат игры
+  try {
+    const gamesData = localStorage.getItem('games');
+    const games: GameResult[] = gamesData ? JSON.parse(gamesData) : [];
+
+    games.push(result);
+
+    localStorage.setItem('games', JSON.stringify(games));
+  } catch (error) {
+    console.error('Ошибка при сохранении результата игры:', error);
+  }
+
+  return result;
+};
+
+/**
+ * Получить чаты по ID пользователя
+ */
+export const getChatsByUserId = (userId: string): Chat[] => {
+  const allChats: Chat[] = getUserChats();
+  return allChats.filter(chat => chat.userId === userId || chat.partnerId === userId);
+};
+
+/**
+ * Добавить системное сообщение в чат
+ */
+export const addSystemMessage = (chatId: string, text: string): Message | null => {
+  try {
     const systemMessage: Message = {
-      id: messageId,
+      id: `system_${Date.now()}`,
       chatId,
       senderId: 'system',
       text,
-      timestamp: now,
-      isRead: false,
+      timestamp: Date.now(),
+      isRead: true,
       isSystem: true
     };
 
-    // Получаем текущие сообщения и добавляем новое
-    const messages = await getChatMessages(chatId);
-    messages.push(systemMessage);
-    await setItem(`messages.${chatId}`, messages);
+    const chats = userStorage.getItem<Chat[]>('chats', []);
+    const chatIndex = chats.findIndex(chat => chat.id === chatId);
 
-    // Обновляем информацию о последнем сообщении в чате
-    chat.lastMessage = systemMessage;
-    chat.updatedAt = now;
-    await setItem(`chats.${chatId}`, chat);
+    if (chatIndex === -1) return null;
 
-    return true;
+    // Добавляем системное сообщение в чат
+    chats[chatIndex].messages.push(systemMessage);
+    userStorage.setItem('chats', chats);
+
+    return systemMessage;
   } catch (error) {
-    console.error(`Ошибка при добавлении системного сообщения в чат ${chatId}:`, error);
-    return false;
+    console.error('Ошибка при добавлении системного сообщения:', error);
+    return null;
   }
 };
 
-// Завершение чата
-export const endChat = async (chatId: string): Promise<boolean> => {
+/**
+ * Отправить сообщение в чат
+ */
+export const sendMessage = (chatId: string, text: string, senderId: string): Message | null => {
   try {
-    const chat = await getChatById(chatId);
+    if (!chatId || !text || !senderId) {
+      console.error('sendMessage: Неверные параметры');
+      return null;
+    }
+
+    const chat = getChatById(chatId);
     if (!chat) {
+      console.error(`Чат ${chatId} не найден`);
+      return null;
+    }
+
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const message: Message = {
+      id: messageId,
+      chatId,
+      senderId,
+      text,
+      timestamp: Date.now(),
+      isRead: false
+    };
+
+    // Добавляем сообщение в чат
+    chat.messages.push(message);
+    // Обновляем время последней активности в чате
+    chat.lastActivity = new Date();
+    // Сохраняем чат
+    saveChat(chat);
+
+    return message;
+  } catch (error) {
+    console.error(`Ошибка при отправке сообщения в чат ${chatId}:`, error);
+    return null;
+  }
+};
+
+/**
+ * Завершить чат
+ */
+export const endChat = (chatId: string): boolean => {
+  try {
+    const chat = getChatById(chatId);
+    if (!chat) {
+      console.error(`Чат ${chatId} не найден`);
       return false;
     }
 
     // Отмечаем чат как завершенный
-    chat.ended = true;
     chat.isActive = false;
-    chat.updatedAt = Date.now();
-
-    await setItem(`chats.${chatId}`, chat);
+    chat.endedAt = Date.now();
+    chat.ended = true;
 
     // Добавляем системное сообщение о завершении чата
-    await addSystemMessage(chatId, 'Чат был завершен.');
+    const systemMessage: Message = {
+      id: `system_${Date.now()}`,
+      chatId,
+      senderId: 'system',
+      text: 'Чат был завершен.',
+      timestamp: Date.now(),
+      isRead: true,
+      isSystem: true
+    };
 
-    return true;
+    chat.messages.push(systemMessage);
+
+    // Сохраняем изменения
+    return saveChat(chat);
   } catch (error) {
     console.error(`Ошибка при завершении чата ${chatId}:`, error);
     return false;
   }
 };
 
-// Получение непрочитанных сообщений
-export const getUnreadMessagesCount = async (userId: string, chatId?: string): Promise<number> => {
+/**
+ * Добавить/удалить чат из избранного
+ */
+export const toggleFavoriteChat = (chatId: string): boolean => {
   try {
-    // Если указан chatId, считаем непрочитанные только в этом чате
-    if (chatId) {
-      const messages = await getChatMessages(chatId);
-      return messages.filter(msg => !msg.isRead && msg.senderId !== userId).length;
-    }
-
-    // Если chatId не указан, считаем все непрочитанные сообщения
-    const userChats = await getUserChats(userId);
-    let totalUnread = 0;
-
-    for (const chat of userChats) {
-      const messages = await getChatMessages(chat);
-      totalUnread += messages.filter(msg => !msg.isRead && msg.senderId !== userId).length;
-    }
-
-    return totalUnread;
-  } catch (error) {
-    console.error(`Ошибка при подсчете непрочитанных сообщений для ${userId}:`, error);
-    return 0;
-  }
-};
-
-// Устанавливаем активный чат для пользователя
-export const setActiveChat = async (userId: string, chatId: string): Promise<void> => {
-  try {
-    await setItem(`active_chat_${userId}`, chatId);
-    // Для совместимости также сохраняем общий ключ активного чата
-    await setItem('active_chat_id', chatId);
-    console.log(`[setActiveChat] Активный чат успешно установлен для ${userId}`);
-  } catch (error) {
-    console.error('[setActiveChat] Ошибка при установке активного чата:', error);
-  }
-};
-
-// Получить активный чат пользователя
-export const getActiveChat = async (userId: string): Promise<string | null> => {
-  try {
-    const chatId = await getItem(`active_chat_${userId}`);
-    if (!chatId) return null;
-    // Проверяем существование чата
-    const chat = await getChatById(chatId);
+    const chat = getChatById(chatId);
     if (!chat) {
-      await removeItem(`active_chat_${userId}`);
-      return null;
-    }
-    return chatId;
-  } catch (error) {
-    console.error('[getActiveChat] Ошибка при получении активного чата:', error);
-    return null;
-  }
-};
-
-// Переключение избранного статуса чата
-export const toggleFavoriteChat = async (chatId: string, userId: string): Promise<boolean> => {
-  try {
-    const chat = await getChatById(chatId);
-    if (!chat) {
-      console.error(`[toggleFavoriteChat] Чат с ID ${chatId} не найден`);
+      console.error(`Чат ${chatId} не найден`);
       return false;
     }
 
-    // Получаем список избранных чатов пользователя
-    const favoriteChats: string[] = await getItem(`favorite_chats.${userId}`) || [];
+    // Переключаем статус избранного
+    chat.isFavorite = !chat.isFavorite;
 
-    // Проверяем, есть ли данный чат в избранном
-    const isFavorite = favoriteChats.includes(chatId);
-
-    if (isFavorite) {
-      // Удаляем из избранного
-      const updatedFavorites = favoriteChats.filter(id => id !== chatId);
-      await setItem(`favorite_chats.${userId}`, updatedFavorites);
-      console.log(`[toggleFavoriteChat] Чат ${chatId} удален из избранного пользователя ${userId}`);
-    } else {
-      // Добавляем в избранное
-      favoriteChats.push(chatId);
-      await setItem(`favorite_chats.${userId}`, favoriteChats);
-      console.log(`[toggleFavoriteChat] Чат ${chatId} добавлен в избранное пользователя ${userId}`);
-    }
-
-    return true;
+    // Сохраняем изменения
+    return saveChat(chat);
   } catch (error) {
-    console.error(`[toggleFavoriteChat] Ошибка при изменении статуса избранного для чата ${chatId}:`, error);
+    console.error(`Ошибка при изменении статуса избранного для чата ${chatId}:`, error);
     return false;
   }
 };
 
-// Получение всех чатов пользователя (включая признак избранного)
-export const getAllUserChats = async (userId: string): Promise<Chat[]> => {
+/**
+ * Получить все активные чаты пользователя
+ */
+export const getActiveUserChats = (userId: string): Chat[] => {
   try {
-    // Получаем список ID чатов пользователя
-    const chatIds = await getUserChats(userId);
-
-    // Получаем список избранных чатов
-    const favoriteChats: string[] = await getItem(`favorite_chats.${userId}`) || [];
-
-    // Получаем полные данные о каждом чате
-    const chats: Chat[] = [];
-    for (const chatId of chatIds) {
-      const chat = await getChatById(chatId);
-      if (chat) {
-        // Дополняем чат информацией о том, находится ли он в избранном
-        chat.isFavorite = favoriteChats.includes(chatId);
-        chats.push(chat);
-      }
-    }
-
-    // Сортируем: сначала избранные, затем по дате обновления
-    return chats.sort((a, b) => {
-      if (a.isFavorite && !b.isFavorite) return -1;
-      if (!a.isFavorite && b.isFavorite) return 1;
-      return b.updatedAt - a.updatedAt;
-    });
+    const allChats = getUserChats();
+    return allChats.filter(chat =>
+      (chat.userId === userId || chat.partnerId === userId) &&
+      chat.isActive === true
+    );
   } catch (error) {
-    console.error(`[getAllUserChats] Ошибка при получении чатов пользователя ${userId}:`, error);
+    console.error(`Ошибка при получении активных чатов для пользователя ${userId}:`, error);
     return [];
   }
 };
 
-// Получение активных чатов пользователя (не завершенные)
-export const getActiveUserChats = async (userId: string): Promise<Chat[]> => {
-  try {
-    const allChats = await getAllUserChats(userId);
-    return allChats.filter(chat => !chat.ended);
-  } catch (error) {
-    console.error(`[getActiveUserChats] Ошибка при получении активных чатов пользователя ${userId}:`, error);
-    return [];
-  }
+/**
+ * Получить все чаты пользователя
+ */
+export const getAllUserChats = (): Chat[] => {
+  return getUserChats();
 };

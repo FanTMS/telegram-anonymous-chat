@@ -1,6 +1,5 @@
-import { User, getCurrentUser, getUsers, getUserById } from './user';
+import { User, getCurrentUser, getUsers } from './user';
 import { getChatById, addSystemMessage, updateChat, Chat } from './chat';
-import { getItem, setItem, getAllItems } from './dbService';
 
 // Типы для игры "Камень-ножницы-бумага"
 export type GameChoice = 'rock' | 'paper' | 'scissors';
@@ -33,10 +32,10 @@ const GAME_REQUESTS_KEY = 'game_requests';
 const GAMES_KEY = 'games';
 
 // Получение всех запросов на игру
-export const getAllGameRequests = async (): Promise<GameRequest[]> => {
+export const getAllGameRequests = (): GameRequest[] => {
     try {
-        const data = await getItem(GAME_REQUESTS_KEY);
-        return data || [];
+        const data = localStorage.getItem(GAME_REQUESTS_KEY);
+        return data ? JSON.parse(data) : [];
     } catch (error) {
         console.error('Ошибка при получении запросов на игру:', error);
         return [];
@@ -44,19 +43,19 @@ export const getAllGameRequests = async (): Promise<GameRequest[]> => {
 };
 
 // Сохранение запросов на игру
-const saveGameRequests = async (requests: GameRequest[]): Promise<void> => {
+const saveGameRequests = (requests: GameRequest[]): void => {
     try {
-        await setItem(GAME_REQUESTS_KEY, requests);
+        localStorage.setItem(GAME_REQUESTS_KEY, JSON.stringify(requests));
     } catch (error) {
         console.error('Ошибка при сохранении запросов на игру:', error);
     }
 };
 
 // Получение всех результатов игр
-export const getAllGames = async (): Promise<GameResult[]> => {
+export const getAllGames = (): GameResult[] => {
     try {
-        const data = await getItem(GAMES_KEY);
-        return data || [];
+        const data = localStorage.getItem(GAMES_KEY);
+        return data ? JSON.parse(data) : [];
     } catch (error) {
         console.error('Ошибка при получении результатов игр:', error);
         return [];
@@ -64,26 +63,26 @@ export const getAllGames = async (): Promise<GameResult[]> => {
 };
 
 // Сохранение результатов игр
-const saveGames = async (games: GameResult[]): Promise<void> => {
+const saveGames = (games: GameResult[]): void => {
     try {
-        await setItem(GAMES_KEY, games);
+        localStorage.setItem(GAMES_KEY, JSON.stringify(games));
     } catch (error) {
         console.error('Ошибка при сохранении результатов игр:', error);
     }
 };
 
 // Отправка запроса на игру
-export const sendGameRequest = async (toUserId: string, chatId: string): Promise<boolean> => {
+export const sendGameRequest = (toUserId: string, chatId: string): boolean => {
     try {
-        const currentUser = await getCurrentUser();
+        const currentUser = getCurrentUser();
         if (!currentUser) return false;
 
         // Проверяем, существует ли чат
-        const chat = await getChatById(chatId);
+        const chat = getChatById(chatId);
         if (!chat) return false;
 
         // Проверяем, не отправлен ли уже запрос на игру в этом чате
-        const requests = await getAllGameRequests();
+        const requests = getAllGameRequests();
         const existingRequest = requests.find(
             req => req.chatId === chatId &&
                 (req.status === 'pending' || req.status === 'accepted') &&
@@ -107,10 +106,10 @@ export const sendGameRequest = async (toUserId: string, chatId: string): Promise
 
         // Сохраняем запрос
         requests.push(newRequest);
-        await saveGameRequests(requests);
+        saveGameRequests(requests);
 
         // Добавляем системное сообщение в чат
-        await addSystemMessage(chatId, `${currentUser.name} предлагает сыграть в "Камень-ножницы-бумага".`);
+        addSystemMessage(chatId, `${currentUser.name} предлагает сыграть в "Камень-ножницы-бумага".`);
 
         console.log(`Запрос на игру отправлен пользователю ${toUserId}`);
         return true;
@@ -121,13 +120,12 @@ export const sendGameRequest = async (toUserId: string, chatId: string): Promise
 };
 
 // Получение входящих запросов на игру
-export const getIncomingGameRequests = async (userId?: string): Promise<GameRequest[]> => {
+export const getIncomingGameRequests = (userId?: string): GameRequest[] => {
     try {
-        const currentUser = userId ? await getUserById(userId) : await getCurrentUser();
-        if (!currentUser) return [];
-        const currentId = currentUser.id;
+        const currentId = userId || getCurrentUser()?.id;
+        if (!currentId) return [];
 
-        const requests = await getAllGameRequests();
+        const requests = getAllGameRequests();
         return requests.filter(req => req.toUserId === currentId && req.status === 'pending');
     } catch (error) {
         console.error('Ошибка при получении входящих запросов на игру:', error);
@@ -136,13 +134,12 @@ export const getIncomingGameRequests = async (userId?: string): Promise<GameRequ
 };
 
 // Получение активных игр
-export const getActiveGames = async (userId?: string): Promise<GameResult[]> => {
+export const getActiveGames = (userId?: string): GameResult[] => {
     try {
-        const currentUser = userId ? await getUserById(userId) : await getCurrentUser();
-        if (!currentUser) return [];
-        const currentId = currentUser.id;
+        const currentId = userId || getCurrentUser()?.id;
+        if (!currentId) return [];
 
-        const games = await getAllGames();
+        const games = getAllGames();
         return games.filter(
             game => (game.player1Id === currentId || game.player2Id === currentId) && !game.isCompleted
         );
@@ -153,9 +150,9 @@ export const getActiveGames = async (userId?: string): Promise<GameResult[]> => 
 };
 
 // Принятие запроса на игру
-export const acceptGameRequest = async (requestId: string): Promise<boolean> => {
+export const acceptGameRequest = (requestId: string): boolean => {
     try {
-        const requests = await getAllGameRequests();
+        const requests = getAllGameRequests();
         const requestIndex = requests.findIndex(req => req.id === requestId);
 
         if (requestIndex === -1) return false;
@@ -164,7 +161,7 @@ export const acceptGameRequest = async (requestId: string): Promise<boolean> => 
 
         // Обновляем статус запроса
         requests[requestIndex].status = 'accepted';
-        await saveGameRequests(requests);
+        saveGameRequests(requests);
 
         // Создаем новую игру
         const newGame: GameResult = {
@@ -176,20 +173,20 @@ export const acceptGameRequest = async (requestId: string): Promise<boolean> => 
         };
 
         // Сохраняем игру
-        const games = await getAllGames();
+        const games = getAllGames();
         games.push(newGame);
-        await saveGames(games);
+        saveGames(games);
 
         // Добавляем системное сообщение в чат
-        const users = await getUsers();
+        const users = getUsers();
         const toUser = users.find(user => user.id === request.toUserId);
 
         if (toUser) {
-            await addSystemMessage(request.chatId, `${toUser.name} принял предложение сыграть в "Камень-ножницы-бумага".`);
+            addSystemMessage(request.chatId, `${toUser.name} принял предложение сыграть в "Камень-ножницы-бумага".`);
         }
 
         // Обновляем данные чата
-        await updateChat(request.chatId, {
+        updateChat(request.chatId, {
             gameRequestAccepted: true,
             gameData: newGame
         });
@@ -203,9 +200,9 @@ export const acceptGameRequest = async (requestId: string): Promise<boolean> => 
 };
 
 // Отклонение запроса на игру
-export const rejectGameRequest = async (requestId: string): Promise<boolean> => {
+export const rejectGameRequest = (requestId: string): boolean => {
     try {
-        const requests = await getAllGameRequests();
+        const requests = getAllGameRequests();
         const requestIndex = requests.findIndex(req => req.id === requestId);
 
         if (requestIndex === -1) return false;
@@ -214,18 +211,18 @@ export const rejectGameRequest = async (requestId: string): Promise<boolean> => 
 
         // Обновляем статус запроса
         requests[requestIndex].status = 'rejected';
-        await saveGameRequests(requests);
+        saveGameRequests(requests);
 
         // Добавляем системное сообщение в чат
-        const users = await getUsers();
+        const users = getUsers();
         const toUser = users.find(user => user.id === request.toUserId);
 
         if (toUser) {
-            await addSystemMessage(request.chatId, `${toUser.name} отклонил предложение сыграть в "Камень-ножницы-бумага".`);
+            addSystemMessage(request.chatId, `${toUser.name} отклонил предложение сыграть в "Камень-ножницы-бумага".`);
         }
 
         // Обновляем данные чата
-        await updateChat(request.chatId, { gameRequestAccepted: false });
+        updateChat(request.chatId, { gameRequestAccepted: false });
 
         console.log(`Запрос на игру с ID ${requestId} отклонен`);
         return true;
@@ -236,9 +233,9 @@ export const rejectGameRequest = async (requestId: string): Promise<boolean> => 
 };
 
 // Сделать выбор в игре
-export const makeGameChoice = async (gameId: string, playerId: string, choice: GameChoice): Promise<boolean> => {
+export const makeGameChoice = (gameId: string, playerId: string, choice: GameChoice): boolean => {
     try {
-        const games = await getAllGames();
+        const games = getAllGames();
         const gameIndex = games.findIndex(game =>
             game.chatId === gameId &&
             (game.player1Id === playerId || game.player2Id === playerId) &&
@@ -277,7 +274,7 @@ export const makeGameChoice = async (gameId: string, playerId: string, choice: G
             game.isCompleted = true;
 
             // Добавляем системное сообщение в чат
-            const users = await getUsers();
+            const users = getUsers();
             const player1 = users.find(user => user.id === game.player1Id);
             const player2 = users.find(user => user.id === game.player2Id);
 
@@ -302,10 +299,10 @@ export const makeGameChoice = async (gameId: string, playerId: string, choice: G
                     resultMessage = `${player1.name} выбрал(a) ${player1Choice}, ${player2.name} выбрал(a) ${player2Choice}. Победил(а) ${winner}!`;
                 }
 
-                await addSystemMessage(game.chatId, resultMessage);
+                addSystemMessage(game.chatId, resultMessage);
 
                 // Обновляем статус запроса на игру
-                const requests = await getAllGameRequests();
+                const requests = getAllGameRequests();
                 const requestIndex = requests.findIndex(req =>
                     req.chatId === game.chatId &&
                     ((req.fromUserId === game.player1Id && req.toUserId === game.player2Id) ||
@@ -315,16 +312,16 @@ export const makeGameChoice = async (gameId: string, playerId: string, choice: G
 
                 if (requestIndex !== -1) {
                     requests[requestIndex].status = 'completed';
-                    await saveGameRequests(requests);
+                    saveGameRequests(requests);
                 }
             }
         }
 
         // Сохраняем обновленные игры
-        await saveGames(games);
+        saveGames(games);
 
         // Обновляем данные чата
-        await updateChat(game.chatId, { gameData: game });
+        updateChat(game.chatId, { gameData: game });
 
         return true;
     } catch (error) {
@@ -334,15 +331,14 @@ export const makeGameChoice = async (gameId: string, playerId: string, choice: G
 };
 
 // Проверка, есть ли входящие запросы на игру
-export const hasIncomingGameRequests = async (userId?: string): Promise<boolean> => {
-    const requests = await getIncomingGameRequests(userId);
-    return requests.length > 0;
+export const hasIncomingGameRequests = (userId?: string): boolean => {
+    return getIncomingGameRequests(userId).length > 0;
 };
 
 // Получение активной игры для конкретного чата
-export const getActiveGameForChat = async (chatId: string): Promise<GameResult | null> => {
+export const getActiveGameForChat = (chatId: string): GameResult | null => {
     try {
-        const games = await getAllGames();
+        const games = getAllGames();
         const activeGame = games.find(game => game.chatId === chatId && !game.isCompleted);
         return activeGame || null;
     } catch (error) {
@@ -352,9 +348,9 @@ export const getActiveGameForChat = async (chatId: string): Promise<GameResult |
 };
 
 // Получение запроса на игру для конкретного чата
-export const getGameRequestForChat = async (chatId: string): Promise<GameRequest | null> => {
+export const getGameRequestForChat = (chatId: string): GameRequest | null => {
     try {
-        const requests = await getAllGameRequests();
+        const requests = getAllGameRequests();
         const request = requests.find(req =>
             req.chatId === chatId &&
             (req.status === 'pending' || req.status === 'accepted')

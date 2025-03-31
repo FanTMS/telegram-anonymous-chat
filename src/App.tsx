@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import { Layout } from './components/Layout'
-import { Home } from './pages/Home'
+import { RouterProvider } from 'react-router-dom'
 import { router } from './routes'
 import { startMatchmakingService, stopMatchmakingService } from './utils/matchmaking'
 import { validateLocalStorage } from './utils/database'
-import { getCurrentUser, saveUser, User } from './utils/user' // Добавим тип User
+import { getCurrentUser, saveUser } from './utils/user'
+import { userStorage } from './utils/userStorage' // Импортируем наш сервис
 import WebApp from '@twa-dev/sdk';
-import Debug from './pages/Debug'
 
 // Инициализация глобальных переменных для интервалов и флагов
 if (typeof window !== 'undefined') {
@@ -35,12 +33,26 @@ export const App = () => {
         localStorage.setItem('dev_mode', 'true');
 
         // Проверяем текущего пользователя и делаем его админом если локальная разработка
-        getCurrentUser().then(currentUser => {
-          if (currentUser) {
-            currentUser.isAdmin = true;
-            saveUser(currentUser);
-          }
-        });
+        const currentUser = getCurrentUser();
+        if (currentUser) {
+          currentUser.isAdmin = true;
+          saveUser(currentUser);
+        }
+      }
+
+      // Инициализируем хранилище пользователя с Telegram ID если доступен
+      if (WebApp && WebApp.initDataUnsafe && WebApp.initDataUnsafe.user) {
+        const userId = WebApp.initDataUnsafe.user.id;
+        userStorage.initialize(userId);
+        console.log('Инициализировано пользовательское хранилище для пользователя:', userId);
+      } else {
+        console.warn('Telegram User ID не доступен, используется общее хранилище');
+
+        // В режиме разработки используем фиксированный ID для тестирования
+        if (localStorage.getItem('dev_mode') === 'true') {
+          userStorage.initialize('dev_user_' + Date.now());
+          console.log('Инициализировано тестовое пользовательское хранилище');
+        }
       }
 
       // Принудительно устанавливаем светлую тему для всех пользователей
@@ -72,11 +84,7 @@ export const App = () => {
       }
 
       // Валидируем данные в localStorage при запуске приложения
-      if (validateLocalStorage) {
-        validateLocalStorage(); // Проверяем наличие функции перед вызовом
-      } else {
-        console.warn('validateLocalStorage не определена, пропускаем проверку');
-      }
+      validateLocalStorage();
 
       // Проверяем структуру основных данных
       const checkAndFixLocalStorage = () => {
@@ -212,16 +220,7 @@ export const App = () => {
   }
 
   // Рендерим только роутер
-  return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path="/debug" element={<Debug />} /> {/* Добавляем маршрут отладки */}
-        </Route>
-      </Routes>
-    </Router>
-  );
+  return <RouterProvider router={router} />;
 };
 
 export default App;

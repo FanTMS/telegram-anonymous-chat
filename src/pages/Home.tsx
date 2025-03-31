@@ -8,7 +8,18 @@ import { getUserCurrency } from '../utils/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UserRegistration } from '../components/UserRegistration'
 import { InterestsSelector } from '../components/InterestsSelector'
-import { startSearching, stopSearching, isUserSearching, startMatchmakingService, stopMatchmakingService, markChatNotificationAsRead, hasNewChat, getNewChatNotification, triggerMatchmaking, getChatById } from '../utils/matchmaking'
+import {
+  startSearching,
+  stopSearching,
+  isUserSearching,
+  startMatchmakingService,
+  stopMatchmakingService,
+  markChatNotificationAsRead,
+  hasNewChat,
+  getNewChatNotification,
+  triggerMatchmaking
+} from '../utils/matchmaking'
+import { getChatById } from '../utils/chat'
 import { useNotifications } from '../utils/notifications'
 
 // Интерфейс для режима поиска
@@ -196,74 +207,66 @@ export const Home = () => {
 
   // Проверяем, является ли пользователь администратором и существует ли пользователь
   useEffect(() => {
-    const initUser = async () => {
-      try {
-        const user = await getCurrentUser();
-        setCurrentUser(user);
-        setIsRegistered(!!user);
+    try {
+      const user = getCurrentUser()
+      setCurrentUser(user)
+      setIsRegistered(!!user)
 
-        if (user) {
-          const currency = await getUserCurrency(user.id);
-          setUserBalance(currency.balance);
-          setShowRegistration(false);
+      if (user) {
+        const userCurrency = getUserCurrency(user.id)
+        setUserBalance(userCurrency.balance)
+        setShowRegistration(false)
 
-          // Проверяем, не находится ли пользователь уже в поиске
-          const searching = await isUserSearching(user.id);
-          setIsSearching(searching);
+        // Проверяем, не находится ли пользователь уже в поиске
+        const searching = isUserSearching(user.id)
+        setIsSearching(searching)
 
-          // Если пользователь уже в поиске, запускаем таймер и сервис
-          if (searching) {
-            startSearchTimer();
-            startMatchmaking();
-          }
-        } else {
-          // Если пользователь не существует, показываем форму регистрации
-          setShowRegistration(true);
+        // Если пользователь уже в поиске, запускаем таймер и сервис
+        if (searching) {
+          startSearchTimer()
+          startMatchmaking()
         }
-
-        const adminStatus = await isAdmin();
-        setIsAdminUser(adminStatus);
-      } catch (e) {
-        console.error('Failed to check user status', e);
+      } else {
+        // Если пользователь не существует, показываем форму регистрации
+        setShowRegistration(true)
       }
-    };
 
-    initUser();
+      const adminStatus = isAdmin()
+      setIsAdminUser(adminStatus)
+    } catch (e) {
+      console.error('Failed to check user status', e)
+    }
 
     // Очистка при размонтировании
     return () => {
       if (searchTimerRef.current) {
-        clearInterval(searchTimerRef.current);
+        clearInterval(searchTimerRef.current)
       }
       if (matchmakingServiceId) {
-        stopMatchmakingService(matchmakingServiceId);
+        stopMatchmakingService(matchmakingServiceId)
       }
       if (window._newChatCheckInterval) {
         clearInterval(window._newChatCheckInterval);
         delete window._newChatCheckInterval;
       }
-    };
-  }, []);
+    }
+  }, [])
 
   useEffect(() => {
-    const checkForChat = async () => {
-      const user = await getCurrentUser();
-      if (user) {
-        if (await hasNewChat(user.id)) {
-          const notification = await getNewChatNotification(user.id);
-          if (notification && !notification.isRead) {
-            setFoundChatId(notification.chatId);
-          }
+    const currentUser = getCurrentUser();
+    if (currentUser) {
+      if (hasNewChat(currentUser.id)) {
+        const notification = getNewChatNotification(currentUser.id);
+        if (notification && !notification.isRead) {
+          setFoundChatId(notification.chatId);
         }
       }
-    };
-
-    checkForChat();
+    }
   }, []);
 
   // Добавляем слушатель событий для обнаружения новых чатов
   useEffect(() => {
-    const handleChatFound = async (event: CustomEvent) => {
+    const handleChatFound = (event: CustomEvent) => {
       console.log('Получено событие о новом чате:', event.detail.chatId);
       setFoundChatId(event.detail.chatId);
 
@@ -271,7 +274,10 @@ export const Home = () => {
       if (isSearching) {
         stopSearchTimer();
         setIsSearching(false);
-        await stopSearching();
+        const user = getCurrentUser();
+        if (user) {
+          stopSearching(user.id);
+        }
       }
     };
 
@@ -287,21 +293,21 @@ export const Home = () => {
   // Обработчик событий для обнаружения новых чатов
   useEffect(() => {
     // Функция проверки наличия новых чатов
-    const checkNewChats = async () => {
-      const user = await getCurrentUser();
+    const checkNewChats = () => {
+      const user = getCurrentUser();
       if (!user) return;
 
       console.log('Проверка наличия новых чатов...');
-      if (await hasNewChat(user.id)) {
+      if (hasNewChat(user.id)) {
         console.log('Найден новый чат!');
-        const notification = await getNewChatNotification(user.id);
+        const notification = getNewChatNotification(user.id);
         if (notification) {
           setFoundChatId(notification.chatId);
           // Останавливаем поиск
           if (isSearching) {
             stopSearchTimer();
             setIsSearching(false);
-            await stopSearching();
+            stopSearching(user.id);
           }
         }
       }
@@ -311,7 +317,7 @@ export const Home = () => {
     checkNewChats();
 
     // Также обрабатываем событие chatFound
-    const handleChatFound = async (event: CustomEvent) => {
+    const handleChatFound = (event: CustomEvent) => {
       console.log('Получено событие о новом чате:', event.detail.chatId);
       setFoundChatId(event.detail.chatId);
 
@@ -319,7 +325,10 @@ export const Home = () => {
       if (isSearching) {
         stopSearchTimer();
         setIsSearching(false);
-        await stopSearching();
+        const user = getCurrentUser();
+        if (user) {
+          stopSearching(user.id);
+        }
       }
     };
 
@@ -339,17 +348,17 @@ export const Home = () => {
   // Обработчик событий для обнаружения новых чатов - Улучшенная версия
   useEffect(() => {
     // Функция проверки наличия новых чатов
-    const checkNewChats = async () => {
-      const user = await getCurrentUser();
+    const checkNewChats = () => {
+      const user = getCurrentUser();
       if (!user) return;
 
       // console.log('Проверка наличия новых чатов для', user.id);
-      if (await hasNewChat(user.id)) {
+      if (hasNewChat(user.id)) {
         console.log('🎉 Найден новый чат для пользователя', user.id);
-        const notification = await getNewChatNotification(user.id);
+        const notification = getNewChatNotification(user.id);
         if (notification) {
           // Проверка валидности чата
-          const chat = await getChatById(notification.chatId);
+          const chat = getChatById(notification.chatId);
           if (chat && chat.participants.includes(user.id)) {
             console.log('Чат валиден, устанавливаем ID:', notification.chatId);
             setFoundChatId(notification.chatId);
@@ -359,7 +368,7 @@ export const Home = () => {
               console.log('Останавливаем активный поиск...');
               stopSearchTimer();
               setIsSearching(false);
-              await stopSearching(user.id);
+              stopSearching(user.id);
             }
           } else {
             console.error('Чат не валиден или пользователь не является участником', notification.chatId);
@@ -375,11 +384,11 @@ export const Home = () => {
     checkNewChats();
 
     // Также обрабатываем событие chatFound
-    const handleChatFound = async (event: CustomEvent) => {
+    const handleChatFound = (event: CustomEvent) => {
       console.log('Получено событие о новом чате:', event.detail);
 
       // Проверяем, что событие относится к текущему пользователю
-      const user = await getCurrentUser();
+      const user = getCurrentUser();
       if (!user) return;
 
       // Проверка userId указанного в событии (если есть)
@@ -389,7 +398,7 @@ export const Home = () => {
       }
 
       // Обновляем UI, только если чат действительно существует
-      const chat = await getChatById(event.detail.chatId);
+      const chat = getChatById(event.detail.chatId);
       if (chat && chat.participants.includes(user.id)) {
         console.log('Устанавливаем ID найденного чата:', event.detail.chatId);
         setFoundChatId(event.detail.chatId);
@@ -399,7 +408,7 @@ export const Home = () => {
           console.log('Останавливаем активный поиск из-за события chatFound');
           stopSearchTimer();
           setIsSearching(false);
-          await stopSearching(user.id);
+          stopSearching(user.id);
         }
       } else {
         console.error('Полученный в событии чат не найден или некорректен');
@@ -422,16 +431,16 @@ export const Home = () => {
   // Добавим эффект для проверки новых чатов
   useEffect(() => {
     // Функция для проверки новых чатов
-    const checkForNewChat = async () => {
-      const currentUser = await getCurrentUser();
+    const checkForNewChat = () => {
+      const currentUser = getCurrentUser();
       if (!currentUser) return;
 
       try {
-        const newChat = await hasNewChat(currentUser.id);
+        const newChat = hasNewChat(currentUser.id);
         setHasNewChatNotification(newChat);
 
         if (newChat) {
-          const notification = await getNewChatNotification(currentUser.id);
+          const notification = getNewChatNotification(currentUser.id);
           if (notification) {
             setNewChatId(notification.chatId);
             console.log(`[Home] Обнаружен новый чат: ${notification.chatId}`);
@@ -446,7 +455,7 @@ export const Home = () => {
     checkForNewChat();
 
     // Настраиваем слушатель события для нового чата
-    const handleChatFound = async (event: CustomEvent) => {
+    const handleChatFound = (event: CustomEvent) => {
       const { chatId } = event.detail;
       console.log('[Home] Обнаружен новый чат:', chatId);
       checkForNewChat();
@@ -506,20 +515,20 @@ export const Home = () => {
   };
 
   // Обработчик завершения регистрации
-  const handleRegistrationComplete = async () => {
+  const handleRegistrationComplete = () => {
     // Анимируем переход
-    const user = await getCurrentUser();
-    setCurrentUser(user);
-    setIsRegistered(true);
+    const user = getCurrentUser()
+    setCurrentUser(user)
+    setIsRegistered(true)
 
     // Анимация: сначала скрываем форму регистрации, затем показываем главную страницу
-    setShowRegistration(false);
+    setShowRegistration(false)
 
     if (user) {
-      const currency = await getUserCurrency(user.id);
-      setUserBalance(currency.balance);
+      const userCurrency = getUserCurrency(user.id)
+      setUserBalance(userCurrency.balance)
     }
-  };
+  }
 
   // Обработчик выбора рекомендованного пользователя
   const handleSelectRecommendedUser = (user: User) => {
@@ -557,11 +566,11 @@ export const Home = () => {
 
   // Поиск совпадений
   const findMatch = async (): Promise<boolean> => {
-    const user = await getCurrentUser();
+    const user = getCurrentUser();
     if (!user) return false;
 
-    if (await hasNewChat(user.id)) {
-      const notification = await getNewChatNotification(user.id);
+    if (hasNewChat(user.id)) {
+      const notification = getNewChatNotification(user.id);
       if (notification && !notification.isRead) {
         setFoundChatId(notification.chatId);
         return true;
@@ -587,8 +596,8 @@ export const Home = () => {
   };
 
   // Поиск собеседника (улучшенная версия)
-  const handleStartSearch = async () => {
-    const user = await getCurrentUser();
+  const handleStartSearch = () => {
+    const user = getCurrentUser();
     if (!user) {
       console.error('Пользователь не авторизован');
       return;
@@ -598,13 +607,12 @@ export const Home = () => {
     console.log(`Текущий пользователь: ${user.id}`);
 
     // Очищаем любой старый поиск перед началом нового
-    await stopSearching(user.id);
+    stopSearching(user.id);
 
     // Запускаем поиск с выбранными параметрами
-    const success = await startSearching(
-      searchMode === 'random', // true если режим случайного поиска
-      selectedInterests,
-      [0, 100] // Возрастной диапазон (можно настроить более точно)
+    const success = startSearching(
+      user.id,
+      searchMode === 'random' ? { random: true } : { interests: selectedInterests }
     );
 
     if (success) {
@@ -615,23 +623,24 @@ export const Home = () => {
 
       // Принудительно запускаем поиск совпадения несколько раз с интервалом
       // Это помогает решить проблему когда два пользователя начинают поиск почти одновременно
-      const result = await triggerMatchmaking();
-      if (result) {
-        console.log('Найдено совпадение сразу после запуска поиска!');
-      } else {
-        // Если не нашли сразу, попробуем еще несколько раз с интервалом
-        const retryIntervals = [1000, 3000, 5000];
+      triggerMatchmaking().then(result => {
+        if (result) {
+          console.log('Найдено совпадение сразу после запуска поиска!');
+        } else {
+          // Если не нашли сразу, попробуем еще несколько раз с интервалом
+          const retryIntervals = [1000, 3000, 5000];
 
-        retryIntervals.forEach((delay, index) => {
-          setTimeout(async () => {
-            // Проверяем, что пользователь всё еще в поиске
-            if (await isUserSearching(user.id)) {
-              console.log(`Повторная попытка поиска #${index + 1}`);
-              triggerMatchmaking();
-            }
-          }, delay);
-        });
-      }
+          retryIntervals.forEach((delay, index) => {
+            setTimeout(() => {
+              // Проверяем, что пользователь всё еще в поиске
+              if (isUserSearching(user.id)) {
+                console.log(`Повторная попытка поиска #${index + 1}`);
+                triggerMatchmaking();
+              }
+            }, delay);
+          });
+        }
+      });
 
       // Анимируем кнопку Telegram (в реальном приложении)
       if (WebApp.MainButton) {
@@ -645,10 +654,10 @@ export const Home = () => {
   };
 
   // Отмена поиска
-  const handleCancelSearch = async () => {
-    const user = await getCurrentUser();
+  const handleCancelSearch = () => {
+    const user = getCurrentUser();
     if (user) {
-      await stopSearching(user.id);
+      stopSearching(user.id);
     }
     setIsSearching(false);
     stopSearchTimer();
@@ -672,9 +681,9 @@ export const Home = () => {
   }
 
   // Улучшенная функция перехода в чат с дополнительными проверками
-  const goToChat = async (chatId: string) => {
+  const goToChat = (chatId: string) => {
     try {
-      const user = await getCurrentUser();
+      const user = getCurrentUser();
       if (!user) {
         console.error('Пользователь не авторизован');
         WebApp.showAlert('Необходимо авторизоваться для доступа к чату');
@@ -684,7 +693,7 @@ export const Home = () => {
       console.log(`[Home] Попытка перехода в чат ${chatId} пользователя ${user.id}`);
 
       // Получаем информацию о чате
-      const chat = await getChatById(chatId);
+      const chat = getChatById(chatId);
 
       if (!chat) {
         console.error(`[Home] Чат с ID ${chatId} не найден`);
@@ -700,7 +709,7 @@ export const Home = () => {
         console.log(`[Home] Переходим в чат ${chatId}`);
 
         // Отмечаем уведомление как прочитанное перед переходом
-        await markChatNotificationAsRead(user.id);
+        markChatNotificationAsRead(user.id);
 
         // Сохраняем ID активного чата перед переходом
         localStorage.setItem('active_chat_id', chatId);
@@ -719,15 +728,14 @@ export const Home = () => {
   };
 
   // Улучшим обработчик перехода в чат
-  const handleGoToChat = async () => {
+  const handleGoToChat = () => {
     if (newChatId) {
       console.log('[Home] Переход в чат:', newChatId);
       navigate(`/chat/${newChatId}`);
     } else {
-      checkForNewChat();
-      const currentUser = await getCurrentUser();
+      const currentUser = getCurrentUser();
       if (currentUser) {
-        const notification = await getNewChatNotification(currentUser.id);
+        const notification = getNewChatNotification(currentUser.id);
         if (notification) {
           console.log('[Home] Переход в чат из уведомления:', notification.chatId);
           navigate(`/chat/${notification.chatId}`);
@@ -739,11 +747,11 @@ export const Home = () => {
   };
 
   // Усиливаем обработчик обнаружения нового чата
-  const handleChatFound = async (event: CustomEvent) => {
+  const handleChatFound = (event: CustomEvent) => {
     console.log('[Home] Получено событие о новом чате:', event.detail);
 
     // Получаем текущего пользователя
-    const user = await getCurrentUser();
+    const user = getCurrentUser();
     if (!user) {
       console.error('[Home] Не удалось получить текущего пользователя');
       return;
@@ -767,7 +775,7 @@ export const Home = () => {
     }
 
     // Проверяем, существует ли чат
-    const chat = await getChatById(chatId);
+    const chat = getChatById(chatId);
     if (!chat) {
       console.error(`[Home] Чат ${chatId} не найден при обработке события`);
       return;
@@ -780,14 +788,14 @@ export const Home = () => {
       console.log('[Home] Останавливаем активный поиск из-за события chatFound');
       stopSearchTimer();
       setIsSearching(false);
-      await stopSearching(user.id);
+      stopSearching(user.id);
     }
 
     // Установка ID найденного чата в состояние
     setFoundChatId(chatId);
 
     // Принудительно обновляем уведомления о чате
-    const hasNew = await hasNewChat(user.id);
+    const hasNew = hasNewChat(user.id);
     setHasNewChatNotification(hasNew);
 
     // Если пользователь не находится в режиме поиска собеседника,
@@ -1120,19 +1128,4 @@ export const Home = () => {
     </div>
   );
 };
-
-// Корректная реализация функции проверки нового чата
-async function checkForNewChat() {
-  const user = await getCurrentUser();
-  if (!user) return;
-
-  const hasNewChatNotification = await hasNewChat(user.id);
-  if (hasNewChatNotification) {
-    const notification = await getNewChatNotification(user.id);
-    if (notification) {
-      return notification.chatId;
-    }
-  }
-  return null;
-}
 

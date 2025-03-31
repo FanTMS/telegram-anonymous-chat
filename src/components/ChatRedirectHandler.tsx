@@ -22,12 +22,11 @@ export const ChatRedirectHandler: React.FC<ChatRedirectHandlerProps> = ({ enable
 
             try {
                 setChecking(true);
-                const currentUser = await getCurrentUser();
+                const currentUser = getCurrentUser();
 
-                if (currentUser && await hasNewChat(currentUser.id)) {
+                if (currentUser && hasNewChat(currentUser.id)) {
                     console.log('[ChatRedirectHandler] Обнаружен новый чат для пользователя', currentUser.id);
-
-                    const notification = await getNewChatNotification(currentUser.id);
+                    const notification = getNewChatNotification(currentUser.id);
 
                     if (notification && !notification.isRead) {
                         console.log('[ChatRedirectHandler] Перенаправление в чат:', notification.chatId);
@@ -55,11 +54,11 @@ export const ChatRedirectHandler: React.FC<ChatRedirectHandlerProps> = ({ enable
         checkInterval = setInterval(checkForNewChat, 3000);
 
         // Настраиваем слушатель событий для нового чата
-        const handleChatFound = async (event: CustomEvent) => {
+        const handleChatFound = (event: CustomEvent) => {
             const { chatId, userId } = event.detail;
             console.log('[ChatRedirectHandler] Получено событие chatFound:', chatId, userId);
 
-            const currentUser = await getCurrentUser();
+            const currentUser = getCurrentUser();
             if (currentUser && currentUser.id === userId) {
                 console.log('[ChatRedirectHandler] Это наш чат, перенаправляем...');
                 localStorage.setItem('active_chat_id', chatId);
@@ -78,5 +77,5 @@ export const ChatRedirectHandler: React.FC<ChatRedirectHandlerProps> = ({ enable
         };
     }, [navigate, enabled, checking]);
 
-    return null; // Компонент не имеет визуального представления
+    return null; // Этот компонент не рендерит никакой UI
 };

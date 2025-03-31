@@ -9,6 +9,43 @@ import { InterestSelector } from '../components/InterestSelector'
 import { useNotificationService } from '../utils/notifications'
 import { createUserFromTelegram, createDemoUser, saveUser, User, getCurrentUser } from '../utils/user'
 import { telegramApi } from '../utils/database'
+import { userStorage } from '../utils/userStorage'
+import { StepIcon } from '../components/RegistrationStepIcons'
+
+// Расширяем интерфейс для кнопок
+interface ExtendedButtonProps {
+  children: React.ReactNode;
+  onClick?: () => void;
+  isLoading?: boolean;
+  fullWidth?: boolean;
+  className?: string;
+  variant?: 'primary' | 'secondary' | 'outline';
+}
+
+// Создаем компонент кнопки с поддержкой загрузки
+const LoadingButton: React.FC<ExtendedButtonProps> = ({
+  children,
+  onClick,
+  isLoading = false,
+  variant,
+  ...props
+}) => {
+  return (
+    <Button
+      onClick={onClick}
+      disabled={isLoading}
+      variant={variant}
+      {...props}
+    >
+      {isLoading ? (
+        <div className="flex items-center justify-center">
+          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></div>
+          Загрузка...
+        </div>
+      ) : children}
+    </Button>
+  );
+};
 
 export const Registration = () => {
   const navigate = useNavigate()
@@ -22,6 +59,10 @@ export const Registration = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
 
+  // Определяем направление анимации вне useEffect
+  // Это решает проблему "Rendered more hooks than during the previous render"
+  const [direction, setDirection] = useState(0)
+
   // Случайное имя для предзаполнения поля
   const [randomName] = useState(() => {
     const names = [
@@ -30,6 +71,9 @@ export const Registration = () => {
     ]
     return names[Math.floor(Math.random() * names.length)]
   })
+
+  // Проверяем доступность Telegram WebApp и адаптируем UI
+  const [showCustomButton, setShowCustomButton] = useState(false);
 
   // Проверяем, авторизован ли уже пользователь
   useEffect(() => {
@@ -54,7 +98,7 @@ export const Registration = () => {
 
             if (telegramId) {
               // Пытаемся создать пользователя на основе данных из Telegram
-              const user = await createUserFromTelegram(telegramId)
+              const user = await createUserFromTelegram()
 
               if (user) {
                 // Если успешно, перенаправляем на главную
@@ -96,34 +140,59 @@ export const Registration = () => {
     }
   }, [navigate])
 
+  // Определяем, доступно ли приложение в Telegram или мы в браузере
+  useEffect(() => {
+    try {
+      // Проверяем реальную доступность MainButton
+      const isTelegramWebAppFunctional = WebApp &&
+        WebApp.isExpanded &&
+        typeof WebApp.MainButton !== 'undefined' &&
+        typeof WebApp.MainButton.onClick === 'function';
+
+      // Если что-то не так с Telegram WebApp, показываем свою кнопку
+      setShowCustomButton(!isTelegramWebAppFunctional);
+    } catch (error) {
+      console.warn('Ошибка при проверке WebApp.MainButton:', error);
+      // В случае ошибки при проверке WebApp, показываем свою кнопку
+      setShowCustomButton(true);
+    }
+  }, []);
+
   // Обновляем надпись на кнопке и поведение назад в зависимости от шага
   useEffect(() => {
-    if (!WebApp.isExpanded) return
+    try {
+      if (WebApp && WebApp.isExpanded && WebApp.MainButton) {
+        if (step > 1) {
+          WebApp.BackButton.show()
+          WebApp.BackButton.onClick(() => handleBack())
+        } else {
+          WebApp.BackButton.hide()
+          WebApp.BackButton.offClick(() => handleBack())
+        }
 
-    if (step > 1) {
-      WebApp.BackButton.show()
-      WebApp.BackButton.onClick(() => handleBack())
-    } else {
-      WebApp.BackButton.hide()
-      WebApp.BackButton.offClick(() => handleBack())
-    }
-
-    if (step === 3) {
-      WebApp.MainButton.setText('Завершить регистрацию')
-    } else {
-      WebApp.MainButton.setText('Продолжить')
-    }
-
-    return () => {
-      if (WebApp.isExpanded) {
-        WebApp.BackButton.offClick(() => handleBack())
+        if (step === 3) {
+          WebApp.MainButton.setText('Завершить регистрацию')
+        } else {
+          WebApp.MainButton.setText('Продолжить')
+        }
       }
+
+      return () => {
+        if (WebApp && WebApp.isExpanded) {
+          WebApp.BackButton.offClick(() => handleBack())
+        }
+      }
+    } catch (error) {
+      console.warn('Ошибка при настройке MainButton:', error);
+      // В случае ошибки, переключаемся на встроенные кнопки
+      setShowCustomButton(true);
     }
   }, [step])
 
   // Обработчик кнопки "Назад"
   const handleBack = () => {
     if (step > 1) {
+      setDirection(-1)
       setStep(step - 1)
       // Обеспечиваем тактильную обратную связь
       if (WebApp.isExpanded) {
@@ -148,6 +217,7 @@ export const Registration = () => {
       if (!name) {
         setName(randomName)
       }
+      setDirection(1)
       setStep(2)
     } else if (step === 2) {
       // Проверяем, что возраст указан
@@ -170,6 +240,7 @@ export const Registration = () => {
       }
 
       setError(null)
+      setDirection(1)
       setStep(3)
     } else {
       // Проверяем, что выбраны интересы
@@ -188,55 +259,55 @@ export const Registration = () => {
 
   // Обработчик завершения регистрации
   const handleCompleteRegistration = async () => {
-    setIsLoading(true)
-    setError(null)
+    setIsLoading(true);
+    setError(null);
 
     // Показываем индикатор загрузки на MainButton
     if (WebApp.isExpanded) {
-      WebApp.MainButton.showProgress()
+      WebApp.MainButton.showProgress();
     }
 
     try {
-      let user: User | null = null
+      let user: User | null = null;
 
       // Проверяем, есть ли данные Telegram
       if (telegramApi.isReady() && telegramApi.getUserId()) {
-        // Создаем пользователя из данных Telegram
-        user = await createUserFromTelegram(telegramApi.getUserId() as string, name)
+        // Создаем пользователя из данных Telegram - без передачи параметров
+        user = createUserFromTelegram();
       } else {
         // Создаем демо-пользователя
-        user = createDemoUser()
-        user.name = name // Обновляем имя
+        user = createDemoUser();
+        user.name = name; // Обновляем имя
       }
 
       if (!user) {
-        throw new Error('Не удалось создать пользователя')
+        throw new Error('Не удалось создать пользователя');
       }
 
       // Обновляем данные пользователя
-      user.age = parseInt(age)
-      user.city = city || 'Не указан'
-      user.interests = selectedInterests
+      user.age = parseInt(age);
+      user.city = city || 'Не указан';
+      user.interests = selectedInterests;
 
       // Сохраняем пользователя и проверяем результат
-      const saveResult = await saveUser(user)
+      const saveResult = saveUser(user);
       if (!saveResult) {
-        throw new Error('Не удалось сохранить пользователя')
+        throw new Error('Не удалось сохранить пользователя');
       }
 
       // Проверяем, что пользователь действительно сохранился
-      const savedUser = getCurrentUser()
-      console.log('User saved successfully:', savedUser)
+      const savedUser = getCurrentUser();
+      console.log('User saved successfully:', savedUser);
 
       if (!savedUser) {
-        throw new Error('Пользователь сохранён, но не может быть получен')
+        throw new Error('Пользователь сохранён, но не может быть получен');
       }
 
       // Успешная вибрация
       if (WebApp.isExpanded) {
-        WebApp.HapticFeedback.notificationOccurred('success')
-        WebApp.MainButton.hideProgress()
-        WebApp.MainButton.hide()
+        WebApp.HapticFeedback.notificationOccurred('success');
+        WebApp.MainButton.hideProgress();
+        WebApp.MainButton.hide();
 
         // Показываем уведомление об успешной регистрации
         WebApp.showPopup({
@@ -248,222 +319,325 @@ export const Registration = () => {
           }]
         }, () => {
           // Перенаправляем на главную
-          navigate('/')
-        })
+          navigate('/');
+        });
       } else {
         // Для веб-версии просто показываем уведомление и перенаправляем
-        notifications.showSuccess('Регистрация успешно завершена!')
+        notifications.showSuccess('Регистрация успешно завершена!');
         setTimeout(() => {
-          navigate('/')
-        }, 1000)
+          navigate('/');
+        }, 1000);
       }
     } catch (error) {
-      console.error('Ошибка при регистрации:', error)
-      setError('Произошла ошибка при регистрации. Пожалуйста, попробуйте еще раз.')
+      console.error('Ошибка при регистрации:', error);
+      setError('Произошла ошибка при регистрации. Пожалуйста, попробуйте еще раз.');
 
       if (WebApp.isExpanded) {
-        WebApp.MainButton.hideProgress()
-        WebApp.HapticFeedback.notificationOccurred('error')
+        WebApp.MainButton.hideProgress();
+        WebApp.HapticFeedback.notificationOccurred('error');
       }
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
   // Отображение экрана загрузки
   if (isInitializing) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-tg-theme-bg-color">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-t-tg-theme-button-color border-tg-theme-secondary-bg-color rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-tg-theme-hint-color">Загрузка...</p>
-        </div>
+      <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-blue-900">
+        <motion.div
+          className="text-center bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl"
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, type: "spring" }}
+        >
+          <div className="w-16 h-16 border-4 border-t-blue-500 border-blue-200 dark:border-blue-500 dark:border-t-blue-300 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-blue-600 dark:text-blue-400 font-medium">Загружаем приложение...</p>
+        </motion.div>
       </div>
     )
   }
 
+  // Варианты анимации для слайда
+  const slideVariants = {
+    enter: (dir: number) => ({
+      x: dir > 0 ? 200 : -200,
+      opacity: 0,
+    }),
+    center: {
+      x: 0,
+      opacity: 1,
+    },
+    exit: (dir: number) => ({
+      x: dir < 0 ? 200 : -200,
+      opacity: 0,
+    }),
+  };
+
   return (
-    <div className="min-h-screen bg-tg-theme-bg-color text-tg-theme-text-color p-4">
-      <div className="max-w-md mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-blue-900 text-gray-800 dark:text-gray-200 p-4 flex items-center justify-center">
+      <div className="max-w-md w-full">
+        {/* Заголовок и лого */}
+        <motion.div
+          className="text-center mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <h1 className="text-3xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-blue-400 dark:to-indigo-500">
+            Добро пожаловать
+          </h1>
+          <p className="text-gray-600 dark:text-gray-300">Создайте профиль для общения в анонимном чате</p>
+        </motion.div>
+
         {/* Индикатор прогресса */}
-        <div className="flex justify-between mb-8 relative">
-          <div className="absolute top-3 left-0 right-0 h-1 bg-tg-theme-secondary-bg-color rounded">
+        <div className="flex justify-center mb-8 relative">
+          <div className="absolute top-6 left-10 right-10 h-1 bg-gray-200 dark:bg-gray-700 rounded">
             <motion.div
-              className="h-full bg-tg-theme-button-color rounded"
+              className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-blue-400 dark:to-indigo-500 rounded"
               initial={{ width: `${(step - 1) * 50}%` }}
               animate={{ width: `${(step / 3) * 100}%` }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.5, ease: "easeInOut" }}
             />
           </div>
 
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="relative z-10">
-              <motion.div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${s <= step
-                  ? 'bg-tg-theme-button-color text-white'
-                  : 'bg-tg-theme-secondary-bg-color text-tg-theme-hint-color'
-                  }`}
-                animate={{
-                  scale: s === step ? [1, 1.1, 1] : 1,
-                }}
-                transition={{ duration: 0.3 }}
-              >
-                {s}
-              </motion.div>
-              <div className="text-xs mt-1 text-center text-tg-theme-hint-color">
-                {s === 1 ? 'Имя' : s === 2 ? 'Инфо' : 'Интересы'}
+          <div className="flex justify-between w-full px-6 z-10">
+            {[1, 2, 3].map((s) => (
+              <div key={s} className="flex flex-col items-center">
+                <StepIcon step={s} currentStep={step} />
+                <div className="text-sm mt-2 text-center font-medium text-gray-600 dark:text-gray-400">
+                  {s === 1 ? 'Знакомство' : s === 2 ? 'О вас' : 'Интересы'}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={step}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.2 }}
-          >
-            <Card className="p-5 bg-tg-theme-secondary-bg-color border-0 shadow-sm">
-              {/* Шаг 1: Имя */}
-              {step === 1 && (
-                <div className="space-y-4">
-                  <div className="text-center mb-6">
-                    <h1 className="text-xl font-bold text-tg-theme-text-color">Давайте познакомимся</h1>
-                    <p className="text-sm text-tg-theme-hint-color mt-1">
-                      Как вас зовут или как бы вы хотели, чтобы вас называли?
-                    </p>
-                  </div>
+        <motion.div
+          className="w-full mx-auto"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <Card className="p-6 md:p-8 rounded-2xl bg-white/95 dark:bg-gray-800/90 backdrop-blur-sm border-0 shadow-xl">
+            <AnimatePresence mode="wait" custom={direction}>
+              <motion.div
+                key={step}
+                custom={direction}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.4, type: "spring", bounce: 0.1 }}
+                className="w-full"
+              >
+                {/* Шаг 1: Имя */}
+                {step === 1 && (
+                  <div className="space-y-6">
+                    <div className="text-center mb-6">
+                      <div className="w-24 h-24 bg-blue-100 dark:bg-blue-900 rounded-full mx-auto flex items-center justify-center text-4xl mb-4">
+                        👋
+                      </div>
+                      <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Давайте познакомимся</h2>
+                      <p className="text-gray-600 dark:text-gray-300">
+                        Как вас зовут или как бы вы хотели, чтобы вас называли?
+                      </p>
+                    </div>
 
-                  <div className="text-center mb-4">
-                    <div className="w-20 h-20 rounded-full bg-tg-theme-button-color/10 mx-auto flex items-center justify-center text-2xl font-bold text-tg-theme-button-color">
-                      {name ? name.charAt(0).toUpperCase() : '?'}
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500">👤</span>
+                      </div>
+                      <Input
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder={`Например, ${randomName}`}
+                        fullWidth
+                        className="pl-10 bg-gray-50 dark:bg-gray-700 border-0 ring-1 ring-gray-200 dark:ring-gray-600 focus:ring-blue-500 rounded-lg py-3 text-lg"
+                      />
+                    </div>
+
+                    <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-3 text-sm text-blue-700 dark:text-blue-300">
+                      <p>Вы можете использовать настоящее имя или псевдоним. Если оставите поле пустым, мы подберем случайное имя.</p>
                     </div>
                   </div>
-
-                  <div>
-                    <Input
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder={`Например, ${randomName}`}
-                      fullWidth
-                      className="bg-tg-theme-bg-color text-tg-theme-text-color"
-                    />
-                    <p className="text-xs text-tg-theme-hint-color mt-1 text-center">
-                      Вы можете использовать настоящее имя или псевдоним
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Шаг 2: Возраст и город */}
-              {step === 2 && (
-                <div className="space-y-4">
-                  <div className="text-center mb-6">
-                    <h1 className="text-xl font-bold text-tg-theme-text-color">Основная информация</h1>
-                    <p className="text-sm text-tg-theme-hint-color mt-1">
-                      Расскажите немного о себе
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm mb-1 text-tg-theme-hint-color">Ваш возраст</label>
-                    <Input
-                      value={age}
-                      onChange={(e) => {
-                        // Разрешаем только цифры
-                        const value = e.target.value.replace(/\D/g, '')
-                        setAge(value)
-                      }}
-                      placeholder="Укажите ваш возраст"
-                      fullWidth
-                      type="number"
-                      min={13}
-                      max={100}
-                      className="bg-tg-theme-bg-color text-tg-theme-text-color"
-                    />
-                    <p className="text-xs text-tg-theme-hint-color mt-1">
-                      Возраст должен быть от 13 до 100 лет
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm mb-1 text-tg-theme-hint-color">Город (необязательно)</label>
-                    <Input
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="Ваш город"
-                      fullWidth
-                      className="bg-tg-theme-bg-color text-tg-theme-text-color"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Шаг 3: Интересы */}
-              {step === 3 && (
-                <div className="space-y-4">
-                  <div className="text-center mb-6">
-                    <h1 className="text-xl font-bold text-tg-theme-text-color">Ваши интересы</h1>
-                    <p className="text-sm text-tg-theme-hint-color mt-1">
-                      Выберите темы, которые вам интересны
-                    </p>
-                  </div>
-
-                  <InterestSelector
-                    selectedInterests={selectedInterests}
-                    onSelectInterest={(interests) => setSelectedInterests(interests)}
-                  />
-
-                  <p className="text-xs text-tg-theme-hint-color mt-1 text-center">
-                    Выберите хотя бы один интерес. Это поможет находить интересных собеседников
-                  </p>
-                </div>
-              )}
-
-              {/* Вывод ошибки */}
-              <AnimatePresence>
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="mt-4 p-3 bg-red-100 text-red-700 rounded-md text-sm"
-                  >
-                    {error}
-                  </motion.div>
                 )}
-              </AnimatePresence>
 
-              {/* Кнопки навигации (только для веб-версии, не для Telegram) */}
-              {!WebApp.isExpanded && (
-                <div className="flex justify-between mt-6">
-                  {step > 1 ? (
-                    <Button
-                      onClick={handleBack}
-                      variant="outline"
-                      className="border-tg-theme-button-color text-tg-theme-button-color"
+                {/* Шаг 2: Возраст и город */}
+                {step === 2 && (
+                  <div className="space-y-6">
+                    <div className="text-center mb-6">
+                      <div className="w-24 h-24 bg-green-100 dark:bg-green-900 rounded-full mx-auto flex items-center justify-center text-4xl mb-4">
+                        📝
+                      </div>
+                      <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Расскажите о себе</h2>
+                      <p className="text-gray-600 dark:text-gray-300">
+                        Эта информация поможет найти собеседников с общими интересами
+                      </p>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm mb-2 font-medium text-gray-700 dark:text-gray-300">Ваш возраст <span className="text-red-500">*</span></label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500">🗓️</span>
+                          </div>
+                          <Input
+                            value={age}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '')
+                              setAge(value)
+                            }}
+                            placeholder="Сколько вам лет?"
+                            fullWidth
+                            type="number"
+                            min={13}
+                            max={100}
+                            className="pl-10 bg-gray-50 dark:bg-gray-700 border-0 ring-1 ring-gray-200 dark:ring-gray-600 focus:ring-blue-500 rounded-lg py-3"
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-1">
+                          Возраст должен быть от 13 до 100 лет
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm mb-2 font-medium text-gray-700 dark:text-gray-300">Ваш город <span className="text-gray-400">(необязательно)</span></label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500">🌆</span>
+                          </div>
+                          <Input
+                            value={city}
+                            onChange={(e) => setCity(e.target.value)}
+                            placeholder="В каком городе вы живете?"
+                            fullWidth
+                            className="pl-10 bg-gray-50 dark:bg-gray-700 border-0 ring-1 ring-gray-200 dark:ring-gray-600 focus:ring-blue-500 rounded-lg py-3"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Шаг 3: Интересы */}
+                {step === 3 && (
+                  <div className="space-y-6">
+                    <div className="text-center mb-6">
+                      <div className="w-24 h-24 bg-indigo-100 dark:bg-indigo-900 rounded-full mx-auto flex items-center justify-center text-4xl mb-4">
+                        🌟
+                      </div>
+                      <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Ваши интересы</h2>
+                      <p className="text-gray-600 dark:text-gray-300">
+                        Выберите темы, которые вам интересны для лучшего подбора собеседников
+                      </p>
+                    </div>
+
+                    <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-inner">
+                      <InterestSelector
+                        selectedInterests={selectedInterests}
+                        onSelectInterest={(interests) => setSelectedInterests(interests)}
+                      />
+                    </div>
+
+                    <div className="bg-indigo-50 dark:bg-indigo-900/30 rounded-lg p-3 text-sm text-indigo-700 dark:text-indigo-300 flex items-start">
+                      <span className="mr-2 text-lg">💡</span>
+                      <p>Выберите хотя бы один интерес. Чем точнее выбор, тем более интересное общение вас ждет!</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Вывод ошибки */}
+                <AnimatePresence>
+                  {error && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="mt-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg flex items-center"
                     >
-                      Назад
-                    </Button>
-                  ) : (
-                    <div></div> // Пустой div для выравнивания
+                      <span className="text-lg mr-2">⚠️</span>
+                      <span>{error}</span>
+                    </motion.div>
                   )}
+                </AnimatePresence>
 
-                  <Button
-                    onClick={handleNext}
-                    isLoading={isLoading}
-                    className="bg-tg-theme-button-color text-tg-theme-button-text-color"
-                  >
-                    {step === 3 ? 'Завершить' : 'Продолжить'}
-                  </Button>
-                </div>
+                {/* Кнопки навигации */}
+                {(showCustomButton || !WebApp.isExpanded) && (
+                  <div className="flex justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    {step > 1 ? (
+                      <Button
+                        onClick={handleBack}
+                        variant="outline"
+                        className="px-6 py-2.5 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        <span className="mr-2">←</span> Назад
+                      </Button>
+                    ) : (
+                      <div></div> // Пустой div для выравнивания
+                    )}
+
+                    <LoadingButton
+                      onClick={handleNext}
+                      isLoading={isLoading}
+                      className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-bold shadow-md hover:shadow-lg transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                      {step === 3 ? (
+                        <>Завершить <span className="ml-2">✓</span></>
+                      ) : (
+                        <>Продолжить <span className="ml-2">→</span></>
+                      )}
+                    </LoadingButton>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </Card>
+        </motion.div>
+
+        {/* Кнопка "Лёгкая" для мобильных устройств фиксированная внизу экрана */}
+        {showCustomButton && (
+          <motion.div
+            className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg"
+            initial={{ y: 100 }}
+            animate={{ y: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          >
+            <div className="flex justify-between max-w-md w-full mx-auto">
+              {step > 1 ? (
+                <Button
+                  onClick={handleBack}
+                  variant="outline"
+                  className="px-6 py-3 border-gray-300 dark:border-gray-600"
+                >
+                  <span className="mr-2">←</span> Назад
+                </Button>
+              ) : (
+                <div></div> // Пустой div для выравнивания
               )}
-            </Card>
+
+              <LoadingButton
+                onClick={handleNext}
+                isLoading={isLoading}
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-bold shadow-md rounded-lg"
+              >
+                {step === 3 ? 'Завершить ✓' : 'Продолжить →'}
+              </LoadingButton>
+            </div>
           </motion.div>
-        </AnimatePresence>
+        )}
+
+        {/* Нижняя информация */}
+        <motion.div
+          className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          <p>Регистрируясь, вы соглашаетесь с условиями использования сервиса</p>
+        </motion.div>
       </div>
     </div>
-  )
-}
+  );
+};
