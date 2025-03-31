@@ -1,55 +1,43 @@
-// Тип для интересов
-export interface Interest {
-  id: string;
-  name: string;
-  icon: string;
-  category: 'hobby' | 'entertainment' | 'lifestyle' | 'knowledge' | 'other';
-}
+// Список доступных интересов
+export const availableInterests = [
+  { icon: '🎵', name: 'Музыка' },
+  { icon: '🎬', name: 'Кино' },
+  { icon: '📚', name: 'Книги' },
+  { icon: '⚽', name: 'Спорт' },
+  { icon: '✈️', name: 'Путешествия' },
+  { icon: '🍕', name: 'Кулинария' },
+  { icon: '🐶', name: 'Животные' },
+  { icon: '🎮', name: 'Игры' },
+  { icon: '💻', name: 'Технологии' },
+  { icon: '🎨', name: 'Искусство' },
+  { icon: '🔬', name: 'Наука' },
+  { icon: '🌿', name: 'Природа' },
+  { icon: '👗', name: 'Мода' },
+  { icon: '💪', name: 'Фитнес' },
+  { icon: '📷', name: 'Фотография' }
+];
 
-// Доступные интересы
-export const availableInterests: Interest[] = [
-  { id: 'music', name: 'Музыка', icon: '🎵', category: 'hobby' },
-  { id: 'movies', name: 'Фильмы', icon: '🎬', category: 'entertainment' },
-  { id: 'sports', name: 'Спорт', icon: '⚽', category: 'hobby' },
-  { id: 'gaming', name: 'Игры', icon: '🎮', category: 'entertainment' },
-  { id: 'reading', name: 'Чтение', icon: '📚', category: 'hobby' },
-  { id: 'travel', name: 'Путешествия', icon: '✈️', category: 'lifestyle' },
-  { id: 'cooking', name: 'Кулинария', icon: '🍳', category: 'hobby' },
-  { id: 'technology', name: 'Технологии', icon: '💻', category: 'knowledge' },
-  { id: 'art', name: 'Искусство', icon: '🎨', category: 'hobby' },
-  { id: 'photography', name: 'Фотография', icon: '📷', category: 'hobby' },
-  { id: 'fashion', name: 'Мода', icon: '👗', category: 'lifestyle' },
-  { id: 'science', name: 'Наука', icon: '🔬', category: 'knowledge' },
-  { id: 'history', name: 'История', icon: '🏛️', category: 'knowledge' },
-  { id: 'animals', name: 'Животные', icon: '🐾', category: 'lifestyle' },
-  { id: 'fitness', name: 'Фитнес', icon: '💪', category: 'lifestyle' },
-  { id: 'programming', name: 'Программирование', icon: '👨‍💻', category: 'knowledge' },
-  { id: 'languages', name: 'Языки', icon: '🗣️', category: 'knowledge' },
-  { id: 'psychology', name: 'Психология', icon: '🧠', category: 'knowledge' },
-  { id: 'politics', name: 'Политика', icon: '🏛️', category: 'other' },
-  { id: 'philosophy', name: 'Философия', icon: '🤔', category: 'knowledge' },
-]
-
-// Получить интерес по ID
-export const getInterestById = (interestId: string): Interest | undefined => {
-  return availableInterests.find(interest => interest.id === interestId);
-}
-
-// Получить интересы пользователя
-export const getUserInterests = (userInterestIds: string[]): Interest[] => {
-  return userInterestIds
-    .map(interestId => getInterestById(interestId))
-    .filter((interest): interest is Interest => interest !== undefined);
-}
-
-// Генерировать случайный псевдоним
+// Функция для генерации случайного псевдонима
 export const generateRandomNickname = (): string => {
-  const adjectives = ['Тайный', 'Загадочный', 'Скрытный', 'Неизвестный', 'Анонимный', 'Таинственный'];
-  const nouns = ['Пользователь', 'Собеседник', 'Гость', 'Друг', 'Визитёр', 'Путник'];
+  const adjectives = ['Солнечный', 'Лунный', 'Звездный', 'Загадочный', 'Веселый', 'Тихий', 'Яркий', 'Креативный'];
+  const nouns = ['Путник', 'Герой', 'Мечтатель', 'Исследователь', 'Художник', 'Странник', 'Философ'];
 
   const randomAdjective = adjectives[Math.floor(Math.random() * adjectives.length)];
   const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
   const randomNumber = Math.floor(Math.random() * 1000);
 
-  return `${randomAdjective} ${randomNoun} ${randomNumber}`;
-}
+  return `${randomAdjective}${randomNoun}${randomNumber}`;
+};
+
+// Получить случайные интересы
+export const getRandomInterests = (count: number = 3): string[] => {
+  // Перемешиваем интересы и выбираем нужное количество
+  const shuffled = [...availableInterests].sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, count).map(interest => interest.name);
+};
+
+export default {
+  availableInterests,
+  generateRandomNickname,
+  getRandomInterests
+};

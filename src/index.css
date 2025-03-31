@@ -616,3 +616,18 @@ select {
   -webkit-appearance: none;
   appearance: none;
 }
+
+/* Дополнительный стиль для фиксированных кнопок снизу с учетом безопасной зоны */
+.safe-area-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem) !important;
+}
+
+/* Увеличиваем z-index для кнопок, чтобы они были над другими элементами */
+.fixed.bottom-0 {
+  z-index: 50 !important;
+}
+
+/* Исправляем отображение закругленных углов у кнопок */
+button {
+  border-radius: 0.5rem !important;
+}

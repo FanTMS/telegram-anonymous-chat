@@ -1,77 +1,96 @@
-import React from 'react'
-import { motion } from 'framer-motion'
-import WebApp from '@twa-dev/sdk'
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 
 interface InterestSelectorProps {
-    selectedInterests: string[]
-    onSelectInterest: (interests: string[]) => void
+    selectedInterests: string[];
+    // Поддерживаем оба варианта пропсов для обратной совместимости
+    onSelectInterest?: (interests: string[]) => void;
+    onChange?: (interests: string[]) => void;
+    maxSelections?: number;
 }
 
 export const InterestSelector: React.FC<InterestSelectorProps> = ({
-    selectedInterests,
-    onSelectInterest
+    selectedInterests = [],
+    onSelectInterest,
+    onChange,
+    maxSelections = 10
 }) => {
-    // Все доступные интересы
-    const allInterests = [
-        { id: 'music', name: 'Музыка', icon: '🎵' },
-        { id: 'movies', name: 'Кино', icon: '🎬' },
-        { id: 'books', name: 'Книги', icon: '📚' },
-        { id: 'sports', name: 'Спорт', icon: '⚽' },
-        { id: 'travel', name: 'Путешествия', icon: '✈️' },
-        { id: 'food', name: 'Кулинария', icon: '🍕' },
-        { id: 'pets', name: 'Животные', icon: '🐶' },
-        { id: 'gaming', name: 'Игры', icon: '🎮' },
-        { id: 'tech', name: 'Технологии', icon: '💻' },
-        { id: 'art', name: 'Искусство', icon: '🎨' },
-        { id: 'science', name: 'Наука', icon: '🔬' },
-        { id: 'nature', name: 'Природа', icon: '🌿' },
-        { id: 'fashion', name: 'Мода', icon: '👗' },
-        { id: 'fitness', name: 'Фитнес', icon: '💪' },
-        { id: 'photography', name: 'Фотография', icon: '📷' }
-    ]
+    // Список доступных интересов с иконками
+    const availableInterests = [
+        { icon: '🎵', name: 'Музыка' },
+        { icon: '🎬', name: 'Кино' },
+        { icon: '📚', name: 'Книги' },
+        { icon: '⚽', name: 'Спорт' },
+        { icon: '✈️', name: 'Путешествия' },
+        { icon: '🍕', name: 'Кулинария' },
+        { icon: '🐶', name: 'Животные' },
+        { icon: '🎮', name: 'Игры' },
+        { icon: '💻', name: 'Технологии' },
+        { icon: '🎨', name: 'Искусство' },
+        { icon: '🔬', name: 'Наука' },
+        { icon: '🌿', name: 'Природа' },
+        { icon: '👗', name: 'Мода' },
+        { icon: '💪', name: 'Фитнес' },
+        { icon: '📷', name: 'Фотография' }
+    ];
 
-    // Функция обработки выбора интереса
-    const handleInterestClick = (interestName: string) => {
-        // Вибрация для тактильной обратной связи
-        if (WebApp.isExpanded) {
-            WebApp.HapticFeedback.impactOccurred('light')
-        }
+    // Локальное состояние для отслеживания выбранных интересов
+    const [selected, setSelected] = useState<string[]>(selectedInterests);
 
-        if (selectedInterests.includes(interestName)) {
-            onSelectInterest(selectedInterests.filter(i => i !== interestName))
+    // Обновляем локальное состояние при изменении входных пропов
+    useEffect(() => {
+        setSelected(selectedInterests);
+    }, [selectedInterests]);
+
+    // Обработчик выбора интереса
+    const handleToggleInterest = (interest: string) => {
+        let newSelected: string[];
+
+        if (selected.includes(interest)) {
+            // Удаляем интерес, если он уже выбран
+            newSelected = selected.filter(item => item !== interest);
         } else {
-            onSelectInterest([...selectedInterests, interestName])
+            // Добавляем интерес, если он не выбран и не достигнут максимум
+            if (selected.length < maxSelections) {
+                newSelected = [...selected, interest];
+            } else {
+                // Если достигнут максимум, не добавляем новый интерес
+                console.log(`Достигнут максимум выбора интересов: ${maxSelections}`);
+                return;
+            }
         }
-    }
+
+        // Обновляем локальное состояние
+        setSelected(newSelected);
+
+        // Вызываем функции обратного вызова
+        if (onSelectInterest) onSelectInterest(newSelected);
+        if (onChange) onChange(newSelected);
+    };
 
     return (
-        <div className="grid grid-cols-3 gap-2">
-            {allInterests.map((interest) => (
-                <motion.div
-                    key={interest.id}
-                    className={`p-2 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors ${selectedInterests.includes(interest.name)
-                            ? 'bg-tg-theme-button-color text-tg-theme-button-text-color'
-                            : 'bg-tg-theme-bg-color text-tg-theme-text-color'
-                        }`}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => handleInterestClick(interest.name)}
-                >
-                    <span className="text-xl mb-1">{interest.icon}</span>
-                    <span className="text-xs text-center">{interest.name}</span>
+        <div className="flex flex-wrap gap-2">
+            {availableInterests.map(({ icon, name }) => {
+                const isSelected = selected.includes(name);
 
-                    {selectedInterests.includes(interest.name) && (
-                        <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            className="w-4 h-4 bg-white rounded-full flex items-center justify-center absolute top-1 right-1"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-tg-theme-button-color" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                        </motion.div>
-                    )}
-                </motion.div>
-            ))}
+                return (
+                    <motion.div
+                        key={name}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => handleToggleInterest(name)}
+                        className={`cursor-pointer flex flex-col items-center p-2 rounded-lg transition-colors ${isSelected
+                            ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-700'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300 dark:border-gray-600'
+                            } border shadow-sm`}
+                    >
+                        <div className="text-xl mb-1">{icon}</div>
+                        <div className="text-xs font-medium text-center">{name}</div>
+                    </motion.div>
+                );
+            })}
         </div>
-    )
-}
+    );
+};
+
+export default InterestSelector;

@@ -22,15 +22,18 @@ export const RequireAuth: React.FC<RequireAuthProps> = ({ children }) => {
                 }
 
                 const user = getCurrentUser();
+                console.log('RequireAuth проверяет пользователя:', user);
 
-                // Вводим более строгую проверку - пользователь должен существовать
-                // и у него должно быть имя, возраст и хотя бы один интерес
+                // Строгая проверка - пользователь должен существовать и иметь
+                // все обязательные поля, включая возраст и интересы
                 const isValid = user &&
                     user.name &&
-                    user.age &&
+                    user.age && // Обязательное проверка возраста
+                    user.age >= 13 && // Дополнительная проверка на валидность возраста
                     user.interests &&
                     user.interests.length > 0;
 
+                console.log('Результат проверки RequireAuth:', isValid);
                 setIsAuthenticated(!!isValid);
             } catch (error) {
                 console.error('Ошибка при проверке авторизации:', error);

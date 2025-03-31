@@ -79,36 +79,22 @@ const USER_KEY_PREFIX = 'user_'
 const CURRENT_USER_KEY = 'current_user_id'
 const ADMINS_KEY = 'admin_users'
 
-// Инициализация интеграции с Telegram при загрузке модуля
+// ИСПРАВЛЕНО: Убираем автоматическое создание пользователя при загрузке модуля
+// Теперь просто инициализируем API без автоматического создания пользователя
 telegramApi.initialize().then(success => {
   if (success) {
-    console.log('Telegram API initialized successfully')
-
-    // Если пользователь авторизован через Telegram, проверяем и создаем профиль
-    const telegramId = telegramApi.getUserId()
-    if (telegramId) {
-      const existingUser = getUserByTelegramId(telegramId)
-
-      if (!existingUser) {
-        // Создаем нового пользователя из данных Telegram
-        createUserFromTelegram()
-      } else {
-        // Обновляем текущего пользователя и его lastActive
-        setCurrentUser(existingUser.id)
-        existingUser.lastActive = Date.now()
-        saveUser(existingUser)
-      }
+    console.log('Telegram API initialized successfully');
+    // Отключаем автоматическое создание пользователя!
+    // Далее только проверяем наличие ID для инициализации хранилища
+    const telegramId = telegramApi.getUserId();
+    if (telegramId && !userStorage.isInitialized()) {
+      userStorage.initialize(telegramId);
+      console.log(`Хранилище инициализировано для пользователя ${telegramId}`);
     }
   } else {
-    // Проверяем, был ли пользователь уже авторизован
-    const currentUserId = getCurrentUserId()
-    if (currentUserId) {
-      console.log('Using existing user session')
-    } else {
-      console.warn('Telegram API initialization failed, using local mode')
-    }
+    console.warn('Telegram API initialization failed');
   }
-})
+});
 
 // Получение списка всех пользователей
 export const getUsers = (): User[] => {
@@ -264,7 +250,7 @@ export const getCurrentUser = (): User | null => {
   }
 }
 
-// Создание пользователя из данных Telegram
+// Создание пользователя из данных Telegram - УЛУЧШЕННАЯ ВЕРСИЯ
 export const createUserFromTelegram = (): User | null => {
   try {
     // Проверяем доступность Telegram WebApp
@@ -273,30 +259,63 @@ export const createUserFromTelegram = (): User | null => {
       return null;
     }
 
+    // Получаем данные пользователя из Telegram
     const tgUser = WebApp.initDataUnsafe.user;
 
-    const newUser: User = {
+    // ВАЖНО: Проверяем существующего пользователя в обоих хранилищах
+    let existingUser: User | null = null;
+
+    // 1. Сначала проверяем в изолированном хранилище
+    existingUser = userStorage.getItem<User>('currentUser', null);
+
+    // 2. Затем проверяем в общем хранилище (для обратной совместимости)
+    if (!existingUser) {
+      // Старый метод использовал специальный поиск по telegramId
+      existingUser = getUserByTelegramId(tgUser.id.toString());
+
+      // Если нашли в старом хранилище, переносим в новое
+      if (existingUser) {
+        console.log('Перенос пользователя из старого хранилища в новое');
+        userStorage.setItem('currentUser', existingUser);
+      }
+    }
+
+    // Если пользователь существует и у него полностью заполнен профиль,
+    // просто возвращаем его с обновленным временем активности
+    if (existingUser &&
+      existingUser.name &&
+      existingUser.age &&
+      existingUser.interests &&
+      existingUser.interests.length > 0) {
+
+      existingUser.lastActive = Date.now();
+      userStorage.setItem('currentUser', existingUser);
+      console.log('Возвращаем существующего пользователя с заполненным профилем');
+      return existingUser;
+    }
+
+    // Если пользователя нет или его профиль не заполнен,
+    // создаем базовый шаблон или обновляем существующий
+    const newUser: User = existingUser ? { ...existingUser } : {
       id: tgUser.id.toString(),
       name: tgUser.first_name,
       telegramData: {
         telegramId: tgUser.id.toString(),
         username: tgUser.username || '',
+        firstName: tgUser.first_name,
+        lastName: tgUser.last_name,
       },
       createdAt: Date.now(),
       lastActive: Date.now(),
-      interests: [],
+      interests: [], // Пустой массив интересов
       isAnonymous: false,
-      rating: 5
+      rating: 5,
     };
 
     // Сохраняем пользователя в изолированное хранилище
     userStorage.setItem('currentUser', newUser);
 
-    // Инициализируем хранилище с ID пользователя если ещё не инициализировано
-    if (!userStorage.isInitialized()) {
-      userStorage.initialize(tgUser.id);
-    }
-
+    console.log(`Создан/обновлен пользователь из Telegram (${newUser.id})`);
     return newUser;
   } catch (error) {
     console.error('Ошибка при создании пользователя из данных Telegram:', error);

@@ -51,12 +51,26 @@ export const Layout = () => {
         }
 
         let user = getCurrentUser();
+        console.log('Layout проверяет пользователя:', user ? {
+          id: user.id,
+          name: user.name,
+          age: user.age,
+          hasInterests: user.interests && user.interests.length > 0
+        } : 'нет пользователя');
 
-        // Всегда перенаправляем на регистрацию, если нет пользователя - 
-        // НИКАКИХ ИСКЛЮЧЕНИЙ даже для текущего местоположения
-        if (!user) {
-          console.log('Пользователь не найден - перенаправление на регистрацию');
+        // Проверка полной регистрации - пользователь должен иметь возраст и хотя бы один интерес
+        const isFullyRegistered = user &&
+          user.name &&
+          user.age &&
+          user.age >= 13 &&
+          user.interests &&
+          user.interests.length > 0;
+
+        // Перенаправляем на регистрацию, если пользователь не прошел полную регистрацию
+        if (!isFullyRegistered) {
+          console.log('Пользователь не прошел полную регистрацию - перенаправление');
           // Очищаем локальное хранилище, чтобы убедиться, что нет устаревших данных
+          // НЕ удаляем пользователя, только флаг текущего пользователя
           localStorage.removeItem('current_user_id');
           navigate('/registration', { replace: true });
           return;

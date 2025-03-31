@@ -72,8 +72,8 @@ export const Registration = () => {
     return names[Math.floor(Math.random() * names.length)]
   })
 
-  // Проверяем доступность Telegram WebApp и адаптируем UI
-  const [showCustomButton, setShowCustomButton] = useState(false);
+  // Всегда показываем кнопки, независимо от Telegram WebApp
+  const [showCustomButton, setShowCustomButton] = useState(true);
 
   // Проверяем, авторизован ли уже пользователь
   useEffect(() => {
@@ -143,20 +143,32 @@ export const Registration = () => {
   // Определяем, доступно ли приложение в Telegram или мы в браузере
   useEffect(() => {
     try {
-      // Проверяем реальную доступность MainButton
-      const isTelegramWebAppFunctional = WebApp &&
+      // Более надежная проверка работоспособности WebApp
+      const isTelegramWebAppFunctional =
+        typeof WebApp !== 'undefined' &&
         WebApp.isExpanded &&
-        typeof WebApp.MainButton !== 'undefined' &&
-        typeof WebApp.MainButton.onClick === 'function';
+        WebApp.MainButton &&
+        typeof WebApp.MainButton.onClick === 'function' &&
+        typeof WebApp.MainButton.setText === 'function';
 
-      // Если что-то не так с Telegram WebApp, показываем свою кнопку
-      setShowCustomButton(!isTelegramWebAppFunctional);
+      if (isTelegramWebAppFunctional) {
+        console.log('Telegram WebApp API доступен - настраиваем MainButton');
+        // Даже если Telegram WebApp работает, мы всегда показываем наши кнопки
+        // Но можем настроить MainButton дополнительно
+        WebApp.MainButton.setText(step === 3 ? 'Завершить регистрацию' : 'Продолжить');
+        WebApp.MainButton.onClick(handleNext);
+        WebApp.MainButton.show();
+      } else {
+        console.log('Telegram WebApp API недоступен - используем пользовательские кнопки');
+      }
+
+      // Всегда показываем кнопки
+      setShowCustomButton(true);
     } catch (error) {
       console.warn('Ошибка при проверке WebApp.MainButton:', error);
-      // В случае ошибки при проверке WebApp, показываем свою кнопку
       setShowCustomButton(true);
     }
-  }, []);
+  }, [step]);
 
   // Обновляем надпись на кнопке и поведение назад в зависимости от шага
   useEffect(() => {
@@ -537,7 +549,15 @@ export const Registration = () => {
                     <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-inner">
                       <InterestSelector
                         selectedInterests={selectedInterests}
-                        onSelectInterest={(interests) => setSelectedInterests(interests)}
+                        onSelectInterest={(interests) => {
+                          console.log('Выбранные интересы:', interests);
+                          setSelectedInterests(interests);
+                        }}
+                        onChange={(interests) => {
+                          console.log('Выбранные интересы (onChange):', interests);
+                          setSelectedInterests(interests);
+                        }}
+                        maxSelections={5}
                       />
                     </div>
 
@@ -563,70 +583,67 @@ export const Registration = () => {
                   )}
                 </AnimatePresence>
 
-                {/* Кнопки навигации */}
-                {(showCustomButton || !WebApp.isExpanded) && (
-                  <div className="flex justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    {step > 1 ? (
-                      <Button
-                        onClick={handleBack}
-                        variant="outline"
-                        className="px-6 py-2.5 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        <span className="mr-2">←</span> Назад
-                      </Button>
-                    ) : (
-                      <div></div> // Пустой div для выравнивания
-                    )}
-
-                    <LoadingButton
-                      onClick={handleNext}
-                      isLoading={isLoading}
-                      className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-bold shadow-md hover:shadow-lg transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                {/* Кнопки навигации - ВСЕГДА показываем их */}
+                <div className="flex justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  {step > 1 ? (
+                    <Button
+                      onClick={handleBack}
+                      variant="outline"
+                      className="px-6 py-2.5 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
-                      {step === 3 ? (
-                        <>Завершить <span className="ml-2">✓</span></>
-                      ) : (
-                        <>Продолжить <span className="ml-2">→</span></>
-                      )}
-                    </LoadingButton>
-                  </div>
-                )}
+                      <span className="mr-2">←</span> Назад
+                    </Button>
+                  ) : (
+                    <div></div> // Пустой div для выравнивания
+                  )}
+
+                  <LoadingButton
+                    onClick={handleNext}
+                    isLoading={isLoading}
+                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-bold shadow-md hover:shadow-lg transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    {step === 3 ? (
+                      <>Завершить <span className="ml-2">✓</span></>
+                    ) : (
+                      <>Продолжить <span className="ml-2">→</span></>
+                    )}
+                  </LoadingButton>
+                </div>
               </motion.div>
             </AnimatePresence>
           </Card>
         </motion.div>
 
-        {/* Кнопка "Лёгкая" для мобильных устройств фиксированная внизу экрана */}
-        {showCustomButton && (
-          <motion.div
-            className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg"
-            initial={{ y: 100 }}
-            animate={{ y: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          >
-            <div className="flex justify-between max-w-md w-full mx-auto">
-              {step > 1 ? (
-                <Button
-                  onClick={handleBack}
-                  variant="outline"
-                  className="px-6 py-3 border-gray-300 dark:border-gray-600"
-                >
-                  <span className="mr-2">←</span> Назад
-                </Button>
-              ) : (
-                <div></div> // Пустой div для выравнивания
-              )}
-
-              <LoadingButton
-                onClick={handleNext}
-                isLoading={isLoading}
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-bold shadow-md rounded-lg"
+        {/* Фиксированная кнопка внизу экрана - только для мобильных устройств */}
+        <motion.div
+          className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg safe-area-bottom"
+          initial={{ y: 100 }}
+          animate={{ y: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        >
+          <div className="flex justify-between max-w-md w-full mx-auto">
+            {step > 1 ? (
+              <Button
+                onClick={handleBack}
+                variant="outline"
+                className="px-6 py-3 border-gray-300 dark:border-gray-600"
               >
-                {step === 3 ? 'Завершить ✓' : 'Продолжить →'}
-              </LoadingButton>
-            </div>
-          </motion.div>
-        )}
+                <span className="mr-2">←</span> Назад
+              </Button>
+            ) : (
+              <div></div> // Пустой div для выравнивания
+            )
+            }
+
+            <LoadingButton
+              onClick={handleNext}
+              isLoading={isLoading}
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-bold shadow-md rounded-lg"
+            >
+              {step === 3 ? 'Завершить ✓' : 'Продолжить →'}
+            </LoadingButton>
+          </div>
+        </motion.div>
 
         {/* Нижняя информация */}
         <motion.div
