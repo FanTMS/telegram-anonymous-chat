@@ -1,72 +1,90 @@
 import React, { useState, useEffect } from 'react';
 import App from './App';
 import WebApp from '@twa-dev/sdk';
+import { createWebAppMock } from './utils/telegramMock';
 
 const InitApp: React.FC = () => {
-    const [initialized, setInitialized] = useState(false);
+    const [isReady, setIsReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Таймер для случая, если инициализация зависнет
+        // Устанавливаем таймер безопасности на случай зависания инициализации
         const timeoutId = setTimeout(() => {
-            if (!initialized) {
-                console.warn('Таймаут инициализации, принудительно продолжаем работу');
-                setInitialized(true);
+            if (!isReady) {
+                console.warn('🚨 Инициализация не завершилась вовремя, принудительно продолжаем');
+                setIsReady(true);
             }
-        }, 2000); // 2 секунды максимальное время ожидания
+        }, 3000); // 3 секунды максимальное время ожидания
 
         const initializeApp = async () => {
             try {
-                console.log('Инициализация приложения...');
+                console.log('🚀 Начало инициализации приложения...');
 
-                // Проверка, запущены ли мы в Telegram
-                const isTelegramWebApp = typeof window.Telegram !== 'undefined' &&
+                // Проверяем доступность Telegram API
+                const isTelegramAvailable = typeof window !== 'undefined' &&
+                    typeof window.Telegram !== 'undefined' &&
                     typeof window.Telegram.WebApp !== 'undefined';
 
-                console.log(`Запущено в Telegram WebApp: ${isTelegramWebApp}`);
+                console.log(`📱 Telegram WebApp ${isTelegramAvailable ? 'доступен' : 'недоступен'}`);
 
-                // Сигнализируем Telegram о готовности приложения
-                if (isTelegramWebApp) {
-                    try {
-                        console.log('Вызов WebApp.ready()...');
-                        WebApp.ready();
-                        console.log('WebApp.ready() вызван успешно');
-                    } catch (e) {
-                        console.error('Ошибка при вызове WebApp.ready():', e);
-                    }
+                // Если не доступен, пытаемся создать мок еще раз
+                if (!isTelegramAvailable) {
+                    console.log('⚠️ Telegram WebApp недоступен, создаем мок');
+                    createWebAppMock();
                 }
 
-                // Небольшая задержка чтобы убедиться, что все инициализировано
+                // Вызываем ready() с небольшой задержкой для стабильности
                 setTimeout(() => {
-                    setInitialized(true);
-                    clearTimeout(timeoutId); // Очищаем таймер безопасности
-                }, 100);
+                    try {
+                        if (typeof WebApp !== 'undefined') {
+                            console.log('📣 Вызываем WebApp.ready()');
+                            WebApp.ready();
+                            console.log('✅ WebApp.ready() вызван успешно');
+                        } else {
+                            console.warn('⚠️ WebApp не определен, не вызываем ready()');
+                        }
+                    } catch (err) {
+                        console.error('❌ Ошибка при вызове WebApp.ready():', err);
+                    }
+
+                    // Завершаем инициализацию в любом случае
+                    console.log('✅ Инициализация успешно завершена');
+                    setIsReady(true);
+                    clearTimeout(timeoutId);
+                }, 300); // Небольшая задержка для стабильности
             } catch (error) {
-                console.error('Ошибка при инициализации приложения:', error);
-                setError('Ошибка инициализации');
-                setInitialized(true);
-                clearTimeout(timeoutId); // Очищаем таймер безопасности
+                console.error('❌ Критическая ошибка при инициализации:', error);
+                setError('Не удалось инициализировать приложение');
+                setIsReady(true); // Продолжаем в любом случае
+                clearTimeout(timeoutId);
             }
         };
 
         initializeApp();
 
-        // Очистка при размонтировании
+        // Очищаем таймер при размонтировании
         return () => clearTimeout(timeoutId);
     }, []);
 
-    if (!initialized) {
+    // Экран загрузки
+    if (!isReady) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-white dark:bg-gray-900">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
-                    <p className="mt-4 text-lg">Загрузка приложения...</p>
+                    <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <p className="mt-4 text-lg text-gray-700 dark:text-gray-300">Загрузка приложения...</p>
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Пожалуйста, подождите</p>
                 </div>
             </div>
         );
     }
 
-    // Рендер основного приложения
+    // Если есть ошибка, показываем уведомление, но все равно рендерим приложение
+    if (error) {
+        console.warn(`⚠️ Ошибка инициализации: ${error}, но продолжаем работу`);
+    }
+
+    // Рендерим основное приложение
     return <App />;
 };
 

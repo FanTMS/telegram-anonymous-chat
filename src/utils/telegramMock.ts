@@ -15,6 +15,25 @@ const mockUser = {
 // Мок для WebApp инициализационных данных
 const mockInitData = "mock_init_data";
 
+// Проверка, запущено ли приложение в Telegram
+export const isRunningInTelegram = (): boolean => {
+    try {
+        // Проверяем наличие Telegram WebApp по initData
+        if (typeof window !== 'undefined' &&
+            typeof window.Telegram !== 'undefined' &&
+            typeof window.Telegram.WebApp !== 'undefined') {
+
+            // Если есть initData, значит приложение запущено в Telegram
+            const webApp = window.Telegram.WebApp as any;
+            return !!webApp && (!!webApp.initData || !!webApp.initDataUnsafe);
+        }
+        return false;
+    } catch (e) {
+        console.error('❌ Ошибка при проверке запуска в Telegram:', e);
+        return false;
+    }
+};
+
 // Создаем мок WebApp API
 export const createWebAppMock = () => {
     // Проверяем, запущено ли приложение в окружении разработки
@@ -25,17 +44,38 @@ export const createWebAppMock = () => {
         process.env.NODE_ENV === 'development';
 
     // Если не в режиме разработки, ничего не делаем
-    if (!isLocalDevelopment) return;
+    if (!isLocalDevelopment) {
+        console.log('🚫 Не в режиме разработки, не создаем мок');
+        return;
+    }
 
-    // Проверяем наличие реального Telegram WebApp API 
+    // Если уже запущено в реальном Telegram, не создаем мок
+    if (isRunningInTelegram()) {
+        console.log('🔍 Приложение запущено в реальном Telegram, не создаем мок');
+        return;
+    }
+
+    // Если WebApp уже определен, проверяем его свойства
     if (window.Telegram && window.Telegram.WebApp) {
-        // Для совместимости с типами добавляем проверку через as any
-        const realWebApp = window.Telegram.WebApp as any;
-        if (!realWebApp.initData) {
-            console.log('Telegram WebApp обнаружен, но не содержит initData. Добавляем поле.');
-            realWebApp.initData = '';
+        const webApp = window.Telegram.WebApp as any;
+
+        // Если нет initData, добавляем его
+        if (!webApp.initData) {
+            console.log('⚠️ WebApp обнаружен, но без initData. Добавляем поле.');
+            webApp.initData = mockInitData;
         }
-        console.log('WebApp уже определен, не создаем мок');
+
+        // Если нет initDataUnsafe, добавляем его
+        if (!webApp.initDataUnsafe) {
+            console.log('⚠️ WebApp обнаружен, но без initDataUnsafe. Добавляем поле.');
+            webApp.initDataUnsafe = {
+                user: mockUser,
+                query_id: "mock_query_id",
+                auth_date: Math.floor(Date.now() / 1000)
+            };
+        }
+
+        console.log('✅ WebApp уже определен, доработали недостающие поля');
         return;
     }
 
@@ -51,7 +91,10 @@ export const createWebAppMock = () => {
             auth_date: Math.floor(Date.now() / 1000)
         },
         colorScheme: 'light',
-        ready: () => console.log('WebApp.ready() вызван (мок)'),
+        ready: () => {
+            console.log('✅ WebApp.ready() вызван (мок)');
+            return true;
+        },
         expand: () => console.log('WebApp.expand() вызван (мок)'),
         close: () => console.log('WebApp.close() вызван (мок)'),
         showAlert: (message: string) => {
@@ -143,7 +186,7 @@ export const createWebAppMock = () => {
 
     // Подписываемся на ошибки для лучшей отладки
     window.addEventListener('error', function (event) {
-        console.error('Ошибка в Telegram WebApp Mock:', event.error);
+        console.error('❌ Ошибка в Telegram WebApp Mock:', event.error);
     });
 
     return MockWebApp;
