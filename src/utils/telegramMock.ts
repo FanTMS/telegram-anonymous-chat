@@ -27,8 +27,17 @@ export const createWebAppMock = () => {
     // Если не в режиме разработки, ничего не делаем
     if (!isLocalDevelopment) return;
 
-    // Если WebApp уже определен, ничего не делаем
-    if (window.Telegram && window.Telegram.WebApp) return;
+    // Проверяем наличие реального Telegram WebApp API 
+    if (window.Telegram && window.Telegram.WebApp) {
+        // Для совместимости с типами добавляем проверку через as any
+        const realWebApp = window.Telegram.WebApp as any;
+        if (!realWebApp.initData) {
+            console.log('Telegram WebApp обнаружен, но не содержит initData. Добавляем поле.');
+            realWebApp.initData = '';
+        }
+        console.log('WebApp уже определен, не создаем мок');
+        return;
+    }
 
     console.info('📱 Создаем мок Telegram WebApp API для локальной разработки');
 
@@ -41,7 +50,7 @@ export const createWebAppMock = () => {
             query_id: "mock_query_id",
             auth_date: Math.floor(Date.now() / 1000)
         },
-        colorScheme: 'light', // Добавляем обязательное свойство colorScheme
+        colorScheme: 'light',
         ready: () => console.log('WebApp.ready() вызван (мок)'),
         expand: () => console.log('WebApp.expand() вызван (мок)'),
         close: () => console.log('WebApp.close() вызван (мок)'),
@@ -121,11 +130,13 @@ export const createWebAppMock = () => {
             notificationOccurred: (type: string) => console.log(`HapticFeedback.notificationOccurred() вызван (мок): ${type}`),
             selectionChanged: () => console.log('HapticFeedback.selectionChanged() вызван (мок)'),
         },
-        version: '6.0' // Текущая версия Telegram WebApp API
+        version: '6.0'
     };
 
     // Создаем глобальный объект Telegram, если он не существует
-    if (!window.Telegram) (window as any).Telegram = {};
+    if (!window.Telegram) {
+        (window as any).Telegram = {};
+    }
 
     // Добавляем мок WebApp
     (window as any).Telegram.WebApp = MockWebApp;
