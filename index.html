@@ -3,79 +3,63 @@
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/telegram-icon.svg" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="viewport"
-    content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#2678b6" />
-  <meta name="description" content="Анонимный чат в Telegram для общения с новыми людьми" />
-  <title>Telegram Anonymous Chat</title>
-  <!-- Базовые стили -->
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <!-- PWA мета-теги -->
+  <meta name="apple-mobile-web-app-title" content="Анонимный чат" />
+  <meta name="application-name" content="Анонимный чат" />
+
+  <title>Анонимный чат</title>
+
+  <!-- Предотвращаем автомасштабирование шрифтов на iOS -->
   <style>
-    /* Стили при загрузке */
+    html {
+      -webkit-text-size-adjust: 100%;
+    }
+
     body {
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+      overflow-x: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      height: 100%;
+      width: 100%;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
-      background-color: var(--tg-theme-bg-color, #ffffff);
-      color: var(--tg-theme-text-color, #000000);
     }
 
+    /* Hack для поддержки 100vh на мобильных устройствах */
+    :root {
+      --app-height: 100vh;
+    }
+
+    html,
+    body,
     #root {
-      min-height: 100vh;
-      width: 100%;
-    }
-
-    /* Остальные стили не меняются */
-    .loader {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      width: 100%;
-    }
-
-    .spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid rgba(0, 0, 0, 0.1);
-      border-radius: 50%;
-      border-left-color: #2678b6;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      0% {
-        transform: rotate(0deg);
-      }
-
-      100% {
-        transform: rotate(360deg);
-      }
-    }
-
-    @media (prefers-color-scheme: dark) {
-      body:not(.light-theme) {
-        background-color: #1e1e1e;
-        color: #ffffff;
-      }
-
-      body:not(.light-theme) .spinner {
-        border: 4px solid rgba(255, 255, 255, 0.1);
-        border-left-color: #2678b6;
-      }
+      height: var(--app-height);
     }
   </style>
+  <script>
+    // Исправление высоты для мобильных браузеров (iOS Safari)
+    const appHeight = () => {
+      const doc = document.documentElement;
+      doc.style.setProperty('--app-height', `${window.innerHeight}px`);
+    }
+    window.addEventListener('resize', appHeight);
+    window.addEventListener('orientationchange', appHeight);
+    appHeight();
+
+    // Записываем начальную ширину вьюпорта для отслеживания изменений
+    document.documentElement.style.setProperty('--initial-viewport-width', `${window.innerWidth}px`);
+  </script>
 </head>
 
 <body>
-  <div id="root">
-    <!-- Показываем загрузчик, пока React не загрузится -->
-    <div class="loader">
-      <div class="spinner"></div>
-    </div>
-  </div>
+  <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

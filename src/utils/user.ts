@@ -1,4 +1,5 @@
-import { db, telegramApi } from './database'
+import db from './database'
+import { telegramApi } from './database'
 import { MatchingStrategy } from './recommendations'
 import { userStorage } from './userStorage';
 import WebApp from '@twa-dev/sdk';
@@ -552,7 +553,11 @@ export const unblockUser = (userId: string): boolean => {
 // Очистка всей базы данных
 export const clearDatabase = async (): Promise<boolean> => {
   try {
-    return await db.clearAllData()
+    // Используем локальное хранилище для очистки данных
+    localStorage.clear();
+    userStorage.clear();
+    console.log('База данных очищена');
+    return true;
   } catch (error) {
     console.error('Failed to clear database', error)
     return false

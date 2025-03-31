@@ -76,12 +76,14 @@ export const Layout = () => {
           return;
         }
 
-        setCurrentUser(user);
-
-        const isAdmin = await checkAdmin();
-        setIsAdminUser(isAdmin);
-
         if (user) {
+          setCurrentUser(user);
+
+          // Проверяем, является ли пользователь администратором
+          const isAdmin = await checkAdmin();
+          setIsAdminUser(isAdmin);
+
+          // Обновляем время последней активности
           user.lastActive = Date.now();
           saveUser(user);
         }
@@ -91,6 +93,7 @@ export const Layout = () => {
         navigate('/registration', { replace: true });
       } finally {
         setIsLoading(false);
+        if (loadingTimeout) clearTimeout(loadingTimeout);
       }
     };
 

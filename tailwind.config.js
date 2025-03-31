@@ -1,17 +1,11 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
-  darkMode: ["class"],
-  content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  darkMode: 'class',
   theme: {
-    // Переопределяем размеры экранов для обеспечения единого вида на всех устройствах
-    screens: {
-      // Установка единых брейкпоинтов для всех устройств
-      'sm': '1px',
-      'md': '1px',
-      'lg': '1px',
-      'xl': '1px',
-      '2xl': '1px',
-    },
     extend: {
       borderRadius: {
         lg: "var(--radius)",
@@ -69,6 +63,34 @@ module.exports = {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        tg: {
+          bg: 'var(--tg-theme-bg-color)',
+          text: 'var(--tg-theme-text-color)',
+          hint: 'var(--tg-theme-hint-color)',
+          link: 'var(--tg-theme-link-color)',
+          button: 'var(--tg-theme-button-color)',
+          buttonText: 'var(--tg-theme-button-text-color)',
+          secondaryBg: 'var(--tg-theme-secondary-bg-color)',
+        }
+      },
+      spacing: {
+        'safe-top': 'var(--safe-area-inset-top)',
+        'safe-bottom': 'var(--safe-area-inset-bottom)',
+        'safe-left': 'var(--safe-area-inset-left)',
+        'safe-right': 'var(--safe-area-inset-right)',
+        'navbar': 'var(--navbar-height)',
+      },
+      height: {
+        screen: 'var(--app-height)',
+      },
+      minHeight: {
+        screen: 'var(--app-height)',
+      },
+      padding: {
+        'safe-bottom': 'var(--safe-area-inset-bottom)',
+      },
+      margin: {
+        'safe-bottom': 'var(--safe-area-inset-bottom)',
       },
       keyframes: {
         "accordion-down": {
@@ -101,7 +123,6 @@ module.exports = {
           xl: '5rem',
           '2xl': '6rem',
         },
-        // Подстраиваем контейнеры под десктоп
         screens: {
           'sm': '640px',
           'md': '768px',
@@ -111,6 +132,13 @@ module.exports = {
         },
       },
     },
+    fontFamily: {
+      sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', 'sans-serif'],
+      mono: ['Menlo', 'Monaco', 'Courier New', 'monospace'],
+    },
   },
-  plugins: [],
-};
+  plugins: [
+    require('@tailwindcss/forms'),
+    // ...другие плагины...
+  ],
+}

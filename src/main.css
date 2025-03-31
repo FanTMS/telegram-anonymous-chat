@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Базовые стили для предотвращения горизонтальной прокрутки и учета безопасных областей */
+body {
+    overflow-x: hidden;
+    max-width: 100vw;
+    width: 100%;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+}
+
+/* Стили для iOS с вырезом (notch) */
+.safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.min-h-screen-safe {
+    min-height: calc(100vh - env(safe-area-inset-bottom, 0px));
+}
+
+/* Стили для компонентов с fixed позицией внизу экрана */
+.fixed-bottom-safe {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Стили для навигационного бара */
+.tg-navbar {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}

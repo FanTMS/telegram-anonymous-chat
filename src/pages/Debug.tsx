@@ -1,265 +1,166 @@
-import React, { useState, useEffect } from 'react';
-import { getCurrentUser } from '../utils/user';
-import { getSearchingUsers, triggerMatchmaking } from '../utils/matchmaking';
-import { getChatById } from '../utils/chat'; // Импортируем getChatById из chat.ts
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import WebApp from '@twa-dev/sdk';
+import { debugUtils } from '../utils/debug';
+import { getCurrentUser, saveUser } from '../utils/user';
+import { userStorage } from '../utils/userStorage';
+import { Button } from '../components/Button';
+import { Card } from '../components/Card';
 
-// Страница для отладки проблем с чатом
-export const DebugPage = () => {
-    const [logs, setLogs] = useState<string[]>([]);
-    const [userInfo, setUserInfo] = useState<any>(null);
-    const [searchingUsers, setSearchingUsers] = useState<any[]>([]);
-    const [storageInfo, setStorageInfo] = useState<{ [key: string]: any }>({});
+export const DebugPage: React.FC = () => {
+    const navigate = useNavigate();
+    const [log, setLog] = useState<string>('');
+    const [userStorageInitialized, setUserStorageInitialized] = useState(userStorage.isInitialized());
 
-    useEffect(() => {
-        refreshData();
-    }, []);
+    const addToLog = (message: string) => {
+        setLog(prev => `${message}\n${prev}`);
+    };
 
-    const refreshData = () => {
+    const handleRunDiagnostics = () => {
         try {
-            // Получаем информацию о текущем пользователе
-            const user = getCurrentUser();
-            setUserInfo(user);
+            addToLog('Запуск диагностики...');
+            debugUtils.runFullDebug();
+            addToLog('Диагностика завершена, проверьте консоль браузера');
+        } catch (error) {
+            addToLog(`Ошибка диагностики: ${error}`);
+        }
+    };
 
-            // Получаем список пользователей в поиске
-            const users = getSearchingUsers();
-            setSearchingUsers(users);
+    const handleResetUserData = () => {
+        try {
+            const confirmed = window.confirm('Вы уверены, что хотите сбросить все данные пользователя?');
+            if (!confirmed) return;
 
-            // Получаем информацию из localStorage
-            const storageData: { [key: string]: any } = {};
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key) {
-                    try {
-                        const value = localStorage.getItem(key);
-                        storageData[key] = value ? JSON.parse(value) : null;
-                    } catch (e) {
-                        storageData[key] = localStorage.getItem(key);
-                    }
-                }
+            const success = debugUtils.resetUserData();
+            if (success) {
+                addToLog('Данные пользователя успешно сброшены');
+                setUserStorageInitialized(false);
+            } else {
+                addToLog('Не удалось сбросить данные пользователя');
             }
-            setStorageInfo(storageData);
-
-            addLog('Данные обновлены');
         } catch (error) {
-            addLog(`Ошибка при обновлении данных: ${error}`);
+            addToLog(`Ошибка при сбросе данных: ${error}`);
         }
     };
 
-    const addLog = (message: string) => {
-        setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${message}`, ...prev.slice(0, 19)]);
-    };
-
-    const forceTriggerMatch = async () => {
-        addLog('Запуск принудительного поиска совпадений...');
+    const handleTestTelegramApi = () => {
         try {
-            const result = await triggerMatchmaking();
-            addLog(`Результат поиска: ${result ? 'Найдено совпадение' : 'Совпадение не найдено'}`);
-        } catch (error) {
-            addLog(`Ошибка при поиске: ${error}`);
-        }
-    };
-
-    const clearAllData = () => {
-        if (window.confirm('Это действие удалит все данные приложения. Продолжить?')) {
-            localStorage.clear();
-            addLog('Все данные очищены');
-            refreshData();
-        }
-    };
-
-    const createTestUser = () => {
-        try {
-            // Создаем тестового пользователя для отладки
-            const testUser = {
-                id: `test_user_${Date.now()}`,
-                name: 'Test User',
-                interests: ['Test'],
-                isAnonymous: true,
-                rating: 5,
-                createdAt: Date.now(),
-                lastActive: Date.now()
-            };
-
-            // Сохраняем в localStorage
-            const usersData = localStorage.getItem('users');
-            const users = usersData ? JSON.parse(usersData) : [];
-            users.push(testUser);
-            localStorage.setItem('users', JSON.stringify(users));
-
-            // Добавляем в список поиска
-            const searchingUsersData = localStorage.getItem('searching_users');
-            const searchingUsers = searchingUsersData ? JSON.parse(searchingUsersData) : [];
-            searchingUsers.push({
-                userId: testUser.id,
-                startedAt: Date.now(),
-                preferences: { random: true }
-            });
-            localStorage.setItem('searching_users', JSON.stringify(searchingUsers));
-
-            addLog(`Создан тестовый пользователь: ${testUser.id}`);
-            refreshData();
-        } catch (error) {
-            addLog(`Ошибка при создании тестового пользователя: ${error}`);
-        }
-    };
-
-    // Функция для полной очистки данных о поиске
-    const resetSearchData = () => {
-        try {
-            localStorage.setItem('searching_users', JSON.stringify([]));
-            addLog('Данные о поиске пользователей очищены');
-            refreshData();
-        } catch (error) {
-            addLog(`Ошибка при очистке данных поиска: ${error}`);
-        }
-    };
-
-    // Функция для очистки всех уведомлений о чатах
-    const resetChatNotifications = () => {
-        try {
-            // Находим все ключи, связанные с уведомлениями о чатах
-            const allKeys = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && (key.startsWith('new_chat_notification_') || key.startsWith('new_chat_flag_'))) {
-                    allKeys.push(key);
-                }
-            }
-
-            // Удаляем найденные ключи
-            allKeys.forEach(key => localStorage.removeItem(key));
-
-            addLog(`Очищено ${allKeys.length} уведомлений о чатах`);
-            refreshData();
-        } catch (error) {
-            addLog(`Ошибка при очистке уведомлений: ${error}`);
-        }
-    };
-
-    // Проверка состояния уведомлений
-    const checkNotifications = () => {
-        try {
-            const userId = userInfo?.id;
-            if (!userId) {
-                addLog('Нет текущего пользователя для проверки уведомлений');
+            if (typeof WebApp === 'undefined') {
+                addToLog('Telegram WebApp API не доступен');
                 return;
             }
 
-            const hasFlag = localStorage.getItem(`new_chat_flag_${userId}`) === 'true';
-            const notificationData = localStorage.getItem(`new_chat_notification_${userId}`);
+            WebApp.showPopup({
+                title: 'Тестовое сообщение',
+                message: 'Это тестовое сообщение Telegram WebApp API',
+                buttons: [
+                    { type: 'ok' },
+                    { type: 'cancel' }
+                ]
+            });
 
-            addLog(`Флаг нового чата для ${userId}: ${hasFlag ? 'Установлен' : 'Отсутствует'}`);
-
-            if (notificationData) {
-                try {
-                    const notification = JSON.parse(notificationData);
-                    addLog(`Уведомление: chatId=${notification.chatId}, isRead=${notification.isRead}`);
-
-                    // Проверяем существование чата
-                    const chat = getChatById(notification.chatId);
-                    if (chat) {
-                        addLog('Чат существует!');
-                    } else {
-                        addLog('Чат не найден!');
-                    }
-                } catch (e) {
-                    addLog(`Ошибка при парсинге уведомления: ${e}`);
-                }
-            } else {
-                addLog('Данные уведомления отсутствуют');
-            }
+            addToLog('Тестовое сообщение отправлено');
         } catch (error) {
-            addLog(`Ошибка при проверке уведомлений: ${error}`);
+            addToLog(`Ошибка при тестировании Telegram API: ${error}`);
+        }
+    };
+
+    const handleFixRegistration = () => {
+        try {
+            const user = getCurrentUser();
+            if (!user) {
+                addToLog('Пользователь не найден');
+                return;
+            }
+
+            // Фиксируем обязательные поля
+            if (!user.age) user.age = 25;
+            if (!user.interests || !user.interests.length) {
+                user.interests = ['Музыка', 'Кино', 'Путешествия'];
+            }
+            if (!user.name) user.name = 'Пользователь';
+
+            // Исправляем дату активности
+            user.lastActive = Date.now();
+
+            // Сохраняем исправленного пользователя
+            saveUser(user);
+
+            addToLog(`Регистрация пользователя исправлена: ${JSON.stringify({
+                id: user.id,
+                name: user.name,
+                age: user.age,
+                interests: user.interests
+            })}`);
+        } catch (error) {
+            addToLog(`Ошибка при исправлении регистрации: ${error}`);
+        }
+    };
+
+    const handleTestNavigation = () => {
+        try {
+            addToLog('Проверка навигации...');
+
+            // Тестируем навигацию туда-обратно
+            setTimeout(() => {
+                navigate('/');
+
+                setTimeout(() => {
+                    navigate('/debug');
+                    addToLog('Тест навигации завершен');
+                }, 1000);
+            }, 1000);
+        } catch (error) {
+            addToLog(`Ошибка при тестировании навигации: ${error}`);
         }
     };
 
     return (
-        <div className="p-4 max-w-4xl mx-auto">
-            <h1 className="text-2xl font-bold mb-4">Страница отладки</h1>
+        <div className="p-4">
+            <h1 className="text-2xl font-bold mb-4">Инструменты отладки</h1>
 
-            <div className="flex flex-wrap gap-2 mb-4">
-                <button
-                    onClick={refreshData}
-                    className="px-4 py-2 bg-blue-500 text-white rounded"
-                >
-                    Обновить данные
-                </button>
-                <button
-                    onClick={forceTriggerMatch}
-                    className="px-4 py-2 bg-green-500 text-white rounded"
-                >
-                    Принудительный поиск
-                </button>
-                <button
-                    onClick={createTestUser}
-                    className="px-4 py-2 bg-purple-500 text-white rounded"
-                >
-                    Создать тестового пользователя
-                </button>
-                <button
-                    onClick={clearAllData}
-                    className="px-4 py-2 bg-red-500 text-white rounded"
-                >
-                    Очистить все данные
-                </button>
-                <button
-                    onClick={resetSearchData}
-                    className="px-4 py-2 bg-orange-500 text-white rounded"
-                >
-                    Сбросить данные поиска
-                </button>
-                <button
-                    onClick={resetChatNotifications}
-                    className="px-4 py-2 bg-yellow-500 text-white rounded"
-                >
-                    Очистить уведомления
-                </button>
-                <button
-                    onClick={checkNotifications}
-                    className="px-4 py-2 bg-blue-500 text-white rounded"
-                >
-                    Проверить уведомления
-                </button>
+            <div className="grid gap-4 mb-6">
+                <Card className="p-4">
+                    <h2 className="font-bold mb-2">Диагностика</h2>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Button onClick={handleRunDiagnostics}>Запустить диагностику</Button>
+                        <Button onClick={debugUtils.logWebAppInfo} variant="secondary">Инфо о WebApp</Button>
+                    </div>
+                </Card>
+
+                <Card className="p-4">
+                    <h2 className="font-bold mb-2">Пользовательские данные</h2>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Button onClick={handleFixRegistration}>Исправить регистрацию</Button>
+                        <Button onClick={handleResetUserData} variant="outline" className="border-red-500 text-red-500">
+                            Сбросить данные
+                        </Button>
+                    </div>
+                    <div className="mt-2">
+                        <p className="text-sm">
+                            UserStorage инициализировано: {userStorageInitialized ? 'Да' : 'Нет'}
+                        </p>
+                        <p className="text-sm">
+                            Текущий пользователь: {getCurrentUser()?.id || 'Не определен'}
+                        </p>
+                    </div>
+                </Card>
+
+                <Card className="p-4">
+                    <h2 className="font-bold mb-2">Telegram API</h2>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Button onClick={handleTestTelegramApi}>Тест WebApp API</Button>
+                        <Button onClick={handleTestNavigation} variant="secondary">Тест навигации</Button>
+                    </div>
+                </Card>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gray-100 p-4 rounded-lg">
-                    <h2 className="text-xl font-bold mb-2">Текущий пользователь</h2>
-                    <pre className="text-xs overflow-auto max-h-40">
-                        {JSON.stringify(userInfo, null, 2)}
-                    </pre>
+            <Card className="p-4">
+                <h2 className="font-bold mb-2">Журнал</h2>
+                <div className="bg-gray-100 dark:bg-gray-800 p-2 rounded h-60 overflow-auto font-mono text-xs whitespace-pre-line">
+                    {log || 'Журнал пуст. Запустите тесты для получения информации.'}
                 </div>
-
-                <div className="bg-gray-100 p-4 rounded-lg">
-                    <h2 className="text-xl font-bold mb-2">Пользователи в поиске ({searchingUsers.length})</h2>
-                    <pre className="text-xs overflow-auto max-h-40">
-                        {JSON.stringify(searchingUsers, null, 2)}
-                    </pre>
-                </div>
-
-                <div className="bg-gray-100 p-4 rounded-lg md:col-span-2">
-                    <h2 className="text-xl font-bold mb-2">Логи</h2>
-                    <div className="text-xs font-mono bg-white p-2 rounded border max-h-40 overflow-auto">
-                        {logs.map((log, index) => (
-                            <div key={index} className="mb-1">{log}</div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="bg-gray-100 p-4 rounded-lg md:col-span-2">
-                    <h2 className="text-xl font-bold mb-2">Данные localStorage</h2>
-                    <div className="text-xs overflow-auto max-h-60">
-                        {Object.entries(storageInfo).map(([key, value]) => (
-                            <div key={key} className="mb-4">
-                                <div className="font-bold">{key}:</div>
-                                <pre className="pl-4 mt-1 bg-white p-1 rounded">
-                                    {JSON.stringify(value, null, 2)}
-                                </pre>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
+            </Card>
         </div>
     );
 };

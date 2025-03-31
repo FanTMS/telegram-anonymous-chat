@@ -9,16 +9,39 @@ const STORAGE_PREFIX = 'tg_user_';
 class UserStorage {
     private userId: string | null = null;
     private initialized = false;
+    private initializationAttempts = 0;
+    private readonly MAX_INITIALIZATION_ATTEMPTS = 3;
 
     /**
      * Инициализация хранилища для конкретного пользователя
      * @param userId - ID пользователя (обычно Telegram ID)
      */
-    initialize(userId: string | number): void {
-        // Преобразуем ID в строку
-        this.userId = String(userId);
-        this.initialized = true;
-        console.log(`Хранилище инициализировано для пользователя ${this.userId}`);
+    initialize(userId: string | number): boolean {
+        try {
+            // Проверяем, не превысили ли лимит попыток
+            if (this.initializationAttempts >= this.MAX_INITIALIZATION_ATTEMPTS) {
+                console.warn(`Превышен лимит попыток инициализации хранилища (${this.MAX_INITIALIZATION_ATTEMPTS})`);
+                return false;
+            }
+
+            this.initializationAttempts++;
+
+            // Преобразуем ID в строку
+            const userIdStr = String(userId);
+
+            if (!userIdStr || userIdStr === 'undefined' || userIdStr === 'null') {
+                console.error('Попытка инициализации хранилища с некорректным userId:', userId);
+                return false;
+            }
+
+            this.userId = userIdStr;
+            this.initialized = true;
+            console.log(`Хранилище успешно инициализировано для пользователя ${this.userId}`);
+            return true;
+        } catch (error) {
+            console.error('Ошибка при инициализации хранилища:', error);
+            return false;
+        }
     }
 
     /**
@@ -41,7 +64,7 @@ class UserStorage {
     private getStorageKey(key: string): string {
         if (!this.isInitialized()) {
             console.error('Попытка доступа к хранилищу до инициализации');
-            throw new Error('UserStorage не инициализирован');
+            return `${STORAGE_PREFIX}undefined_${key}`;
         }
         return `${STORAGE_PREFIX}${this.userId}_${key}`;
     }
@@ -77,17 +100,19 @@ class UserStorage {
      * @param key - ключ данных
      * @param value - значение для сохранения
      */
-    setItem<T>(key: string, value: T): void {
+    setItem<T>(key: string, value: T): boolean {
         try {
             if (!this.isInitialized()) {
                 console.error('Попытка сохранения до инициализации хранилища');
-                throw new Error('UserStorage не инициализирован');
+                return false;
             }
 
             const storageKey = this.getStorageKey(key);
             localStorage.setItem(storageKey, JSON.stringify(value));
+            return true;
         } catch (error) {
             console.error(`Ошибка при сохранении значения по ключу ${key}:`, error);
+            return false;
         }
     }
 
@@ -95,28 +120,30 @@ class UserStorage {
      * Удалить данные из хранилища
      * @param key - ключ данных
      */
-    removeItem(key: string): void {
+    removeItem(key: string): boolean {
         try {
             if (!this.isInitialized()) {
                 console.error('Попытка удаления до инициализации хранилища');
-                return;
+                return false;
             }
 
             const storageKey = this.getStorageKey(key);
             localStorage.removeItem(storageKey);
+            return true;
         } catch (error) {
             console.error(`Ошибка при удалении значения по ключу ${key}:`, error);
+            return false;
         }
     }
 
     /**
      * Очистить все данные текущего пользователя
      */
-    clear(): void {
+    clear(): boolean {
         try {
             if (!this.isInitialized()) {
                 console.error('Попытка очистки до инициализации хранилища');
-                return;
+                return false;
             }
 
             // Удаляем только ключи текущего пользователя
@@ -127,8 +154,10 @@ class UserStorage {
                 .forEach(key => localStorage.removeItem(key));
 
             console.log(`Удалены все данные пользователя ${this.userId}`);
+            return true;
         } catch (error) {
             console.error('Ошибка при очистке хранилища:', error);
+            return false;
         }
     }
 
@@ -151,6 +180,15 @@ class UserStorage {
             console.error('Ошибка при получении списка ключей:', error);
             return [];
         }
+    }
+
+    /**
+     * Сбросить состояние хранилища (для тестирования)
+     */
+    reset(): void {
+        this.userId = null;
+        this.initialized = false;
+        this.initializationAttempts = 0;
     }
 }
 
