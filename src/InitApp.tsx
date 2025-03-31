@@ -16,7 +16,12 @@ const InitApp: React.FC = () => {
                 console.log('Инициализация приложения...');
 
                 // Инициализируем хранилище данных пользователя
-                if (isTelegramWebApp() && WebApp.initDataUnsafe?.user) {
+                if (isTelegramWebApp() &&
+                    typeof WebApp !== 'undefined' &&
+                    WebApp.initDataUnsafe &&
+                    WebApp.initDataUnsafe.user &&
+                    WebApp.initDataUnsafe.user.id) {
+
                     // Используем Telegram User ID для инициализации хранилища
                     const telegramUserId = WebApp.initDataUnsafe.user.id;
                     secureStorage.initialize(telegramUserId);
@@ -29,11 +34,13 @@ const InitApp: React.FC = () => {
                     console.log(`Хранилище инициализировано с временным ID: ${devUserId}`);
                 }
 
-                // Запускаем отладочные утилиты при необходимости
-                if (process.env.NODE_ENV === 'development') {
-                    setTimeout(() => {
+                // Запускаем отладочные утилиты только если они существуют и мы в режиме разработки
+                if (process.env.NODE_ENV === 'development' && debugUtils && typeof debugUtils.runFullDebug === 'function') {
+                    try {
                         debugUtils.runFullDebug();
-                    }, 1000);
+                    } catch (debugError) {
+                        console.error('Ошибка отладочных утилит:', debugError);
+                    }
                 }
 
                 // Завершаем инициализацию
@@ -41,7 +48,7 @@ const InitApp: React.FC = () => {
             } catch (error) {
                 console.error('Ошибка при инициализации приложения:', error);
                 setError('Произошла ошибка при инициализации приложения');
-                setInitialized(true); // Все равно показываем приложение
+                setInitialized(true); // Всё равно показываем приложение
             }
         };
 
@@ -50,26 +57,66 @@ const InitApp: React.FC = () => {
 
     if (!initialized) {
         return (
-            <div className="app-loading">
-                <div className="spinner"></div>
+            <div className="app-loading" style={{
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                height: '100vh',
+                textAlign: 'center'
+            }}>
+                <div className="spinner" style={{
+                    border: '4px solid rgba(0, 0, 0, 0.1)',
+                    borderRadius: '50%',
+                    borderTop: '4px solid #3498db',
+                    width: '50px',
+                    height: '50px',
+                    animation: 'spin 1s linear infinite'
+                }}></div>
                 <p>Загрузка приложения...</p>
+                <style>{`
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                `}</style>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="app-error">
+            <div className="app-error" style={{
+                padding: '20px',
+                textAlign: 'center',
+                maxWidth: '600px',
+                margin: '40px auto'
+            }}>
                 <h1>Ошибка</h1>
                 <p>{error}</p>
-                <button onClick={() => window.location.reload()}>Перезагрузить</button>
+                <button
+                    onClick={() => window.location.reload()}
+                    style={{
+                        padding: '10px 20px',
+                        backgroundColor: '#3498db',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                    }}
+                >
+                    Перезагрузить
+                </button>
             </div>
         );
     }
 
+    // Добавляем простой обертку для отладки, если приложение рендерится корректно
     return (
         <BrowserRouter>
-            <App />
+            <div id="app-container">
+                <App />
+            </div>
         </BrowserRouter>
     );
 };

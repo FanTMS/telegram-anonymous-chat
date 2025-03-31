@@ -1,135 +1,106 @@
-import { useState, useEffect } from 'react'
-import WebApp from '@twa-dev/sdk'
-import { RouterProvider } from 'react-router-dom'
-import { router } from './routes'
-import { userStorage } from './utils/userStorage'
-import { getCurrentUser } from './utils/user'
-import { safeViewport } from './utils/safe-viewport'
-import './utils/responsive.css'
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { useTelegramWebApp } from './hooks/useTelegramWebApp';
+import WebApp from '@twa-dev/sdk';
 
-/**
- * Основной компонент приложения
- */
-function App() {
-  const [isInitializing, setIsInitializing] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+// Создаем базовые компоненты
+const HomePage = () => {
+  const twa = useTelegramWebApp({ expandApp: true });
+  const [userData, setUserData] = useState<any>(null);
 
   useEffect(() => {
-    // Устанавливаем таймаут на инициализацию
-    const timeout = setTimeout(() => {
-      if (isInitializing) {
-        console.warn('Превышено время инициализации - принудительно продолжаем загрузку')
-        setIsInitializing(false)
-      }
-    }, 3000) // 3 секунды максимум на инициализацию
-
-    // Инициализация при монтировании
-    const init = async () => {
-      try {
-        console.log('Инициализация приложения...')
-
-        // Применяем настройки для корректного отображения
-        safeViewport.setupViewport()
-
-        // Проверяем наличие данных Telegram пользователя
-        if (WebApp && WebApp.initDataUnsafe && WebApp.initDataUnsafe.user) {
-          const userId = WebApp.initDataUnsafe.user.id
-          if (userId) {
-            // Инициализируем хранилище для этого пользователя
-            const initialized = userStorage.initialize(userId)
-            console.log(`Хранилище инициализировано для Telegram пользователя: ${initialized}`)
-          }
-        } else {
-          // В режиме разработки используем dev_user_id
-          const devUserId = localStorage.getItem('dev_user_id') || `dev_${Date.now()}`
-          localStorage.setItem('dev_user_id', devUserId)
-          const initialized = userStorage.initialize(devUserId)
-          console.log(`Хранилище инициализировано для разработки: ${initialized}`)
-        }
-
-        // Настраиваем WebApp
-        if (WebApp && WebApp.isExpanded) {
-          try {
-            WebApp.ready() // Сообщаем Telegram, что приложение готово
-
-            // Устанавливаем цветовую схему для всего приложения
-            document.documentElement.style.setProperty('--tg-theme-bg-color-rgb', '255, 255, 255')
-            document.documentElement.classList.remove('dark') // Принудительно светлая тема
-          } catch (e) {
-            console.warn('Ошибка при настройке Telegram WebApp:', e)
-          }
-        }
-
-        // Завершаем инициализацию
-        setIsInitializing(false)
-      } catch (error) {
-        console.error('Ошибка при инициализации приложения:', error)
-        setError('Произошла ошибка при инициализации приложения')
-        setIsInitializing(false)
-      }
+    // Отправляем сообщение, что страница загрузилась
+    if (twa.isAvailable) {
+      twa.hapticFeedback.notificationOccurred('success');
     }
 
-    init()
-
-    return () => clearTimeout(timeout)
-  }, [])
-
-  // Обработка изменений размера экрана
-  useEffect(() => {
-    // Создаем обработчик для изменения размера окна
-    const handleResize = () => {
-      safeViewport.setupViewport()
+    // Получаем данные из Telegram WebApp если доступны
+    if (WebApp && WebApp.initDataUnsafe && WebApp.initDataUnsafe.user) {
+      setUserData(WebApp.initDataUnsafe.user);
+    } else {
+      setUserData({ id: 'dev-user', first_name: 'Developer' });
     }
+  }, [twa]);
 
-    // Добавляем слушатели событий
-    window.addEventListener('resize', handleResize)
-    window.addEventListener('orientationchange', handleResize)
+  return (
+    <div className="p-4">
+      <h1 className="text-2xl font-bold mb-4">Telegram Anonymous Chat</h1>
 
-    // Вызываем один раз при монтировании
-    handleResize()
-
-    // Очистка при размонтировании
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      window.removeEventListener('orientationchange', handleResize)
-    }
-  }, [])
-
-  // Экран загрузки
-  if (isInitializing) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-white">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-t-blue-500 border-blue-200 rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">Загрузка приложения...</p>
+      {userData ? (
+        <div className="bg-white shadow rounded p-4 mb-4 dark:bg-gray-800 dark:text-white">
+          <h2 className="text-lg font-semibold">Привет, {userData.first_name}!</h2>
+          <p className="text-gray-600 dark:text-gray-300">ID: {userData.id}</p>
         </div>
-      </div>
-    )
-  }
+      ) : (
+        <div className="bg-white shadow rounded p-4 mb-4 dark:bg-gray-800 dark:text-white">
+          <p>Загрузка данных пользователя...</p>
+        </div>
+      )}
 
-  // Если произошла ошибка при инициализации
-  if (error) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-white p-4">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 bg-red-100 rounded-full mx-auto flex items-center justify-center mb-4">
-            <span className="text-red-500 text-2xl">⚠️</span>
-          </div>
-          <h1 className="text-xl font-bold text-red-600 mb-2">Ошибка инициализации</h1>
-          <p className="text-gray-600 mb-4">{error}</p>
+      <div className="bg-white shadow rounded p-4 dark:bg-gray-800 dark:text-white">
+        <h2 className="text-lg font-semibold mb-2">Информация о WebApp</h2>
+        <div className="text-sm text-gray-700 dark:text-gray-300">
+          <p>Тема: {twa.colorScheme || 'не определена'}</p>
+          <p>Платформа: {navigator.userAgent}</p>
+          <p>Версия SDK: 6.9.2</p>
+          <p>Доступен Telegram WebApp: {twa.isAvailable ? 'Да' : 'Нет'}</p>
+        </div>
+
+        <div className="mt-4">
           <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+            onClick={() => twa.showAlert('Это тестовое сообщение')}
+            className="bg-blue-500 text-white px-4 py-2 rounded mr-2 hover:bg-blue-600"
           >
-            Перезагрузить
+            Показать уведомление
+          </button>
+
+          <button
+            onClick={() => twa.hapticFeedback.notificationOccurred('success')}
+            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+          >
+            Haptic отклик
           </button>
         </div>
       </div>
-    )
-  }
+    </div>
+  );
+};
 
-  // Основное приложение
-  return <RouterProvider router={router} />
-}
+const NotFoundPage = () => {
+  const twa = useTelegramWebApp({ useBackButton: true });
 
-export default App
+  useEffect(() => {
+    if (twa.isAvailable) {
+      twa.hapticFeedback.notificationOccurred('error');
+    }
+  }, [twa]);
+
+  return (
+    <div className="p-4 text-center">
+      <h1 className="text-2xl font-bold mb-4">404 - Страница не найдена</h1>
+      <p>Запрошенная страница не существует.</p>
+      <button
+        onClick={() => window.history.back()}
+        className="bg-blue-500 text-white px-4 py-2 rounded mt-4 hover:bg-blue-600"
+      >
+        Вернуться назад
+      </button>
+    </div>
+  );
+};
+
+// Основной компонент App
+const App: React.FC = () => {
+  return (
+    <Router>
+      <div className="app-container min-h-screen bg-gray-100 dark:bg-gray-900">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </div>
+    </Router>
+  );
+};
+
+export default App;

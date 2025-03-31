@@ -33,21 +33,47 @@ export const initializeTelegramWebApp = (): void => {
         console.log('WebApp.ready() вызван');
 
         // Настраиваем основные параметры
-        WebApp.expand(); // Раскрываем приложение на весь экран
+        try {
+            WebApp.expand(); // Раскрываем приложение на весь экран
+        } catch (expandError) {
+            console.warn('Не удалось развернуть WebApp:', expandError);
+        }
 
         // Устанавливаем тему
-        document.documentElement.setAttribute('data-theme', WebApp.colorScheme);
+        try {
+            if (WebApp.colorScheme) {
+                document.documentElement.setAttribute('data-theme', WebApp.colorScheme);
+                console.log('Установлена тема:', WebApp.colorScheme);
+            }
+        } catch (themeError) {
+            console.warn('Не удалось установить тему:', themeError);
+        }
 
         // Логируем информацию для отладки
         if (process.env.NODE_ENV === 'development') {
-            debugUtils.logWebAppInfo();
+            try {
+                console.group('Telegram WebApp Debug Info');
+                console.log('WebApp.initData:', WebApp.initData);
+                console.log('WebApp.colorScheme:', WebApp.colorScheme);
+                console.log('WebApp.themeParams:', WebApp.themeParams);
+                console.log('WebApp.isExpanded:', WebApp.isExpanded);
+                console.log('WebApp.viewportHeight:', WebApp.viewportHeight);
+                console.log('WebApp.viewportStableHeight:', WebApp.viewportStableHeight);
+                console.groupEnd();
+            } catch (debugError) {
+                console.warn('Ошибка при выводе отладочной информации:', debugError);
+            }
         }
 
         // Добавляем слушатель событий для темы
-        WebApp.onEvent('themeChanged', () => {
-            document.documentElement.setAttribute('data-theme', WebApp.colorScheme);
-            console.log('Тема изменена на:', WebApp.colorScheme);
-        });
+        try {
+            WebApp.onEvent('themeChanged', () => {
+                document.documentElement.setAttribute('data-theme', WebApp.colorScheme);
+                console.log('Тема изменена на:', WebApp.colorScheme);
+            });
+        } catch (eventError) {
+            console.warn('Не удалось добавить слушатель событий для темы:', eventError);
+        }
 
         // Настраиваем MainButton по умолчанию (если нужно)
         configureMainButton();
@@ -84,7 +110,13 @@ const configureMainButton = (text?: string, color?: string, textColor?: string):
 export const showTelegramAlert = (message: string): Promise<void> => {
     return new Promise((resolve) => {
         if (isTelegramWebApp()) {
-            WebApp.showAlert(message, () => resolve());
+            try {
+                WebApp.showAlert(message, () => resolve());
+            } catch (e) {
+                console.warn('Ошибка при вызове WebApp.showAlert:', e);
+                alert(message);
+                resolve();
+            }
         } else {
             alert(message);
             resolve();

@@ -3,85 +3,136 @@
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" href="/icon.png" />
   <meta name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#ffffff" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <!-- PWA мета-теги -->
-  <meta name="apple-mobile-web-app-title" content="Анонимный чат" />
-  <meta name="application-name" content="Анонимный чат" />
+  <meta name="description" content="Telegram Anonymous Chat" />
+  <title>Telegram Anonymous Chat</title>
 
-  <title>Анонимный чат</title>
-
-  <!-- Предотвращаем автомасштабирование шрифтов на iOS -->
   <style>
-    html {
-      -webkit-text-size-adjust: 100%;
-    }
-
+    /* Критические стили для предотвращения белого экрана */
+    html,
     body {
       margin: 0;
       padding: 0;
+      width: 100%;
+      height: 100%;
       overflow-x: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #ffffff;
+    }
+
+    #root {
+      display: block !important;
       height: 100%;
       width: 100%;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
     }
 
-    /* Hack для поддержки 100vh на мобильных устройствах */
-    :root {
-      --app-height: 100vh;
+    .loading-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      background: #ffffff;
+      z-index: 9999;
     }
 
-    html,
-    body,
-    #root {
-      height: var(--app-height);
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 5px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top-color: #3390ec;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Если загружен телеграм - применим его тему */
+    .dark-theme {
+      background-color: #212121;
+      color: #ffffff;
     }
   </style>
-  <script>
-    // Исправление высоты для мобильных браузеров (iOS Safari)
-    const appHeight = () => {
-      const doc = document.documentElement;
-      doc.style.setProperty('--app-height', `${window.innerHeight}px`);
-    }
-    window.addEventListener('resize', appHeight);
-    window.addEventListener('orientationchange', appHeight);
-    appHeight();
 
-    // Записываем начальную ширину вьюпорта для отслеживания изменений
-    document.documentElement.style.setProperty('--initial-viewport-width', `${window.innerWidth}px`);
-  </script>
-  <!-- Скрипт для предотвращения бесконечной загрузки в Telegram WebApp -->
+  <!-- Скрипт предварительной загрузки, выполняется сразу -->
   <script type="text/javascript">
-    // Устанавливаем таймер безопасности для предотвращения бесконечной загрузки
-    window.telegramAppInitTimeout = setTimeout(function () {
-      console.log('⚠️ Таймаут инициализации приложения - принудительно продолжаем');
+    // Определение преференций темы
+    function detectColorScheme() {
+      var theme = 'light';
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        theme = 'dark';
+      }
+      // Если доступен Telegram WebApp, используем его тему
+      if (window.Telegram && window.Telegram.WebApp) {
+        theme = window.Telegram.WebApp.colorScheme || theme;
+      }
 
-      // Пытаемся вызвать WebApp.ready() напрямую
+      document.documentElement.setAttribute('data-theme', theme);
+      if (theme === 'dark') {
+        document.body.classList.add('dark-theme');
+      }
+    }
+
+    // Вызываем определение темы сразу
+    detectColorScheme();
+
+    // Показываем экран загрузки
+    window.addEventListener('DOMContentLoaded', function () {
+      var loadingScreen = document.createElement('div');
+      loadingScreen.className = 'loading-screen';
+      loadingScreen.id = 'app-loading-screen';
+
+      var spinner = document.createElement('div');
+      spinner.className = 'loading-spinner';
+
+      var loadingText = document.createElement('p');
+      loadingText.textContent = 'Загрузка приложения...';
+
+      loadingScreen.appendChild(spinner);
+      loadingScreen.appendChild(loadingText);
+      document.body.appendChild(loadingScreen);
+
+      // Вызов WebApp.ready() на раннем этапе
       if (window.Telegram && window.Telegram.WebApp) {
         try {
           window.Telegram.WebApp.ready();
-          console.log('✅ WebApp.ready() вызван из таймаута безопасности');
+          console.log('✅ WebApp.ready() вызван из раннего скрипта');
         } catch (e) {
-          console.error('❌ Ошибка при вызове WebApp.ready() из таймаута:', e);
+          console.warn('❌ Ошибка при раннем вызове WebApp.ready():', e);
         }
       }
-    }, 3000); // 3 секунды максимальное время ожидания
+    });
 
-    // Предварительный вызов WebApp.ready() для немедленной сигнализации Telegram
-    if (window.Telegram && window.Telegram.WebApp) {
-      try {
-        window.Telegram.WebApp.ready();
-        console.log('✅ WebApp.ready() вызван из предварительного скрипта');
-      } catch (e) {
-        console.log('❌ Ошибка при предварительном вызове WebApp.ready():', e);
+    // Функция для удаления экрана загрузки
+    window.removeLoadingScreen = function () {
+      var loadingScreen = document.getElementById('app-loading-screen');
+      if (loadingScreen) {
+        loadingScreen.style.opacity = '0';
+        loadingScreen.style.transition = 'opacity 0.5s';
+        setTimeout(function () {
+          if (loadingScreen.parentNode) {
+            loadingScreen.parentNode.removeChild(loadingScreen);
+          }
+        }, 500);
       }
-    }
+    };
+
+    // Предотвращение белого экрана: вызываем удаление через таймаут
+    window.telegramAppInitTimeout = setTimeout(function () {
+      window.removeLoadingScreen();
+      console.log('⚠️ Экран загрузки удален по таймауту');
+    }, 5000); // 5 секунд максимальное время ожидания
   </script>
 </head>
 
