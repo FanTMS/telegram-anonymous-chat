@@ -1,77 +1,68 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 
 interface ButtonProps {
   children: React.ReactNode;
-  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
-  className?: string;
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
-  size?: 'small' | 'medium' | 'large';
-  fullWidth?: boolean;
+  onClick?: () => void;
   disabled?: boolean;
-  type?: 'button' | 'submit' | 'reset';
-  icon?: React.ReactNode;
+  fullWidth?: boolean;
+  className?: string;
+  variant?: 'primary' | 'secondary' | 'outline' | 'text';
+  size?: 'small' | 'medium' | 'large';
 }
 
 export const Button: React.FC<ButtonProps> = ({
   children,
   onClick,
+  disabled = false,
+  fullWidth = false,
   className = '',
   variant = 'primary',
-  size = 'medium',
-  fullWidth = false,
-  disabled = false,
-  type = 'button',
-  icon
+  size = 'medium'
 }) => {
-  // Базовые стили для всех кнопок
-  let baseClasses = 'inline-flex items-center justify-center rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-opacity-50';
+  // Базовые классы для всех кнопок
+  let buttonClasses = 'focus:outline-none transition-all ease-in-out rounded-lg font-medium shadow-sm';
 
-  // Стили в зависимости от размера
-  const sizeClasses = {
-    small: 'px-3 py-1.5 text-sm',
-    medium: 'px-4 py-2',
-    large: 'px-6 py-3 text-lg font-medium'
-  };
+  // Добавляем классы в зависимости от размера кнопки
+  if (size === 'small') {
+    buttonClasses += ' px-3 py-1.5 text-sm';
+  } else if (size === 'medium') {
+    buttonClasses += ' px-4 py-2';
+  } else if (size === 'large') {
+    buttonClasses += ' px-5 py-3 text-lg';
+  }
 
-  // Стили в зависимости от варианта
-  const variantClasses = {
-    primary: 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white focus:ring-blue-300',
-    secondary: 'bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 focus:ring-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white',
-    outline: 'border border-gray-300 hover:bg-gray-100 active:bg-gray-200 text-gray-700 focus:ring-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 dark:text-gray-200 dark:active:bg-gray-600',
-    ghost: 'hover:bg-gray-100 active:bg-gray-200 text-gray-700 focus:ring-gray-300 dark:hover:bg-gray-800 dark:text-gray-300 dark:active:bg-gray-700'
-  };
+  // Добавляем классы в зависимости от варианта
+  if (variant === 'primary') {
+    buttonClasses += ' bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white hover:shadow-md';
+  } else if (variant === 'secondary') {
+    buttonClasses += ' bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:active:bg-gray-500 dark:text-gray-200';
+  } else if (variant === 'outline') {
+    buttonClasses += ' bg-transparent border border-gray-300 hover:bg-gray-100 active:bg-gray-200 text-gray-700 dark:border-gray-600 dark:hover:bg-gray-800 dark:active:bg-gray-700 dark:text-gray-300';
+  } else if (variant === 'text') {
+    buttonClasses += ' bg-transparent text-blue-500 hover:text-blue-600 active:text-blue-700 underline';
+  }
 
-  // Полная ширина
-  const widthClass = fullWidth ? 'w-full' : '';
+  // Добавляем класс для кнопки на всю ширину
+  if (fullWidth) {
+    buttonClasses += ' w-full';
+  }
 
-  // Состояние отключено
-  const disabledClass = disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer';
+  // Добавляем класс для отключенной кнопки
+  if (disabled) {
+    buttonClasses += ' opacity-50 cursor-not-allowed';
+  }
 
-  // Объединяем все классы
-  const allClasses = `${baseClasses} ${sizeClasses[size]} ${variantClasses[variant]} ${widthClass} ${disabledClass} ${className}`;
-
-  console.log(`[Button] Рендер кнопки: ${variant} ${size} ${disabled ? 'disabled' : 'enabled'}`);
-
-  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    console.log('[Button] Клик по кнопке');
-    if (!disabled && onClick) {
-      onClick(e);
-    }
-  };
+  // Добавляем пользовательские классы
+  buttonClasses += ` ${className}`;
 
   return (
-    <motion.button
-      type={type}
-      className={allClasses}
-      onClick={handleClick}
+    <button
+      onClick={onClick}
       disabled={disabled}
-      whileHover={disabled ? {} : { scale: 1.02 }}
-      whileTap={disabled ? {} : { scale: 0.98 }}
+      className={buttonClasses}
     >
-      {icon && <span className="mr-2">{icon}</span>}
       {children}
-    </motion.button>
+    </button>
   );
 };
 

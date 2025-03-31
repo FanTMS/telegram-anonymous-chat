@@ -52,21 +52,13 @@ export const Layout = () => {
 
         let user = getCurrentUser();
 
-        if (!user && WebApp && WebApp.initDataUnsafe && WebApp.initDataUnsafe.user) {
-          userStorage.initialize(WebApp.initDataUnsafe.user.id);
-
-          user = getCurrentUser();
-
-          if (!user) {
-            if (!location.pathname.includes('/registration')) {
-              navigate('/registration');
-            }
-            return;
-          }
-        } else if (!user) {
-          if (!location.pathname.includes('/registration')) {
-            navigate('/registration');
-          }
+        // Всегда перенаправляем на регистрацию, если нет пользователя - 
+        // НИКАКИХ ИСКЛЮЧЕНИЙ даже для текущего местоположения
+        if (!user) {
+          console.log('Пользователь не найден - перенаправление на регистрацию');
+          // Очищаем локальное хранилище, чтобы убедиться, что нет устаревших данных
+          localStorage.removeItem('current_user_id');
+          navigate('/registration', { replace: true });
           return;
         }
 
@@ -81,6 +73,8 @@ export const Layout = () => {
         }
       } catch (error) {
         console.error('Ошибка при проверке пользователя:', error);
+        // При ошибке также перенаправляем на регистрацию
+        navigate('/registration', { replace: true });
       } finally {
         setIsLoading(false);
       }
@@ -331,12 +325,12 @@ export const Layout = () => {
       </AnimatePresence>
 
       <motion.nav
-        className="tg-navbar"
+        className="tg-navbar fixed bottom-0 left-0 right-0 max-w-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-2 z-50"
         initial={{ y: 100 }}
         animate={{ y: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       >
-        <div className="flex justify-around items-center w-full px-1">
+        <div className="flex justify-around items-center w-full px-1 max-w-md mx-auto">
           <NavButton
             to="/"
             icon="🏠"

@@ -11,6 +11,7 @@ interface RequireAuthProps {
 export const RequireAuth: React.FC<RequireAuthProps> = ({ children }) => {
     const location = useLocation();
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+    const [isChecking, setIsChecking] = useState(true);
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -21,10 +22,21 @@ export const RequireAuth: React.FC<RequireAuthProps> = ({ children }) => {
                 }
 
                 const user = getCurrentUser();
-                setIsAuthenticated(!!user);
+
+                // Вводим более строгую проверку - пользователь должен существовать
+                // и у него должно быть имя, возраст и хотя бы один интерес
+                const isValid = user &&
+                    user.name &&
+                    user.age &&
+                    user.interests &&
+                    user.interests.length > 0;
+
+                setIsAuthenticated(!!isValid);
             } catch (error) {
                 console.error('Ошибка при проверке авторизации:', error);
                 setIsAuthenticated(false);
+            } finally {
+                setIsChecking(false);
             }
         };
 
@@ -32,7 +44,7 @@ export const RequireAuth: React.FC<RequireAuthProps> = ({ children }) => {
     }, []);
 
     // Пока проверяем авторизацию, отображаем загрузку
-    if (isAuthenticated === null) {
+    if (isChecking) {
         return (
             <div className="flex items-center justify-center h-screen">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -42,6 +54,7 @@ export const RequireAuth: React.FC<RequireAuthProps> = ({ children }) => {
 
     // Если не авторизован, перенаправляем на регистрацию
     if (!isAuthenticated) {
+        // Всегда принудительно перенаправляем - без исключений
         return <Navigate to="/registration" state={{ from: location }} replace />;
     }
 
