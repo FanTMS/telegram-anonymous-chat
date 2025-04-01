@@ -70,13 +70,13 @@ const RegistrationForm = ({ onSubmit, telegramUser, isDevelopment = false }) => 
         // Проверка поддержки необходимых API
         const checkBrowserCompatibility = () => {
             if (typeof window === 'undefined') return true;
-
+            
             // Проверка базовых современных функций
-            const isCompatible =
-                'querySelector' in document &&
+            const isCompatible = 
+                'querySelector' in document && 
                 'localStorage' in window &&
                 'addEventListener' in window;
-
+                
             return isCompatible;
         };
 

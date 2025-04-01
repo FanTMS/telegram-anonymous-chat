@@ -41,7 +41,7 @@ console.log(`ℹ️ Используется Node.js ${process.version}`);
 if (process.version.startsWith('v16.')) {
     console.log('⚠️ Вы используете Node.js v16. Рекомендуется обновить до v18.17.1 или выше.');
     console.log('ℹ️ Настраиваем окружение для совместимости...');
-
+    
     // Автоматическое исправление .env файла для Node.js v16
     try {
         const envPath = path.join(__dirname, '.env');
