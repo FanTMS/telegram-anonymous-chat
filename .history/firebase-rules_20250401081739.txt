@@ -1,0 +1,16 @@
+// Сохраните эти правила и примените их в консоли Firebase для вашей базы данных Firestore
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      // Разрешаем любой доступ без аутентификации для отладки и работы приложения
+      allow read, write: if true;
+      
+      // Для продакшн-версии рекомендуется использовать более строгие правила:
+      // allow read, write: if request.auth != null;
+      
+      // Или правила, основанные на идентификаторах пользователей Telegram:
+      // allow read, write: if resource.data.telegramId == request.resource.data.telegramId;
+    }
+  }
+}
