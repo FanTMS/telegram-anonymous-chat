@@ -69,7 +69,7 @@ TSC_COMPILE_ON_ERROR=true
         const firebaseEnvFallbackPath = path.join(__dirname, 'netlify', 'firebase-env-fallback.js');
         if (fs.existsSync(firebaseEnvFallbackPath)) {
             const firebaseEnvFallback = require(firebaseEnvFallbackPath);
-
+            
             // Перечисляем переменные Firebase
             const firebaseEnvVars = [
                 'REACT_APP_FIREBASE_API_KEY',
@@ -79,7 +79,7 @@ TSC_COMPILE_ON_ERROR=true
                 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID',
                 'REACT_APP_FIREBASE_APP_ID'
             ];
-
+            
             // Добавляем переменные из окружения или резервные значения
             for (const varName of firebaseEnvVars) {
                 const value = process.env[varName] || firebaseEnvFallback[varName];
