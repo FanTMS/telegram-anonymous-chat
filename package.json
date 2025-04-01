@@ -13,7 +13,9 @@
         "react-dom": "^18.2.0",
         "react-router-dom": "^6.20.0",
         "react-scripts": "5.0.1",
-        "cross-env": "^7.0.3"
+        "cross-env": "^7.0.3",
+        "ajv": "6.12.6",
+        "ajv-keywords": "3.5.2"
     },
     "scripts": {
         "start": "cross-env NODE_OPTIONS=\"--openssl-legacy-provider --no-deprecation\" react-scripts start",
@@ -22,7 +24,7 @@
         "build:netlify": "node ./scripts/build-netlify.js",
         "test": "cross-env NODE_OPTIONS=\"--openssl-legacy-provider --no-deprecation\" react-scripts test",
         "eject": "react-scripts eject",
-        "postinstall": "node fix-dependencies.js",
+        "postinstall": "node ./fix-dependencies.js",
         "audit-fix": "npm audit fix",
         "audit-fix-force": "npm audit fix --force",
         "clean": "node ./scripts/clean.js"
@@ -46,10 +48,6 @@
         ]
     },
     "devDependencies": {},
-    "resolutions": {
-        "ajv": "^6.12.5"
-    },
-    "overrides": {
-        "ajv": "^6.12.5"
-    }
+    "resolutions": {},
+    "overrides": {}
 }

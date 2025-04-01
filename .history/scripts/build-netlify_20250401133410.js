@@ -71,21 +71,21 @@ REACT_APP_FIREBASE_APP_ID=1:123456789:web:abcdef123456
     console.log('🔧 Временно модифицируем package.json для разрешения конфликта ajv...');
     const packageJsonPath = path.join(process.cwd(), 'package.json');
     const packageJson = require(packageJsonPath);
-
+    
     // Сохраняем оригинальное состояние
     const originalResolutions = packageJson.resolutions ? { ...packageJson.resolutions } : {};
     const originalOverrides = packageJson.overrides ? { ...packageJson.overrides } : {};
-
+    
     // Удаляем конфликтующие настройки
     delete packageJson.resolutions;
     delete packageJson.overrides;
-
+    
     // Записываем обновленный package.json
     fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 4));
-
+    
     console.log('📦 Установка совместимых версий ajv и ajv-keywords...');
     execSync('npm install ajv@6.12.6 ajv-keywords@3.5.2 --save-exact', { stdio: 'inherit' });
-
+    
     console.log('🛠 Выполнение команды сборки...');
     execSync('npx react-scripts build', {
         stdio: 'inherit',
@@ -93,13 +93,13 @@ REACT_APP_FIREBASE_APP_ID=1:123456789:web:abcdef123456
             ...process.env
         }
     });
-
+    
     // Восстанавливаем package.json
     console.log('🔄 Восстанавливаем оригинальный package.json...');
     packageJson.resolutions = originalResolutions;
     packageJson.overrides = originalOverrides;
     fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 4));
-
+    
     console.log('✅ Сборка успешно завершена!');
 } catch (error) {
     console.error('❌ Ошибка при сборке:', error.message);

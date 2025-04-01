@@ -61,17 +61,36 @@ BROWSER=none
 
 # Игнорировать предупреждения source-map-loader
 TSC_COMPILE_ON_ERROR=true
-
-# Firebase конфигурация
-REACT_APP_FIREBASE_API_KEY=AIzaSyCNpBazUWauF99zxWKvAwIJ0mbTsf6il8g
-REACT_APP_FIREBASE_AUTH_DOMAIN=oleop-19cc2.firebaseapp.com
-REACT_APP_FIREBASE_DATABASE_URL=https://oleop-19cc2-default-rtdb.firebaseio.com
-REACT_APP_FIREBASE_PROJECT_ID=oleop-19cc2
-REACT_APP_FIREBASE_STORAGE_BUCKET=oleop-19cc2.firebasestorage.app
-REACT_APP_FIREBASE_MESSAGING_SENDER_ID=452609655600
-REACT_APP_FIREBASE_APP_ID=1:452609655600:web:95c47ff9b3ea191f6fbef5
-REACT_APP_FIREBASE_MEASUREMENT_ID=G-X4DP12TNSB
 `;
+
+    // Добавляем переменные Firebase из окружения или файла резервных значений
+    try {
+        // Проверка наличия файла с резервными значениями
+        const firebaseEnvFallbackPath = path.join(__dirname, 'netlify', 'firebase-env-fallback.js');
+        if (fs.existsSync(firebaseEnvFallbackPath)) {
+            const firebaseEnvFallback = require(firebaseEnvFallbackPath);
+
+            // Перечисляем переменные Firebase
+            const firebaseEnvVars = [
+                'REACT_APP_FIREBASE_API_KEY',
+                'REACT_APP_FIREBASE_AUTH_DOMAIN',
+                'REACT_APP_FIREBASE_PROJECT_ID',
+                'REACT_APP_FIREBASE_STORAGE_BUCKET',
+                'REACT_APP_FIREBASE_MESSAGING_SENDER_ID',
+                'REACT_APP_FIREBASE_APP_ID'
+            ];
+
+            // Добавляем переменные из окружения или резервные значения
+            for (const varName of firebaseEnvVars) {
+                const value = process.env[varName] || firebaseEnvFallback[varName];
+                if (value) {
+                    envContent += `\n${varName}=${value}`;
+                }
+            }
+        }
+    } catch (firebaseError) {
+        console.error('❌ Ошибка при добавлении Firebase переменных:', firebaseError.message);
+    }
 
     const envPath = path.join(__dirname, '.env');
     fs.writeFileSync(envPath, envContent, 'utf8');
