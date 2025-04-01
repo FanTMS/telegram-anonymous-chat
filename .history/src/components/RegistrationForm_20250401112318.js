@@ -82,7 +82,7 @@ const RegistrationForm = ({ onSubmit, telegramUser, isDevelopment = false }) => 
                     typeof document.querySelector === 'function' &&
                     typeof window.localStorage !== 'undefined' &&
                     typeof window.addEventListener === 'function';
-
+                
                 return isCompatible;
             } catch (error) {
                 // Если произошла ошибка при проверке, возвращаем true
