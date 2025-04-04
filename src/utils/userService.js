@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, addDoc, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc } from 'firebase/firestore';
 
 /**
  * Сохраняет нового пользователя в базу данных
@@ -50,6 +50,32 @@ export const updateUser = async (userId, userData) => {
         await updateDoc(userRef, userData);
     } catch (error) {
         console.error("Ошибка при обновлении пользователя:", error);
+        throw error;
+    }
+};
+
+/**
+ * Получение пользователя по ID
+ * @param {string} userId - ID пользователя
+ * @returns {Promise<Object|null>} - Данные пользователя или null
+ */
+export const getUserById = async (userId) => {
+    try {
+        if (!userId) {
+            console.error("getUserById: userId не указан");
+            return null;
+        }
+
+        const userDoc = await getDoc(doc(db, "users", userId));
+
+        if (userDoc.exists()) {
+            return { id: userDoc.id, ...userDoc.data() };
+        } else {
+            console.warn(`Пользователь с ID ${userId} не найден`);
+            return null;
+        }
+    } catch (error) {
+        console.error("Ошибка при получении пользователя по ID:", error);
         throw error;
     }
 };

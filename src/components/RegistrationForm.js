@@ -201,14 +201,40 @@ const RegistrationForm = ({ onSubmit, telegramUser, isDevelopment = false }) => 
             return;
         }
 
+        // Предотвращаем повторную отправку
+        if (isSubmitting) {
+            console.log("Отправка формы уже в процессе, игнорируем повторный запрос");
+            return;
+        }
+
+        // Проверяем, не идет ли регистрация уже
+        const registrationLock = localStorage.getItem('registration_in_progress');
+        if (registrationLock) {
+            const lockTime = parseInt(registrationLock);
+            const now = Date.now();
+
+            // Если блокировка установлена менее 30 секунд назад, не отправляем форму снова
+            if (now - lockTime < 30000) {
+                console.log("Регистрация уже выполняется (установлена блокировка)");
+                return;
+            } else {
+                // Если блокировка старая, удаляем её
+                localStorage.removeItem('registration_in_progress');
+            }
+        }
+
         setIsSubmitting(true);
+
+        // Устанавливаем блокировку регистрации с текущим временем
+        localStorage.setItem('registration_in_progress', Date.now().toString());
 
         try {
             let userData = { ...formData };
 
             // Если имя не указано, генерируем псевдоним
-            if (!userData.name.trim()) {
+            if (!userData.name?.trim()) {
                 userData.nickname = generateNickname();
+                console.log("Имя не указано, сгенерирован псевдоним:", userData.nickname);
             }
 
             // Конвертируем возраст в число
@@ -227,17 +253,26 @@ const RegistrationForm = ({ onSubmit, telegramUser, isDevelopment = false }) => 
                 userData.interests = interestNames.join(', ');
             }
 
+            console.log("Отправка данных формы:", userData);
             await onSubmit(userData);
 
             // Показываем сообщение об успехе
             setShowSuccess(true);
+
+            // После успешной регистрации очищаем блокировку
+            localStorage.removeItem('registration_in_progress');
+
         } catch (error) {
             console.error("Ошибка при отправке формы:", error);
-            setErrors({ submit: error.message });
+            setErrors(prev => ({
+                ...prev,
+                submit: error.message || "Произошла ошибка при регистрации"
+            }));
+            localStorage.removeItem('registration_in_progress');
         } finally {
             setIsSubmitting(false);
         }
-    }, [currentStep, formData, validateStep, onSubmit, setIsSubmitting, setShowSuccess]);
+    }, [formData, currentStep, validateStep, onSubmit, isSubmitting]);
 
     // Кастомизация MainButton от Telegram WebApp в зависимости от шага
     useEffect(() => {

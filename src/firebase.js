@@ -18,41 +18,41 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Обновленная функция для анонимной аутентификации с обходом ошибок
+// Улучшенная функция для анонимной аутентификации с обходом ошибок и журналированием
 const signInAnonymouslyIfNeeded = async () => {
     try {
         if (!auth.currentUser) {
+            console.log("Попытка анонимной аутентификации...");
             try {
                 // Пробуем выполнить анонимную аутентификацию
-                await signInAnonymously(auth);
-                console.log("Анонимная аутентификация выполнена успешно");
+                const userCredential = await signInAnonymously(auth);
+                console.log("Анонимная аутентификация выполнена успешно. UID:", userCredential.user.uid);
                 return true;
             } catch (error) {
                 // Если не удалось, логируем ошибку, но не выбрасываем исключение
-                console.warn("Не удалось выполнить анонимную аутентификацию:", error);
-
-                // Специальная обработка ошибки, если анонимная аутентификация отключена
-                if (error.code === 'auth/admin-restricted-operation') {
-                    console.log("Анонимная аутентификация отключена в Firebase. Продолжаем без аутентификации.");
-                }
-
+                console.error("Ошибка при анонимной аутентификации:", error.code, error.message);
+                console.log("Продолжаем работу без аутентификации");
                 return false;
             }
+        } else {
+            console.log("Пользователь уже аутентифицирован:", auth.currentUser.uid);
+            return true;
         }
-        return true;
     } catch (error) {
-        console.error("Ошибка при проверке состояния аутентификации:", error);
+        console.error("Непредвиденная ошибка в signInAnonymouslyIfNeeded:", error);
         return false;
     }
 };
 
-// Пробуем выполнить аутентификацию, но не блокируем работу приложения при ошибке
-signInAnonymouslyIfNeeded().then(success => {
-    if (success) {
-        console.log("Инициализация аутентификации Firebase завершена успешно");
-    } else {
+// Тестируем соединение с Firebase при инициализации
+(async function testConnection() {
+    try {
+        const authResult = await signInAnonymouslyIfNeeded();
+        console.log("Статус аутентификации:", authResult ? "успешно" : "не удалось");
+        console.log("Инициализация Firebase завершена успешно");
+    } catch (error) {
         console.log("Приложение продолжит работу без аутентификации Firebase");
     }
-});
+})();
 
 export { db, auth, signInAnonymouslyIfNeeded };

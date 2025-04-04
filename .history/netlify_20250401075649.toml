@@ -1,9 +1,0 @@
-[build]
-  publish = "build"
-  command = "npm run build"
-  environment = { NODE_OPTIONS = "--openssl-legacy-provider" }
-
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200

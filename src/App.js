@@ -1,157 +1,265 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { auth, db } from './firebase';
+import { collection, query, where, getDocs, addDoc, doc, getDoc } from 'firebase/firestore';
+import { signInAnonymously } from 'firebase/auth';
 import WebApp from '@twa-dev/sdk';
-import { db, auth, signInAnonymouslyIfNeeded } from './firebase';
-import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
-import RegistrationForm from './components/RegistrationForm';
-import { testFirebaseConnection, testTelegramIdStorage } from './utils/firebaseTest';
+import { testFirebaseConnection } from './utils/firebaseTest';
 
+// Импорт компонентов
+import RegistrationForm from './components/RegistrationForm';
+import ChatsList from './pages/ChatsList';
+import Chat from './pages/Chat';
+import RandomChat from './pages/RandomChat';
+import NotFound from './components/NotFound';
+import MainMenu from './components/MainMenu';
+import Profile from './pages/Profile';
+import AppLayout from './components/AppLayout';
+
+// Импорт страницы руководства вынесен в отдельный блок для решения проблемы
+import BeginnerGuide from './components/BeginnerGuide';
+
+import './App.css';
+
+// Проверка режима разработки
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+// Основной компонент приложения
 function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [telegramUser, setTelegramUser] = useState(null);
-    const [isDevelopment, setIsDevelopment] = useState(process.env.NODE_ENV === 'development');
-    // eslint-disable-next-line no-unused-vars
-    const [authError, setAuthError] = useState(null);
 
+    // Функция для анонимной авторизации при необходимости
+    const signInAnonymouslyIfNeeded = async () => {
+        try {
+            // Если уже есть пользователь, не делаем ничего
+            if (auth.currentUser) {
+                return auth.currentUser;
+            }
+
+            // Анонимный вход
+            const userCredential = await signInAnonymously(auth);
+            return userCredential.user;
+        } catch (error) {
+            console.error("Error during anonymous sign-in:", error);
+            throw error;
+        }
+    };
+
+    // Проверка авторизации при загрузке приложения
     useEffect(() => {
-        const initializeApp = async () => {
-            const isDevMode = process.env.NODE_ENV === 'development';
-            setIsDevelopment(isDevMode);
+        // Очищаем флаг незавершенной регистрации при запуске
+        const registrationInProgress = localStorage.getItem('registration_in_progress');
+        if (registrationInProgress) {
+            console.log("Обнаружена незавершенная регистрация, очищаем состояние");
+            localStorage.removeItem('registration_in_progress');
+        }
 
-            // Пробуем выполнить аутентификацию, но продолжаем даже если не удалось
+        const checkAuth = async () => {
             try {
-                const authSuccess = await signInAnonymouslyIfNeeded();
-                if (!authSuccess) {
-                    console.log("Приложение продолжит работу без аутентификации Firebase");
-                }
-            } catch (error) {
-                console.warn("Ошибка аутентификации Firebase:", error);
-                // Не устанавливаем authError, чтобы не блокировать приложение
-            }
+                console.log("Запуск проверки авторизации...");
 
-            let tgUser;
-
-            try {
-                tgUser = WebApp.initDataUnsafe.user;
-                console.log("Telegram user data:", tgUser);
-            } catch (error) {
-                console.warn("Ошибка получения данных пользователя Telegram:", error);
-            }
-
-            if (isDevMode && !tgUser) {
-                tgUser = {
-                    id: 123456789,
-                    first_name: "Тестовый",
-                    last_name: "Пользователь",
-                    username: "test_user",
-                    language_code: "ru",
-                    is_dev_mode: true
-                };
-                console.log("Создан тестовый пользователь для разработки:", tgUser);
-            }
-
-            setTelegramUser(tgUser);
-
-            const checkUser = async () => {
+                // Проверяем соединение с Firebase
                 try {
-                    const telegramId = tgUser?.id;
-
-                    if (!telegramId) {
-                        console.warn("Telegram ID не найден. Пользователь может использовать бота не из Telegram.");
+                    const isConnected = await testFirebaseConnection();
+                    if (!isConnected) {
+                        console.error("Не удалось подключиться к Firebase");
                         setLoading(false);
                         return;
                     }
+                    console.log("Соединение с Firebase установлено успешно");
+                } catch (connectionError) {
+                    console.error("Ошибка при проверке соединения с Firebase:", connectionError);
+                    setLoading(false);
+                    return;
+                }
 
-                    const userQuery = query(collection(db, "users"), where("telegramId", "==", telegramId));
-                    const userSnapshot = await getDocs(userQuery);
+                // Сначала проверяем сохраненный ID пользователя
+                const savedUserId = localStorage.getItem('current_user_id');
+                if (savedUserId) {
+                    console.log("Найден ID пользователя в localStorage:", savedUserId);
+                    try {
+                        const userDoc = await getDoc(doc(db, "users", savedUserId));
+                        if (userDoc.exists()) {
+                            const userData = { id: savedUserId, ...userDoc.data() };
+                            console.log("Пользователь загружен из базы:", userData);
+                            setUser(userData);
+                            setLoading(false);
+                            return;
+                        } else {
+                            console.log("Пользователь не найден в базе данных, удаляем ID из localStorage");
+                            localStorage.removeItem('current_user_id');
+                        }
+                    } catch (error) {
+                        console.error("Ошибка при получении пользователя из localStorage:", error);
+                        localStorage.removeItem('current_user_id');
+                    }
+                }
 
-                    if (!userSnapshot.empty) {
-                        const userData = userSnapshot.docs[0].data();
-                        console.log("Найден пользователь:", userData);
+                // Проверка авторизации через Telegram
+                const telegramUser = WebApp.initDataUnsafe?.user;
+                let telegramId = telegramUser?.id?.toString();
+
+                // Сохраняем Telegram пользователя для отображения в форме
+                if (telegramUser) {
+                    console.log("Получены данные Telegram пользователя:", telegramUser);
+                    setTelegramUser(telegramUser);
+                }
+
+                // В режиме разработки можем использовать тестовый ID
+                if (isDevelopment && !telegramId) {
+                    telegramId = "test_user_" + Math.floor(Math.random() * 10000);
+                    console.warn("Режим разработки: используется тестовый Telegram ID:", telegramId);
+                }
+
+                if (!telegramId) {
+                    console.log("Telegram ID не получен, требуется регистрация");
+                    setLoading(false);
+                    return;
+                }
+
+                // Проверяем, есть ли пользователь с таким Telegram ID в базе
+                console.log("Проверка существования пользователя в базе по Telegram ID:", telegramId);
+                const usersRef = collection(db, "users");
+                const q = query(usersRef, where("telegramId", "==", telegramId));
+
+                try {
+                    const querySnapshot = await getDocs(q);
+
+                    if (!querySnapshot.empty) {
+                        // Пользователь найден
+                        const userData = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+                        console.log("Пользователь найден в базе данных:", userData);
+
+                        // Сохраняем ID пользователя в localStorage
+                        localStorage.setItem('current_user_id', userData.id);
                         setUser(userData);
                     } else {
-                        console.log("Пользователь не найден в базе данных. Требуется регистрация.");
+                        console.log("Пользователь не найден в базе данных, требуется регистрация");
                     }
-
-                    setLoading(false);
-                } catch (error) {
-                    console.error("Ошибка при проверке пользователя:", error);
-                    setLoading(false);
+                } catch (queryError) {
+                    console.error("Ошибка при запросе пользователя:", queryError);
                 }
-            };
-
-            checkUser();
-        };
-
-        initializeApp();
-    }, []);
-
-    useEffect(() => {
-        const runTests = async () => {
-            const connectionResult = await testFirebaseConnection();
-            console.log("Firebase connection test:", connectionResult ? "PASSED" : "FAILED");
-
-            if (telegramUser?.id) {
-                const storageResult = await testTelegramIdStorage(telegramUser.id);
-                console.log("Telegram ID storage test:", storageResult ? "PASSED" : "FAILED");
+            } catch (error) {
+                console.error("Ошибка при проверке авторизации:", error);
+            } finally {
+                setLoading(false);
             }
         };
 
-        if (isDevelopment && telegramUser) {
-            runTests();
-        }
-    }, [telegramUser, isDevelopment]);
+        checkAuth();
+    }, [isDevelopment]);
 
+    // Функция для обработки создания пользователя
+    const handleProfileUpdate = (updatedUser) => {
+        setUser(updatedUser);
+    };
+
+    // Обработка отправки формы регистрации
     const handleRegistration = async (userData) => {
         try {
-            // Пробуем выполнить аутентификацию, но продолжаем даже если не удалось
-            try {
-                await signInAnonymouslyIfNeeded();
-            } catch (authError) {
-                console.warn("Аутентификация не выполнена, но продолжаем работу:", authError);
-            }
+            console.log("Начало процесса регистрации пользователя...");
 
-            const telegramId = telegramUser?.id;
+            // Анонимная авторизация (если не авторизован)
+            await signInAnonymouslyIfNeeded();
+
+            const telegramUser = WebApp.initDataUnsafe?.user;
+            let telegramId = telegramUser?.id?.toString();
+
+            // В режиме разработки используем тестовый ID
+            if (isDevelopment && !telegramId) {
+                telegramId = "test_user_" + Math.floor(Math.random() * 10000);
+                console.warn("Режим разработки: используется тестовый Telegram ID:", telegramId);
+            }
 
             if (!telegramId) {
-                throw new Error("Не удалось получить ID пользователя Telegram");
+                throw new Error("Не удалось получить Telegram ID");
             }
 
-            // Собираем дополнительную информацию о пользователе из Telegram
-            const newUser = {
-                ...userData,
-                telegramId,
-                telegramUsername: telegramUser?.username || null,
-                telegramFirstName: telegramUser?.first_name || null,
-                telegramLastName: telegramUser?.last_name || null,
-                telegramLanguageCode: telegramUser?.language_code || null,
-                registeredAt: new Date(),
-                isTestUser: telegramUser?.is_dev_mode || false
-            };
+            // Проверяем существование пользователя
+            console.log("Проверка существования пользователя с Telegram ID:", telegramId);
+            const usersRef = collection(db, "users");
+            const q = query(usersRef, where("telegramId", "==", telegramId));
+            const querySnapshot = await getDocs(q);
 
-            console.log("Сохраняем пользователя с данными:", newUser);
-            console.log("Firebase auth status:", auth.currentUser ? "Authenticated" : "Not authenticated");
+            if (!querySnapshot.empty) {
+                // Пользователь уже существует
+                const existingUser = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+                console.log("Пользователь уже существует:", existingUser);
+                setUser(existingUser);
 
-            // Сохраняем пользователя в базе данных
-            try {
-                const docRef = await addDoc(collection(db, "users"), newUser);
-                console.log("Пользователь добавлен с ID:", docRef.id);
-                setUser(newUser);
+                // Сохраняем ID пользователя в localStorage
+                localStorage.setItem('current_user_id', existingUser.id);
+                localStorage.removeItem('registration_in_progress');
 
-                // Показываем уведомление об успешной регистрации
+                // Успешная вибрация
+                if (WebApp.HapticFeedback) {
+                    WebApp.HapticFeedback.notificationOccurred('success');
+                }
+
                 try {
                     WebApp.showPopup({
-                        title: 'Успешная регистрация',
-                        message: 'Вы успешно зарегистрировались в анонимном чате!',
+                        title: 'Информация',
+                        message: 'Вы уже зарегистрированы в системе',
                         buttons: [{ text: "OK" }]
                     });
                 } catch (e) {
-                    console.log("Успешная регистрация! (Уведомление недоступно в режиме разработки)");
-                    alert("Успешная регистрация!");
+                    console.log("Не удалось показать popup:", e);
                 }
+
+                // Принудительное перенаправление на главную страницу
+                setTimeout(() => {
+                    window.location.href = '/chats';
+                }, 500);
+
+                return;
+            }
+
+            // Создаем нового пользователя
+            try {
+                console.log("Создание нового пользователя с данными:", { ...userData, telegramId });
+
+                const userDataWithTelegramId = {
+                    ...userData,
+                    telegramId,
+                    createdAt: new Date(),
+                    lastActive: new Date()
+                };
+
+                const docRef = await addDoc(usersRef, userDataWithTelegramId);
+                console.log("Новый пользователь добавлен с ID:", docRef.id);
+
+                const newUser = { id: docRef.id, ...userDataWithTelegramId };
+                console.log("Новый пользователь создан:", newUser);
+                setUser(newUser);
+
+                // Сохраняем ID пользователя в localStorage
+                localStorage.setItem('current_user_id', docRef.id);
+                localStorage.removeItem('registration_in_progress');
+
+                // Успешная вибрация
+                if (WebApp.HapticFeedback) {
+                    WebApp.HapticFeedback.notificationOccurred('success');
+                }
+
+                try {
+                    WebApp.showPopup({
+                        title: 'Успешная регистрация',
+                        message: 'Теперь вы можете общаться с другими пользователями',
+                        buttons: [{ text: "Начать" }]
+                    });
+                } catch (e) {
+                    console.log("Не удалось показать popup:", e);
+                }
+
+                // Принудительное перенаправление
+                setTimeout(() => {
+                    window.location.href = '/chats';
+                }, 500);
+
             } catch (dbError) {
                 console.error("Ошибка при сохранении в базу данных:", dbError);
-                // Проверяем, связана ли ошибка с отсутствием прав доступа
                 if (dbError.code === 'permission-denied') {
                     throw new Error("Недостаточно прав для записи в базу данных. Проверьте правила безопасности Firebase.");
                 } else {
@@ -160,6 +268,7 @@ function App() {
             }
         } catch (error) {
             console.error("Ошибка при регистрации:", error);
+            localStorage.removeItem('registration_in_progress');
 
             try {
                 WebApp.showPopup({
@@ -174,74 +283,42 @@ function App() {
     };
 
     if (loading) {
-        return <div className="container">Загрузка...</div>;
-    }
-
-    if (authError) {
         return (
-            <div className="container">
-                <div className="error-container">
-                    <h2>Ошибка подключения</h2>
-                    <p>{authError}</p>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="dev-reload-button"
-                    >
-                        Попробовать снова
-                    </button>
-                </div>
+            <div className="app-loading">
+                <div className="loading-spinner"></div>
+                <p>Загрузка...</p>
             </div>
         );
     }
 
     return (
-        <div className="container">
-            {isDevelopment && (
-                <div className="dev-mode-banner">
-                    <p>Режим разработки</p>
-                </div>
-            )}
+        <Router>
+            <div className="App">
+                <Routes>
+                    {!user && (
+                        <Route
+                            path="*"
+                            element={<RegistrationForm onSubmit={handleRegistration} isDevelopment={isDevelopment} />}
+                        />
+                    )}
 
-            {!user ? (
-                <>
-                    {telegramUser ? (
-                        <RegistrationForm onSubmit={handleRegistration} telegramUser={telegramUser} isDevelopment={isDevelopment} />
-                    ) : (
-                        <div>
-                            <h1>Ошибка</h1>
-                            <p>Этот бот должен быть запущен из Telegram. Пожалуйста, откройте бота в Telegram.</p>
-                            {isDevelopment && (
-                                <div>
-                                    <p className="dev-mode-note">
-                                        Вы находитесь в режиме разработки. Приложение должно было автоматически создать тестового пользователя.
-                                        Если этого не произошло, проверьте консоль на наличие ошибок или перезагрузите страницу.
-                                    </p>
-                                    <button
-                                        onClick={() => window.location.reload()}
-                                        className="dev-reload-button"
-                                    >
-                                        Перезагрузить страницу
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                    {user && (
+                        <Route element={<AppLayout />}>
+                            <Route path="/" element={<Navigate to="/chats" replace />} />
+                            <Route path="/index.html" element={<Navigate to="/chats" replace />} />
+                            <Route path="/chats" element={<ChatsList user={user} />} />
+                            <Route path="/chat/:chatId" element={<Chat user={user} />} />
+                            <Route path="/random-chat" element={<RandomChat user={user} />} />
+                            <Route path="/profile" element={<Profile user={user} onUpdate={handleProfileUpdate} />} />
+                            <Route path="/guide" element={<BeginnerGuide />} />
+                            <Route path="*" element={<NotFound />} />
+                        </Route>
                     )}
-                </>
-            ) : (
-                <div>
-                    <h1>Привет, {user.name || user.nickname}!</h1>
-                    <p>Вы успешно зарегистрированы. Скоро здесь появятся дополнительные функции.</p>
-                    {user.telegramId && (
-                        <p className="user-info">Ваш Telegram ID: {user.telegramId}</p>
-                    )}
-                    {isDevelopment && user.isTestUser && (
-                        <div className="dev-mode-note">
-                            <p>Это тестовый аккаунт для разработки.</p>
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
+                </Routes>
+
+                {user && <MainMenu />}
+            </div>
+        </Router>
     );
 }
 
