@@ -4,10 +4,6 @@ import {
     query, where, arrayUnion, serverTimestamp,
     orderBy, limit, onSnapshot, deleteDoc
 } from 'firebase/firestore';
-import {
-    incrementTotalChats, incrementCompletedChats,
-    incrementMessagesCount
-} from './statisticsService';
 
 // Структура для хранения активных слушателей обновлений чата
 const activeListeners = new Map();
@@ -72,10 +68,6 @@ export const findRandomChat = async (userId) => {
 
                 // Удаляем партнера из очереди
                 await deleteDoc(doc(db, "searchQueue", queueDocId));
-
-                // Обновляем статистику обоих пользователей
-                await incrementTotalChats(userId);
-                await incrementTotalChats(partnerId);
 
                 return chatRef.id;
             }
@@ -159,9 +151,6 @@ export const sendMessage = async (chatId, message) => {
             lastMessage: messageData
         });
 
-        // Обновляем статистику пользователя
-        await incrementMessagesCount(message.senderId);
-
         return true;
     } catch (error) {
         console.error("Ошибка при отправке сообщения:", error);
@@ -236,25 +225,11 @@ export const getUserChats = async (userId) => {
 export const endChat = async (chatId) => {
     try {
         const chatRef = doc(db, "chats", chatId);
-        const chatDoc = await getDoc(chatRef);
-
-        if (!chatDoc.exists()) {
-            throw new Error("Чат не найден");
-        }
-
-        const chatData = chatDoc.data();
 
         await updateDoc(chatRef, {
             isActive: false,
             endedAt: serverTimestamp()
         });
-
-        // Обновляем статистику участников
-        if (chatData.participants && chatData.participants.length > 0) {
-            for (const participantId of chatData.participants) {
-                await incrementCompletedChats(participantId);
-            }
-        }
 
         return true;
     } catch (error) {

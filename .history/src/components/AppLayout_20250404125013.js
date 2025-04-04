@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
-import PageTransition from './PageTransition';
 import '../styles/AppLayout.css';
 
 const AppLayout = () => {
@@ -34,9 +33,7 @@ const AppLayout = () => {
     useEffect(() => {
         let pageTitle = 'Анонимный чат';
 
-        if (location.pathname === '/home') {
-            pageTitle = 'Главная';
-        } else if (location.pathname.startsWith('/chat/')) {
+        if (location.pathname.startsWith('/chat/')) {
             pageTitle = 'Чат';
         } else if (location.pathname === '/random-chat') {
             pageTitle = 'Поиск собеседника';
@@ -66,11 +63,9 @@ const AppLayout = () => {
 
     return (
         <div className="app-layout">
-            <PageTransition>
-                <main className="app-content" key={location.pathname}>
-                    <Outlet />
-                </main>
-            </PageTransition>
+            <main className="app-content">
+                <Outlet />
+            </main>
         </div>
     );
 };

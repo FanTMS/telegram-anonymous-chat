@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { auth, db } from './firebase';
-import { collection, query, where, getDocs, addDoc, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, doc, getDoc } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import WebApp from '@twa-dev/sdk';
 import { testFirebaseConnection } from './utils/firebaseTest';
@@ -154,7 +154,7 @@ function App() {
         };
 
         checkAuth();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [isDevelopment]);
 
     // Функция для обработки создания пользователя
     const handleProfileUpdate = (updatedUser) => {
@@ -242,17 +242,6 @@ function App() {
                 // Сохраняем ID пользователя в localStorage
                 localStorage.setItem('current_user_id', docRef.id);
                 localStorage.removeItem('registration_in_progress');
-
-                // Инициализируем статистику пользователя
-                await setDoc(doc(db, "userStatistics", docRef.id), {
-                    totalChats: 0,
-                    activeChats: 0,
-                    completedChats: 0,
-                    totalMessages: 0,
-                    lastChatTimestamp: null,
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                });
 
                 // Успешная вибрация
                 if (WebApp.HapticFeedback) {

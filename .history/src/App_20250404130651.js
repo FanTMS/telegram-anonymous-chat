@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { auth, db } from './firebase';
-import { collection, query, where, getDocs, addDoc, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, doc, getDoc } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import WebApp from '@twa-dev/sdk';
 import { testFirebaseConnection } from './utils/firebaseTest';
 
 // Импорт компонентов
 import RegistrationForm from './components/RegistrationForm';
-import Home from './pages/Home';
 import ChatsList from './pages/ChatsList';
 import Chat from './pages/Chat';
 import RandomChat from './pages/RandomChat';
@@ -16,15 +15,11 @@ import NotFound from './components/NotFound';
 import MainMenu from './components/MainMenu';
 import Profile from './pages/Profile';
 import AppLayout from './components/AppLayout';
-import BeginnerGuide from './pages/BeginnerGuide';
+
+// Импорт страницы руководства вынесен в отдельный блок для решения проблемы
+import BeginnerGuide from './components/BeginnerGuide';
 
 import './App.css';
-import { createMockTelegramWebApp } from './utils/mockTelegramWebApp';
-
-// Инициализация моков для Telegram WebApp в режиме разработки
-if (process.env.NODE_ENV === 'development') {
-    createMockTelegramWebApp();
-}
 
 // Проверка режима разработки
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -154,7 +149,7 @@ function App() {
         };
 
         checkAuth();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [isDevelopment]);
 
     // Функция для обработки создания пользователя
     const handleProfileUpdate = (updatedUser) => {
@@ -243,17 +238,6 @@ function App() {
                 localStorage.setItem('current_user_id', docRef.id);
                 localStorage.removeItem('registration_in_progress');
 
-                // Инициализируем статистику пользователя
-                await setDoc(doc(db, "userStatistics", docRef.id), {
-                    totalChats: 0,
-                    activeChats: 0,
-                    completedChats: 0,
-                    totalMessages: 0,
-                    lastChatTimestamp: null,
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                });
-
                 // Успешная вибрация
                 if (WebApp.HapticFeedback) {
                     WebApp.HapticFeedback.notificationOccurred('success');
@@ -314,15 +298,14 @@ function App() {
                     {!user && (
                         <Route
                             path="*"
-                            element={<RegistrationForm onSubmit={handleRegistration} telegramUser={telegramUser} isDevelopment={isDevelopment} />}
+                            element={<RegistrationForm onSubmit={handleRegistration} isDevelopment={isDevelopment} />}
                         />
                     )}
 
                     {user && (
                         <Route element={<AppLayout />}>
-                            <Route path="/" element={<Navigate to="/home" replace />} />
-                            <Route path="/index.html" element={<Navigate to="/home" replace />} />
-                            <Route path="/home" element={<Home user={user} />} />
+                            <Route path="/" element={<Navigate to="/chats" replace />} />
+                            <Route path="/index.html" element={<Navigate to="/chats" replace />} />
                             <Route path="/chats" element={<ChatsList user={user} />} />
                             <Route path="/chat/:chatId" element={<Chat user={user} />} />
                             <Route path="/random-chat" element={<RandomChat user={user} />} />

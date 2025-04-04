@@ -4,9 +4,9 @@ import {
     query, where, arrayUnion, serverTimestamp,
     orderBy, limit, onSnapshot, deleteDoc
 } from 'firebase/firestore';
-import {
-    incrementTotalChats, incrementCompletedChats,
-    incrementMessagesCount
+import { 
+    incrementTotalChats, incrementCompletedChats, 
+    incrementMessagesCount 
 } from './statisticsService';
 
 // Структура для хранения активных слушателей обновлений чата

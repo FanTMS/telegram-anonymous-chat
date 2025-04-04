@@ -23,7 +23,7 @@ const MainMenu = () => {
         if (WebApp.HapticFeedback) {
             WebApp.HapticFeedback.impactOccurred('light');
         }
-
+        
         navigate(path);
         setIsExpanded(false);
     };
@@ -43,7 +43,7 @@ const MainMenu = () => {
     return (
         <div className="bottom-menu-container">
             <div className="bottom-menu">
-                <div
+                <div 
                     className={`menu-item ${isActive('/home') ? 'active' : ''}`}
                     onClick={() => handleNavigate('/home')}
                 >
@@ -56,7 +56,7 @@ const MainMenu = () => {
                     <span className="menu-text">Главная</span>
                 </div>
 
-                <div
+                <div 
                     className={`menu-item ${isActive('/chats') ? 'active' : ''}`}
                     onClick={() => handleNavigate('/chats')}
                 >

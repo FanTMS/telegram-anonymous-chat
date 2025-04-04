@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getChatById, sendMessage, subscribeToChatUpdates, endChat, reportChat } from '../utils/chatService';
-import { incrementMessagesCount } from '../utils/statisticsService';
 import WebApp from '@twa-dev/sdk';
 import '../styles/Chat.css';
 
@@ -109,12 +108,7 @@ const Chat = ({ user }) => {
                 WebApp.HapticFeedback.impactOccurred('light');
             }
 
-            // Отправляем сообщение
             await sendMessage(chatId, messageData);
-
-            // Обновляем счетчик сообщений (для дополнительной надежности, хотя уже обрабатывается в sendMessage)
-            await incrementMessagesCount(user.telegramId);
-
             setInputMessage('');
         } catch (err) {
             console.error("Ошибка при отправке сообщения:", err);

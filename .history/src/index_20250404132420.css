@@ -9,8 +9,7 @@ body {
     -moz-osx-font-smoothing: grayscale;
     background-color: var(--tg-theme-bg-color, #ffffff);
     color: var(--tg-theme-text-color, #000000);
-    overscroll-behavior: none;
-    /* Предотвращает "резиновый" эффект на iOS */
+    overscroll-behavior: none; /* Предотвращает "резиновый" эффект на iOS */
     position: fixed;
     width: 100%;
     height: 100%;
@@ -25,10 +24,8 @@ html {
 
 /* Улучшенная прокрутка */
 * {
-    -webkit-tap-highlight-color: transparent;
-    /* Убираем подсветку при тапе */
-    -webkit-overflow-scrolling: touch;
-    /* Плавная прокрутка на iOS */
+    -webkit-tap-highlight-color: transparent; /* Убираем подсветку при тапе */
+    -webkit-overflow-scrolling: touch; /* Плавная прокрутка на iOS */
 }
 
 /* Настройки безопасной области для iOS */

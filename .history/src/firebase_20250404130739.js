@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 
 // Используем конфигурацию из переменных окружения или прямо из объекта
@@ -17,25 +17,6 @@ console.log("Firebase initialized with project:", firebaseConfig.projectId);
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-
-// Включаем оффлайн-персистентность для Firestore
-try {
-    enableIndexedDbPersistence(db)
-        .then(() => {
-            console.log("Firestore persistence enabled");
-        })
-        .catch((err) => {
-            if (err.code === 'failed-precondition') {
-                console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
-            } else if (err.code === 'unimplemented') {
-                console.warn('The current browser does not support all of the features required to enable persistence');
-            } else {
-                console.error("Error enabling persistence:", err);
-            }
-        });
-} catch (error) {
-    console.warn("Failed to enable Firestore persistence:", error);
-}
 
 // Улучшенная функция для анонимной аутентификации с обходом ошибок и журналированием
 const signInAnonymouslyIfNeeded = async () => {

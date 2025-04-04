@@ -111,10 +111,10 @@ const Chat = ({ user }) => {
 
             // Отправляем сообщение
             await sendMessage(chatId, messageData);
-
+            
             // Обновляем счетчик сообщений (для дополнительной надежности, хотя уже обрабатывается в sendMessage)
             await incrementMessagesCount(user.telegramId);
-
+            
             setInputMessage('');
         } catch (err) {
             console.error("Ошибка при отправке сообщения:", err);

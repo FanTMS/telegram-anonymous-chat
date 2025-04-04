@@ -5,6 +5,7 @@ import { collection, query, where, getDocs, addDoc, doc, getDoc, setDoc } from '
 import { signInAnonymously } from 'firebase/auth';
 import WebApp from '@twa-dev/sdk';
 import { testFirebaseConnection } from './utils/firebaseTest';
+import { getUserStatistics } from './utils/statisticsService';
 
 // Импорт компонентов
 import RegistrationForm from './components/RegistrationForm';
@@ -154,7 +155,7 @@ function App() {
         };
 
         checkAuth();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [isDevelopment]);
 
     // Функция для обработки создания пользователя
     const handleProfileUpdate = (updatedUser) => {
