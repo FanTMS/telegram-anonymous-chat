@@ -43,7 +43,7 @@ export const UsersService = {
             // Если диагностика прошла успешно, пробуем еще раз
             if (diagnostics.exists || diagnostics.created) {
                 console.log("Повторная попытка создания пользователя после диагностики...");
-
+                
                 // Очищаем данные от undefined значений
                 const cleanUserData = sanitizeData({
                     ...userData,
@@ -51,14 +51,14 @@ export const UsersService = {
                     updatedAt: serverTimestamp(),
                     lastActive: serverTimestamp()
                 });
-
+                
                 // Создаем документ напрямую второй раз
                 const userDocRef = doc(db, 'users', userId);
                 await setDoc(userDocRef, cleanUserData);
-
+                
                 return { id: userId, ...cleanUserData };
             }
-
+            
             throw new Error(`Не удалось создать пользователя: ${error.message}`);
         }
     },

@@ -41,7 +41,7 @@ export const createOrUpdateUser = async (userId, userData) => {
                 lastSeen: serverTimestamp(),
                 updatedAt: serverTimestamp()
             });
-
+            
             // Обновляем существующего пользователя
             await updateDoc(userRef, cleanUserData);
             return { id: userId, ...userDoc.data(), ...userData };
@@ -56,7 +56,7 @@ export const createOrUpdateUser = async (userId, userData) => {
                 messageCount: 0,
                 status: 'active'
             });
-
+            
             // Создаем нового пользователя
             await setDoc(userRef, cleanUserData);
             return { id: userId, ...userData };

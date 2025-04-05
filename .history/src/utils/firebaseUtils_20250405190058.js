@@ -41,15 +41,15 @@ export const sanitizeData = (data) => {
     if (!data || typeof data !== 'object') {
         return data;
     }
-
+    
     const sanitized = {};
-
+    
     for (const key in data) {
         if (Object.prototype.hasOwnProperty.call(data, key) && data[key] !== undefined) {
             sanitized[key] = data[key];
         }
     }
-
+    
     return sanitized;
 };
 
