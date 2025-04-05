@@ -67,16 +67,16 @@ export const sanitizeData = (data) => {
  */
 export const hasChanges = (newData, oldData) => {
     if (!newData || !oldData) return true;
-
+    
     const newKeys = Object.keys(newData);
     const oldKeys = Object.keys(oldData);
-
+    
     if (newKeys.length !== oldKeys.length) return true;
-
+    
     for (const key of newKeys) {
         if (newData[key] !== oldData[key]) return true;
     }
-
+    
     return false;
 };
 

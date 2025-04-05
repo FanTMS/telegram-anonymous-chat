@@ -42,7 +42,7 @@ export const _getUserById = async (userId) => {
     try {
         const userRef = doc(db, "users", userId);
         const userSnap = await getDoc(userRef);
-
+        
         if (userSnap.exists()) {
             return { id: userSnap.id, ...userSnap.data() };
         } else {

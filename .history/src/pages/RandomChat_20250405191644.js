@@ -13,7 +13,7 @@ const RandomChat = () => {
     const [foundMatch, setFoundMatch] = useState(false);
 
     const navigate = useNavigate();
-    const { _WebApp, hapticFeedback, showPopup } = useTelegram();
+    const { WebApp, hapticFeedback, showPopup } = useTelegram();
 
     const timeIntervalRef = useRef(null);
     const searchIntervalRef = useRef(null);

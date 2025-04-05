@@ -17,7 +17,12 @@ import {
     limit
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
-import { incrementCompletedChats, incrementMessagesCount, incrementChatStarted } from './statisticsService';
+import { getUserById } from './usersService';
+import {
+    incrementCompletedChats,
+    incrementMessagesCount,
+    incrementActiveChats
+} from './statisticsService';
 import { sanitizeData } from './firebaseUtils';
 
 /**
@@ -31,28 +36,6 @@ import { sanitizeData } from './firebaseUtils';
  */
 const generateMessageId = () => {
     return uuidv4();
-};
-
-/**
- * Переименовываем функцию, чтобы соответствовать правилам линтинга
- * @param {string} userId ID пользователя
- * @returns {Promise<Object|null>} Данные пользователя или null, если пользователь не найден
- */
-export const _getUserById = async (userId) => {
-    try {
-        const userRef = doc(db, "users", userId);
-        const userSnap = await getDoc(userRef);
-
-        if (userSnap.exists()) {
-            return { id: userSnap.id, ...userSnap.data() };
-        } else {
-            console.error(`Пользователь с ID ${userId} не найден.`);
-            return null;
-        }
-    } catch (error) {
-        console.error("Ошибка при получении данных пользователя:", error);
-        return null;
-    }
 };
 
 /**
@@ -74,16 +57,15 @@ export const createChat = async (userId1, userId2) => {
             participantsNotified: {
                 [userId1]: false,
                 [userId2]: false
-            },
-            participantsInfo: {}
+            }
         };
 
         const chatRef = await addDoc(collection(db, "chats"), sanitizeData(chatData));
         console.log(`Создан новый чат между пользователями ${userId1} и ${userId2}`);
 
         await Promise.all([
-            incrementChatStarted(userId1),
-            incrementChatStarted(userId2)
+            incrementActiveChats(userId1),
+            incrementActiveChats(userId2)
         ]);
 
         return chatRef.id;

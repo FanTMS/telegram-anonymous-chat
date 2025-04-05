@@ -17,7 +17,12 @@ import {
     limit
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
-import { incrementCompletedChats, incrementMessagesCount, incrementChatStarted } from './statisticsService';
+import { getUserById } from './usersService';
+import {
+    incrementCompletedChats,
+    incrementMessagesCount,
+    incrementChatStarted
+} from './statisticsService';
 import { sanitizeData } from './firebaseUtils';
 
 /**
@@ -31,28 +36,6 @@ import { sanitizeData } from './firebaseUtils';
  */
 const generateMessageId = () => {
     return uuidv4();
-};
-
-/**
- * Переименовываем функцию, чтобы соответствовать правилам линтинга
- * @param {string} userId ID пользователя
- * @returns {Promise<Object|null>} Данные пользователя или null, если пользователь не найден
- */
-export const _getUserById = async (userId) => {
-    try {
-        const userRef = doc(db, "users", userId);
-        const userSnap = await getDoc(userRef);
-
-        if (userSnap.exists()) {
-            return { id: userSnap.id, ...userSnap.data() };
-        } else {
-            console.error(`Пользователь с ID ${userId} не найден.`);
-            return null;
-        }
-    } catch (error) {
-        console.error("Ошибка при получении данных пользователя:", error);
-        return null;
-    }
 };
 
 /**

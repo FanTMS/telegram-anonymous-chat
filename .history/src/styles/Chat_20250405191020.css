@@ -147,8 +147,7 @@
     cursor: not-allowed;
 }
 
-.chat-loading,
-.chat-error {
+.chat-loading, .chat-error {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -166,11 +165,11 @@
     .message {
         max-width: 85%;
     }
-
+    
     .partner-info h2 {
         font-size: 16px;
     }
-
+    
     .end-chat-btn {
         padding: 6px 10px;
         font-size: 12px;

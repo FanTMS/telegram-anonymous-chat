@@ -13,7 +13,7 @@ const RandomChat = () => {
     const [foundMatch, setFoundMatch] = useState(false);
 
     const navigate = useNavigate();
-    const { _WebApp, hapticFeedback, showPopup } = useTelegram();
+    const { WebApp, safeHapticFeedback, safeShowPopup } = useTelegram();
 
     const timeIntervalRef = useRef(null);
     const searchIntervalRef = useRef(null);
@@ -52,7 +52,7 @@ const RandomChat = () => {
             setError(null);
 
             // Тактильная обратная связь при начале поиска
-            if (hapticFeedback) hapticFeedback('impact', 'light');
+            safeHapticFeedback('impact', 'light');
 
             const chatId = await findRandomChat(user.id);
 
@@ -61,7 +61,7 @@ const RandomChat = () => {
                 setFoundMatch(true);
 
                 // Тактильная обратная связь при найденном совпадении
-                if (hapticFeedback) hapticFeedback('notification', null, 'success');
+                safeHapticFeedback('success');
 
                 setTimeout(() => {
                     navigate(`/chat/${chatId}`);
@@ -83,9 +83,9 @@ const RandomChat = () => {
             }
 
             // Вибрация при ошибке
-            if (hapticFeedback) hapticFeedback('notification', null, 'error');
+            safeHapticFeedback('notification', null, 'error');
         }
-    }, [user, navigate, hapticFeedback]);
+    }, [user, navigate, safeHapticFeedback, safeShowPopup]);
 
     // Отмена поиска
     const stopSearch = useCallback(async () => {
@@ -99,22 +99,20 @@ const RandomChat = () => {
             setLoading(false);
 
             // Тактильная обратная связь
-            if (hapticFeedback) hapticFeedback('impact', 'medium');
+            safeHapticFeedback('impact', 'medium');
 
             // Показываем уведомление об отмене поиска
-            if (showPopup) {
-                await showPopup({
-                    title: 'Поиск отменен',
-                    message: 'Вы отменили поиск собеседника.',
-                    buttons: [{ text: "OK" }]
-                });
-            }
+            await safeShowPopup({
+                title: 'Поиск отменен',
+                message: 'Вы отменили поиск собеседника.',
+                buttons: [{ text: "OK" }]
+            });
         } catch (err) {
             console.error("Ошибка при отмене поиска:", err);
             setError('Не удалось отменить поиск. Попробуйте еще раз.');
             setLoading(false);
         }
-    }, [user, hapticFeedback, showPopup]);
+    }, [user, safeHapticFeedback, safeShowPopup]);
 
     // Счетчик времени поиска и проверка статуса
     useEffect(() => {
@@ -149,7 +147,7 @@ const RandomChat = () => {
                         clearInterval(searchIntervalRef.current);
 
                         // Тактильная обратная связь при найденном совпадении
-                        if (hapticFeedback) hapticFeedback('notification', null, 'success');
+                        safeHapticFeedback('success');
 
                         // Задержка перед переходом в чат
                         setTimeout(() => {
@@ -166,7 +164,7 @@ const RandomChat = () => {
             clearInterval(timeIntervalRef.current);
             clearInterval(searchIntervalRef.current);
         };
-    }, [isSearching, user, navigate, hapticFeedback]);
+    }, [isSearching, user, navigate, safeHapticFeedback]);
 
     // Форматирование времени поиска
     const formatSearchTime = () => {

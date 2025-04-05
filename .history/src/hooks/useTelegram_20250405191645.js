@@ -90,6 +90,3 @@ export function useTelegram() {
         showPopup
     };
 }
-
-// Добавляем экспорт по умолчанию
-export default useTelegram;
