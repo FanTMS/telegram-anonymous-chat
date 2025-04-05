@@ -12,7 +12,8 @@
         "ajv": "6.12.6",
         "ajv-keywords": "3.5.2",
         "cross-env": "^7.0.3",
-        "firebase": "^10.7.0",
+        "firebase": "^10.14.1",
+        "framer-motion": "^10.18.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-router-dom": "^6.20.0",
@@ -21,7 +22,7 @@
     },
     "scripts": {
         "start": "cross-env NODE_OPTIONS=\"--openssl-legacy-provider --no-deprecation\" react-scripts start",
-        "build": "node ./scripts/build-netlify.js",
+        "build": "react-scripts build && npm run prepare-deploy",
         "build:local": "react-scripts build",
         "build:netlify": "node ./scripts/build-netlify.js",
         "test": "cross-env NODE_OPTIONS=\"--openssl-legacy-provider --no-deprecation\" react-scripts test",
@@ -29,7 +30,14 @@
         "postinstall": "node ./fix-dependencies.js",
         "audit-fix": "npm audit fix",
         "audit-fix-force": "npm audit fix --force",
-        "clean": "node ./scripts/clean.js"
+        "clean": "node ./scripts/clean.js",
+        "check-routing": "node scripts/check-routing.js",
+        "verify-netlify": "node scripts/verify-netlify-config.js",
+        "check-guide": "node scripts/check-beginner-guide.js",
+        "prebuild": "npm run check-guide",
+        "lint:fix": "node scripts/fix-eslint-errors.js",
+        "prepare-deploy": "node scripts/prepare-deploy.js",
+        "postbuild": "cp -r public/_redirects build/_redirects"
     },
     "eslintConfig": {
         "extends": [

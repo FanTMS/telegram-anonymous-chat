@@ -1,0 +1,110 @@
+/* Основные стили для главного меню */
+.main-menu {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: var(--tg-theme-bg-color, #ffffff);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 8px 16px;
+    z-index: 100;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.main-menu-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.menu-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 0;
+    flex: 1;
+    text-decoration: none;
+    color: var(--tg-theme-hint-color, #999999);
+    position: relative;
+    transition: color 0.2s ease;
+}
+
+.menu-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 3px;
+    border-radius: 1.5px;
+    background-color: var(--tg-theme-button-color, #3390ec);
+    transition: width 0.3s ease;
+}
+
+.menu-item.active {
+    color: var(--tg-theme-button-color, #3390ec);
+}
+
+.menu-item.active::before {
+    width: 24px;
+}
+
+.menu-icon {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.menu-icon svg {
+    width: 22px;
+    height: 22px;
+    stroke: currentColor;
+    fill: none;
+    transition: transform 0.2s ease, fill 0.2s ease;
+}
+
+.menu-item.active .menu-icon svg {
+    stroke: var(--tg-theme-button-color, #3390ec);
+    fill: rgba(51, 144, 236, 0.1);
+    transform: scale(1.1);
+}
+
+.menu-text {
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 0.8;
+    text-align: center;
+}
+
+.menu-item:active {
+    opacity: 0.7;
+}
+
+/* Адаптация под темную тему */
+[data-theme="dark"] .main-menu {
+    border-top-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Адаптивность для разных размеров экрана */
+@media (max-width: 320px) {
+    .menu-text {
+        font-size: 10px;
+    }
+    
+    .menu-icon {
+        width: 22px;
+        height: 22px;
+    }
+    
+    .menu-icon svg {
+        width: 20px;
+        height: 20px;
+    }
+}

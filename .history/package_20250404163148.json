@@ -1,0 +1,55 @@
+{
+    "name": "telegram-anonymous-chat",
+    "version": "0.1.0",
+    "private": true,
+    "engines": {
+        "node": ">=16.0.0",
+        "npm": ">=8.0.0"
+    },
+    "dependencies": {
+        "@tma.js/sdk": "^2.7.0",
+        "@twa-dev/sdk": "^6.9.0",
+        "ajv": "6.12.6",
+        "ajv-keywords": "3.5.2",
+        "cross-env": "^7.0.3",
+        "firebase": "^10.7.0",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "react-router-dom": "^6.20.0",
+        "react-scripts": "5.0.1",
+        "react-transition-group": "^4.4.5"
+    },
+    "scripts": {
+        "start": "cross-env NODE_OPTIONS=\"--openssl-legacy-provider --no-deprecation\" react-scripts start",
+        "build": "node ./scripts/build-netlify.js",
+        "build:local": "react-scripts build",
+        "build:netlify": "node ./scripts/build-netlify.js",
+        "test": "cross-env NODE_OPTIONS=\"--openssl-legacy-provider --no-deprecation\" react-scripts test",
+        "eject": "react-scripts eject",
+        "postinstall": "node ./fix-dependencies.js",
+        "audit-fix": "npm audit fix",
+        "audit-fix-force": "npm audit fix --force",
+        "clean": "node ./scripts/clean.js",
+        "check-routing": "node scripts/check-routing.js"
+    },
+    "eslintConfig": {
+        "extends": [
+            "react-app",
+            "react-app/jest"
+        ]
+    },
+    "browserslist": {
+        "production": [
+            ">0.2%",
+            "not dead",
+            "not op_mini all"
+        ],
+        "development": [
+            "last 1 chrome version",
+            "last 1 firefox version",
+            "last 1 safari version"
+        ]
+    },
+    "resolutions": {},
+    "overrides": {}
+}

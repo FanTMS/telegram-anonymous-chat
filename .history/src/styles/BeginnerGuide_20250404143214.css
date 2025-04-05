@@ -1,0 +1,392 @@
+.guide-container {
+    padding: 16px;
+    max-width: 600px;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    padding-bottom: 80px;
+    /* Для меню внизу */
+    color: var(--tg-theme-text-color, #222222);
+    animation: fadeIn 0.5s ease;
+}
+
+.guide-header {
+    text-align: center;
+    margin-bottom: 24px;
+    position: relative;
+    padding-bottom: 16px;
+}
+
+.guide-title {
+    font-size: 26px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--tg-theme-text-color, #222222);
+    animation: slideInDown 0.5s ease;
+}
+
+.guide-subtitle {
+    font-size: 16px;
+    color: var(--tg-theme-hint-color, #999);
+    margin-bottom: 16px;
+    line-height: 1.4;
+    animation: slideInUp 0.5s ease;
+}
+
+.guide-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 4px;
+    background-color: var(--tg-theme-button-color, #3390ec);
+    border-radius: 2px;
+    animation: expand 0.6s ease-out;
+}
+
+.guide-section {
+    background-color: var(--tg-theme-secondary-bg-color, #f5f5f5);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    animation: fadeInUp 0.5s ease;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.guide-section:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.guide-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background-color: var(--tg-theme-button-color, #3390ec);
+    border-radius: 0 2px 2px 0;
+}
+
+.section-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--tg-theme-text-color, #222222);
+    display: flex;
+    align-items: center;
+}
+
+.section-icon {
+    margin-right: 10px;
+    background-color: var(--tg-theme-button-color, #3390ec);
+    color: var(--tg-theme-button-text-color, #ffffff);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.guide-text {
+    font-size: 15px;
+    line-height: 1.6;
+    margin-bottom: 16px;
+    color: var(--tg-theme-text-color, #222222);
+}
+
+.guide-list {
+    padding-left: 20px;
+    margin-bottom: 16px;
+}
+
+.guide-list-item {
+    margin-bottom: 12px;
+    line-height: 1.5;
+    position: relative;
+    padding-left: 10px;
+    animation: slideInLeft 0.5s ease;
+}
+
+.guide-list-item::before {
+    content: '';
+    position: absolute;
+    left: -10px;
+    top: 8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--tg-theme-button-color, #3390ec);
+}
+
+.guide-card {
+    background-color: rgba(51, 144, 236, 0.05);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border-left: 4px solid var(--tg-theme-button-color, #3390ec);
+}
+
+.guide-card-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+}
+
+.guide-card-icon {
+    margin-right: 8px;
+    font-size: 18px;
+}
+
+.guide-button {
+    background-color: var(--tg-theme-button-color, #3390ec);
+    color: var(--tg-theme-button-text-color, #ffffff);
+    border: none;
+    border-radius: 12px;
+    padding: 14px 24px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 16px;
+    transition: all 0.2s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.guide-button:active {
+    transform: scale(0.98);
+}
+
+.guide-button::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 150px;
+    height: 150px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+    transition: transform 0.5s ease-out, opacity 0.5s ease-out;
+}
+
+.guide-button:active::after {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    transition: 0s;
+}
+
+.guide-button-icon {
+    margin-right: 8px;
+}
+
+.faq-section .guide-list-item {
+    cursor: pointer;
+    padding: 12px 16px;
+    background-color: rgba(51, 144, 236, 0.05);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    transition: all 0.3s ease;
+}
+
+.faq-section .guide-list-item::before {
+    display: none;
+}
+
+.faq-question {
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.faq-question::after {
+    content: '+';
+    font-size: 20px;
+    color: var(--tg-theme-button-color, #3390ec);
+    transition: transform 0.3s ease;
+}
+
+.faq-section .guide-list-item.active .faq-question::after {
+    transform: rotate(45deg);
+}
+
+.faq-answer {
+    margin-top: 10px;
+    display: none;
+    line-height: 1.5;
+    color: var(--tg-theme-hint-color, #999);
+    font-size: 14px;
+}
+
+.faq-section .guide-list-item.active .faq-answer {
+    display: block;
+    animation: fadeIn 0.5s ease;
+}
+
+.faq-section .guide-list-item:hover {
+    background-color: rgba(51, 144, 236, 0.1);
+}
+
+.contact-section {
+    text-align: center;
+}
+
+.contact-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(51, 144, 236, 0.1);
+    color: var(--tg-theme-button-color, #3390ec);
+    border: none;
+    border-radius: 20px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    margin: 0 8px;
+    transition: all 0.2s ease;
+}
+
+.contact-button:hover {
+    background-color: rgba(51, 144, 236, 0.2);
+}
+
+.contact-button-icon {
+    margin-right: 6px;
+}
+
+.progress-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background-color: rgba(51, 144, 236, 0.1);
+    z-index: 1000;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: var(--tg-theme-button-color, #3390ec);
+    width: 0;
+    transition: width 0.3s ease;
+}
+
+/* Анимации */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes expand {
+    from {
+        width: 0;
+    }
+
+    to {
+        width: 60px;
+    }
+}
+
+/* Адаптация для тёмной темы */
+[data-theme="dark"] .guide-section {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .guide-card {
+    background-color: rgba(51, 144, 236, 0.1);
+}
+
+[data-theme="dark"] .faq-section .guide-list-item {
+    background-color: rgba(51, 144, 236, 0.1);
+}
+
+[data-theme="dark"] .faq-section .guide-list-item:hover {
+    background-color: rgba(51, 144, 236, 0.15);
+}
+
+/* Медиа-запросы для адаптивности */
+@media (max-width: 480px) {
+    .guide-title {
+        font-size: 22px;
+    }
+
+    .section-title {
+        font-size: 18px;
+    }
+
+    .guide-section {
+        padding: 16px;
+    }
+
+    .guide-text {
+        font-size: 14px;
+    }
+}

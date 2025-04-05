@@ -1,0 +1,243 @@
+.tutorial-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.stepper {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 30px;
+    position: relative;
+}
+
+.stepper::before {
+    content: '';
+    position: absolute;
+    top: 24px;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background-color: #e0e0e0;
+    z-index: 1;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+}
+
+.step-indicator {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+    font-weight: bold;
+    transition: background-color 0.3s;
+}
+
+.step.active .step-indicator {
+    background-color: #2196f3;
+    color: white;
+}
+
+.step.completed .step-indicator {
+    background-color: #4caf50;
+    color: white;
+}
+
+.step-label {
+    font-size: 14px;
+    color: #757575;
+}
+
+.step.active .step-label {
+    color: #2196f3;
+    font-weight: bold;
+}
+
+.step-content {
+    padding: 20px;
+    background-color: white;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.step-title {
+    font-size: 24px;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.example-container {
+    background-color: #f5f5f5;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-left: 4px solid #2196f3;
+}
+
+.example-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.chat-example {
+    background-color: #e8f4fd;
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+
+.chat-example p {
+    margin: 0;
+}
+
+.quiz-question {
+    background-color: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.quiz-question h3 {
+    margin-top: 0;
+    color: #333;
+}
+
+.quiz-options {
+    margin-top: 15px;
+}
+
+.quiz-option {
+    margin-bottom: 10px;
+}
+
+.quiz-option label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 10px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.quiz-option label:hover {
+    background-color: #f0f0f0;
+}
+
+.quiz-option input {
+    margin-right: 10px;
+}
+
+.quiz-option label.correct {
+    background-color: rgba(76, 175, 80, 0.1);
+    color: #2e7d32;
+}
+
+.quiz-option label.incorrect {
+    background-color: rgba(244, 67, 54, 0.1);
+    color: #c62828;
+}
+
+.feedback {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+.feedback.correct {
+    background-color: rgba(76, 175, 80, 0.1);
+    color: #2e7d32;
+}
+
+.feedback.incorrect {
+    background-color: rgba(244, 67, 54, 0.1);
+    color: #c62828;
+}
+
+.results-container {
+    background-color: #e8f5e9;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.button-container {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+}
+
+.button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.button.primary {
+    background-color: #2196f3;
+    color: white;
+}
+
+.button.primary:hover:not(:disabled) {
+    background-color: #1976d2;
+}
+
+.button.secondary {
+    background-color: #e0e0e0;
+    color: #333;
+}
+
+.button.secondary:hover:not(:disabled) {
+    background-color: #d5d5d5;
+}
+
+.alert-message {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #f44336;
+    color: white;
+    padding: 15px 20px;
+    border-radius: 4px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.alert-message button {
+    background: none;
+    border: none;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    margin-left: 20px;
+}

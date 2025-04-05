@@ -1,0 +1,112 @@
+.home-container {
+    padding: 20px;
+    max-width: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 60px);
+}
+
+.home-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.home-header h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--tg-theme-text-color, #000000);
+}
+
+.home-subtitle {
+    margin: 8px 0 0;
+    font-size: 16px;
+    color: var(--tg-theme-hint-color, #999999);
+}
+
+.home-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 32px;
+}
+
+.primary-button, .secondary-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px 20px;
+    border-radius: 10px;
+    font-size: 16px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.primary-button {
+    background-color: var(--tg-theme-button-color, #3390EC);
+    color: var(--tg-theme-button-text-color, #ffffff);
+}
+
+.secondary-button {
+    background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+    color: var(--tg-theme-text-color, #000000);
+}
+
+.primary-button:hover, .secondary-button:hover {
+    transform: translateY(-2px);
+}
+
+.primary-button:active, .secondary-button:active {
+    transform: translateY(0);
+}
+
+.button-icon {
+    font-size: 20px;
+}
+
+.home-features {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-top: auto;
+}
+
+@media (min-width: 600px) {
+    .home-features {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.feature-card {
+    background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    transition: transform 0.2s;
+}
+
+.feature-card:hover {
+    transform: translateY(-5px);
+}
+
+.feature-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+}
+
+.feature-card h3 {
+    margin: 0 0 8px;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--tg-theme-text-color, #000000);
+}
+
+.feature-card p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--tg-theme-hint-color, #999999);
+}
