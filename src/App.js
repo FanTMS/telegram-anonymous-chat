@@ -281,21 +281,17 @@ const Root = () => {
             return;
         }
         
-        // Специальная обработка для прямых URL
-        if (location.pathname === '/home' || location.pathname === '/register') {
-            // Эти пути обрабатываются напрямую, не перенаправляем
-            console.log('Обнаружен прямой путь:', location.pathname);
-            return;
-        }
+        // Определяем базовый путь приложения - для совместимости между development и production
+        const basePath = process.env.NODE_ENV === 'development' ? '' : '';
         
         // Стандартное перенаправление для корневого пути
-        if (location.pathname === '/' && !loading) {
+        if (location.pathname === '/' || location.pathname === `${basePath}/`) {
             if (isAuthenticated) {
                 console.log('Пользователь аутентифицирован, перенаправление на /home');
-                navigate("/home", { replace: true });
+                navigate(`${basePath}/home`, { replace: true });
             } else {
                 console.log('Пользователь не аутентифицирован, перенаправление на /register');
-                navigate("/register", { replace: true });
+                navigate(`${basePath}/register`, { replace: true });
             }
         }
     }, [isAuthenticated, loading, navigate, location.pathname]);
@@ -305,21 +301,13 @@ const Root = () => {
         return <div className="loading-screen">Loading...</div>;
     }
     
-    // Если это корневой путь, показываем загрузку до перенаправления
-    if (location.pathname === '/') {
+    // Для корневого пути показываем загрузку до перенаправления
+    if (location.pathname === '/' || location.pathname === '/index.html') {
         return <div className="loading-screen">Перенаправление...</div>;
     }
     
-    // Для путей /home или /register возвращаем соответствующий компонент
-    if (location.pathname === '/home') {
-        return <Navigate to="/home" replace />;
-    }
-    if (location.pathname === '/register') {
-        return <Navigate to="/register" replace />;
-    }
-    
-    // Для всех остальных путей
-    return <div className="loading-screen">Обработка маршрута...</div>;
+    // Для стандартных путей просто прокидываем к компонентам
+    return null;
 };
 
 export default App;
