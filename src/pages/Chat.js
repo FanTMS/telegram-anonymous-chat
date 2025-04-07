@@ -5,12 +5,13 @@ import {
     getChatById,
     getChatMessages,
     sendChatMessage,
-    checkChatMatchStatus
+    checkChatMatchStatus,
+    endChat
 } from '../utils/chatService';
 import { addSupportChat } from '../utils/supportService';
 import UserStatus from '../components/UserStatus';
 import { useToast } from '../components/Toast';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import '../styles/Chat.css';
 
@@ -28,13 +29,18 @@ const Chat = () => {
     const [isPartnerTyping, setIsPartnerTyping] = useState(false);
     const [showScrollButton, setShowScrollButton] = useState(false);
     const [isSending, setIsSending] = useState(false);
+    const [showEndChatModal, setShowEndChatModal] = useState(false);
+    const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const [unsubscribeChat, setUnsubscribeChat] = useState(null);
 
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
     const inputRef = useRef(null);
+    const chatContainerRef = useRef(null);
     const navigate = useNavigate();
 
-    // Форматирование времени с учетом возможных проблем с датами
+    // Усовершенствованное форматирование времени с учетом временных зон и дополнительных проверок
     const formatMessageTime = (timestamp) => {
         if (!timestamp) return '';
         
@@ -61,11 +67,30 @@ const Chat = () => {
                 return 'Недавно';
             }
             
-            // Форматируем время
-            return date.toLocaleTimeString('ru-RU', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            const now = new Date();
+            const isToday = date.toDateString() === now.toDateString();
+            const isYesterday = new Date(now - 86400000).toDateString() === date.toDateString();
+            
+            // Форматируем время в зависимости от даты
+            if (isToday) {
+                return date.toLocaleTimeString(navigator.language || 'ru-RU', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } else if (isYesterday) {
+                return 'Вчера, ' + date.toLocaleTimeString(navigator.language || 'ru-RU', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } else {
+                return date.toLocaleDateString(navigator.language || 'ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit'
+                }) + ', ' + date.toLocaleTimeString(navigator.language || 'ru-RU', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
         } catch (error) {
             console.error('Ошибка при форматировании времени:', error);
             return 'Недавно';
@@ -81,6 +106,89 @@ const Chat = () => {
             .toUpperCase()
             .substring(0, 2);
     };
+
+    // Улучшенный механизм определения открытия клавиатуры с учетом различных мобильных устройств
+    useEffect(() => {
+        const handleResize = () => {
+            // Используем более надежный метод определения открытия клавиатуры
+            const visualViewport = window.visualViewport || { height: window.innerHeight };
+            const windowHeight = window.innerHeight;
+            const viewportHeight = visualViewport.height;
+            
+            // Считаем, что клавиатура открыта, если высота области просмотра существенно меньше высоты окна
+            const keyboardThreshold = 0.75; // 75% от полной высоты
+            const isKeyboard = viewportHeight < windowHeight * keyboardThreshold;
+            
+            // Вычисляем примерную высоту клавиатуры
+            const keyboardOpenHeight = isKeyboard ? windowHeight - viewportHeight : 0;
+            
+            setIsKeyboardOpen(isKeyboard);
+            if (isKeyboard) {
+                setKeyboardHeight(keyboardOpenHeight);
+                document.documentElement.style.setProperty('--keyboard-height', `${keyboardOpenHeight}px`);
+                if (chatContainerRef.current) {
+                    chatContainerRef.current.classList.add('keyboard-open');
+                }
+                // При открытии клавиатуры прокручиваем к последнему сообщению
+                setTimeout(() => scrollToBottom(true), 300);
+            } else {
+                setKeyboardHeight(0);
+                document.documentElement.style.setProperty('--keyboard-height', '0px');
+                if (chatContainerRef.current) {
+                    chatContainerRef.current.classList.remove('keyboard-open');
+                }
+            }
+        };
+
+        // Обработчики фокуса на поле ввода (для iOS)
+        const handleFocus = () => {
+            setTimeout(() => {
+                if (messagesEndRef.current) {
+                    messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                }
+                if (chatContainerRef.current) {
+                    chatContainerRef.current.classList.add('keyboard-open');
+                }
+                setIsKeyboardOpen(true);
+            }, 300);
+        };
+
+        const handleBlur = () => {
+            setTimeout(() => {
+                if (chatContainerRef.current) {
+                    chatContainerRef.current.classList.remove('keyboard-open');
+                }
+                setIsKeyboardOpen(false);
+            }, 100);
+        };
+
+        window.addEventListener('resize', handleResize);
+        
+        // Для более точного определения события изменения размера области просмотра в iOS/Android
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', handleResize);
+        }
+        
+        // Добавляем обработчики к полю ввода
+        if (inputRef.current) {
+            inputRef.current.addEventListener('focus', handleFocus);
+            inputRef.current.addEventListener('blur', handleBlur);
+        }
+
+        // Начальная проверка
+        handleResize();
+
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener('resize', handleResize);
+            }
+            if (inputRef.current) {
+                inputRef.current.removeEventListener('focus', handleFocus);
+                inputRef.current.removeEventListener('blur', handleBlur);
+            }
+        };
+    }, [inputRef.current]);
 
     useEffect(() => {
         const loadChatDetails = async () => {
@@ -146,6 +254,22 @@ const Chat = () => {
                 
                 setChat(chatDetails);
 
+                // Настройка слушателя для чата на случай, если другой пользователь завершит чат
+                const unsubscribe = onSnapshot(doc(db, 'chats', chatId), (docSnapshot) => {
+                    if (docSnapshot.exists()) {
+                        const chatData = docSnapshot.data();
+                        // Проверяем, был ли чат завершен
+                        if (chatData.status === 'ended') {
+                            showToast('Чат был завершен', 'info');
+                            navigate('/chats');
+                        }
+                    }
+                }, (error) => {
+                    console.error('Ошибка при слежении за статусом чата:', error);
+                });
+                
+                setUnsubscribeChat(() => unsubscribe);
+
                 const chatMessages = await getChatMessages(chatId);
                 setMessages(chatMessages);
 
@@ -170,8 +294,12 @@ const Chat = () => {
         
         return () => {
             clearInterval(messageInterval);
+            // Отписываемся от слушателя при размонтировании
+            if (unsubscribeChat) {
+                unsubscribeChat();
+            }
         };
-    }, [chatId, user]);
+    }, [chatId, user, navigate, showToast]);
 
     const loadMessages = async () => {
         try {
@@ -296,10 +424,31 @@ const Chat = () => {
         }
     };
 
+    const handleEndChatClick = () => {
+        setShowEndChatModal(true);
+    };
+
+    const handleEndChatConfirm = async () => {
+        try {
+            await endChat(chatId, user.id);
+            showToast('Чат завершен', 'success');
+            navigate('/chats');
+        } catch (error) {
+            console.error('Ошибка при завершении чата:', error);
+            showToast('Не удалось завершить чат', 'error');
+        } finally {
+            setShowEndChatModal(false);
+        }
+    };
+
+    const handleEndChatCancel = () => {
+        setShowEndChatModal(false);
+    };
+
     return (
-        <div className="chat-container telegram-chat">
+        <div className="chat-container telegram-chat" ref={chatContainerRef}>
             <div className="chat-header">
-                <button className="back-button" onClick={handleBackClick}>
+                <button className="back-button" onClick={handleBackClick} aria-label="Вернуться назад">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="19" y1="12" x2="5" y2="12"></line>
                         <polyline points="12 19 5 12 12 5"></polyline>
@@ -330,9 +479,20 @@ const Chat = () => {
                             isSupportChat={chat?.type === 'support'}
                         />
                         {isPartnerTyping && (
-                            <div className="partner-typing">печатает...</div>
+                            <div className="partner-typing">
+                                печатает<span className="typing-dots"><span>.</span><span>.</span><span>.</span></span>
+                            </div>
                         )}
                     </div>
+                </div>
+                <div className="chat-actions">
+                    <button className="end-chat-btn" onClick={handleEndChatClick} aria-label="Завершить чат">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                        Завершить
+                    </button>
                 </div>
             </div>
 
@@ -364,32 +524,57 @@ const Chat = () => {
                                     const showSenderInfo = !isOutgoing && 
                                                           (index === 0 || 
                                                            messages[index - 1].senderId !== message.senderId);
+                                                           
+                                    // Группируем сообщения по дате для добавления разделителей между днями
+                                    const showDateSeparator = index > 0 && 
+                                        message.timestamp && messages[index-1].timestamp &&
+                                        new Date(message.timestamp.toDate?.() || message.timestamp).toDateString() !== 
+                                        new Date(messages[index-1].timestamp.toDate?.() || messages[index-1].timestamp).toDateString();
+                                        
+                                    // Определяем тип сообщения (системное, обычное)
+                                    const isSystemMessage = message.type === 'system' || message.senderId === 'system';
                                     
                                     return (
-                                        <div
-                                            key={message.id}
-                                            className={`message ${isOutgoing ? 'outgoing' : 'incoming'} ${message.pending ? 'pending' : ''}`}
-                                        >
-                                            <div className="message-content">
-                                                {showSenderInfo && (
-                                                    <div className="message-sender">{message.senderName || 'Собеседник'}</div>
-                                                )}
-                                                <p>{message.text}</p>
-                                                <span className="message-time">
-                                                    {formatMessageTime(message.timestamp)}
-                                                    {isOutgoing && (
-                                                        <span className={`message-status ${message.read ? 'read' : ''}`}>
-                                                            {message.pending ? 
-                                                                <span className="sending-indicator">⌛</span> : 
-                                                                message.read ? 
-                                                                    <span className="read-indicator">✓✓</span> : 
-                                                                    <span className="sent-indicator">✓</span>
-                                                            }
+                                        <React.Fragment key={message.id}>
+                                            {showDateSeparator && (
+                                                <div className="date-separator">
+                                                    <span>{new Date(message.timestamp.toDate?.() || message.timestamp).toLocaleDateString(navigator.language || 'ru-RU', {
+                                                        day: 'numeric',
+                                                        month: 'long'
+                                                    })}</span>
+                                                </div>
+                                            )}
+                                            
+                                            {isSystemMessage ? (
+                                                <div className="system-message">
+                                                    <span>{message.text}</span>
+                                                </div>
+                                            ) : (
+                                                <div
+                                                    className={`message ${isOutgoing ? 'outgoing' : 'incoming'} ${message.pending ? 'pending' : ''}`}
+                                                >
+                                                    <div className="message-content">
+                                                        {showSenderInfo && (
+                                                            <div className="message-sender">{message.senderName || 'Собеседник'}</div>
+                                                        )}
+                                                        <p>{message.text}</p>
+                                                        <span className="message-time">
+                                                            {formatMessageTime(message.timestamp)}
+                                                            {isOutgoing && (
+                                                                <span className={`message-status ${message.read ? 'read' : ''}`}>
+                                                                    {message.pending ? 
+                                                                        <span className="sending-indicator">⌛</span> : 
+                                                                        message.read ? 
+                                                                            <span className="read-indicator">✓✓</span> : 
+                                                                            <span className="sent-indicator">✓</span>
+                                                                    }
+                                                                </span>
+                                                            )}
                                                         </span>
-                                                    )}
-                                                </span>
-                                            </div>
-                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </React.Fragment>
                                     );
                                 })}
                                 <div ref={messagesEndRef} />
@@ -397,7 +582,7 @@ const Chat = () => {
                         )}
                     </div>
 
-                    <div className="message-input">
+                    <div className={`message-input ${isKeyboardOpen ? 'keyboard-visible' : ''}`}>
                         <input
                             type="text"
                             placeholder="Введите сообщение..."
@@ -411,6 +596,7 @@ const Chat = () => {
                             onClick={handleSendMessage} 
                             disabled={!inputMessage.trim() || isSending}
                             className={isSending ? 'sending' : ''}
+                            aria-label="Отправить сообщение"
                         >
                             {isSending ? (
                                 <div className="send-loader"></div>
@@ -424,7 +610,11 @@ const Chat = () => {
                     </div>
 
                     {showScrollButton && (
-                        <button className="scroll-bottom-btn" onClick={() => scrollToBottom(true)}>
+                        <button 
+                            className="scroll-bottom-btn" 
+                            onClick={() => scrollToBottom(true)}
+                            aria-label="Прокрутить вниз"
+                        >
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="10"></circle>
                                 <polyline points="8 12 12 16 16 12"></polyline>
@@ -433,6 +623,25 @@ const Chat = () => {
                         </button>
                     )}
                 </>
+            )}
+
+            {showEndChatModal && (
+                <div className="end-chat-modal">
+                    <div className="end-chat-modal-content">
+                        <div className="end-chat-modal-title">Завершение чата</div>
+                        <div className="end-chat-modal-text">
+                            Вы уверены, что хотите завершить этот чат? После завершения чат будет недоступен для обоих пользователей.
+                        </div>
+                        <div className="end-chat-modal-actions">
+                            <button className="end-chat-modal-btn cancel" onClick={handleEndChatCancel}>
+                                Отмена
+                            </button>
+                            <button className="end-chat-modal-btn confirm" onClick={handleEndChatConfirm}>
+                                Завершить
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

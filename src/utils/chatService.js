@@ -749,6 +749,8 @@ export const endChat = async (chatId, options = {}) => {
             throw new Error("ID чата не указан");
         }
 
+        const userId = options.userId;
+
         // Получаем данные чата
         const chatRef = doc(db, "chats", chatId);
         const chatSnap = await getDoc(chatRef);
@@ -760,6 +762,11 @@ export const endChat = async (chatId, options = {}) => {
         const chatData = chatSnap.data();
         const { participants = [], messagesCount = 0, createdAt } = chatData;
 
+        // Проверяем, является ли пользователь участником чата (если указан userId)
+        if (userId && !participants.includes(userId)) {
+            throw new Error('Вы не являетесь участником этого чата');
+        }
+
         // Вычисляем продолжительность чата в минутах
         const startTime = createdAt?.toDate?.() || new Date();
         const endTime = new Date();
@@ -768,16 +775,26 @@ export const endChat = async (chatId, options = {}) => {
         // Обновляем статус чата
         await updateDoc(chatRef, {
             isActive: false,
+            status: 'ended',
             endedAt: serverTimestamp(),
-            duration: durationMinutes
+            duration: durationMinutes,
+            ...(userId ? { endedBy: userId } : {})
+        });
+
+        // Добавляем системное сообщение о завершении чата
+        await addDoc(collection(db, 'chats', chatId, 'messages'), {
+            text: 'Чат был завершен',
+            type: 'system',
+            timestamp: serverTimestamp(),
+            senderId: 'system'
         });
 
         // Обновляем статистику для всех участников
-        for (const userId of participants) {
+        for (const participantId of participants) {
             try {
-                await updateChatEndStatistics(userId, chatId, messagesCount, durationMinutes);
+                await updateChatEndStatistics(participantId, chatId, messagesCount, durationMinutes);
             } catch (statsError) {
-                console.warn(`Ошибка при обновлении статистики для пользователя ${userId}:`, statsError);
+                console.warn(`Ошибка при обновлении статистики для пользователя ${participantId}:`, statsError);
             }
         }
 

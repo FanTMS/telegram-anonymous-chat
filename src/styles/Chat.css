@@ -5,6 +5,7 @@
     background-color: var(--tg-theme-bg-color, #ffffff);
     position: relative;
     overflow: hidden;
+    transition: height 0.3s ease;
 }
 
 .telegram-chat {
@@ -30,6 +31,39 @@
     align-items: center;
     gap: 12px;
     flex: 1;
+}
+
+.chat-actions {
+    display: flex;
+    margin-left: auto;
+}
+
+.end-chat-btn {
+    background-color: rgba(231, 76, 60, 0.1);
+    color: #e74c3c;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 18px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.end-chat-btn:hover {
+    background-color: rgba(231, 76, 60, 0.2);
+    transform: translateY(-1px);
+}
+
+.end-chat-btn:active {
+    transform: translateY(1px);
+}
+
+.end-chat-btn svg {
+    margin-right: 5px;
 }
 
 .back-button {
@@ -97,11 +131,32 @@
     font-weight: 500;
     margin-top: 3px;
     line-height: 1;
-    animation: typing-pulse 1s infinite;
 }
 
-@keyframes typing-pulse {
-    0%, 100% { opacity: 0.7; }
+.typing-dots {
+    display: inline-block;
+}
+
+.typing-dots span {
+    opacity: 0;
+    animation: fadeInOut 1.4s infinite;
+    margin-left: 1px;
+}
+
+.typing-dots span:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.typing-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes fadeInOut {
+    0%, 100% { opacity: 0; }
     50% { opacity: 1; }
 }
 
@@ -183,17 +238,18 @@
 
 .message-content {
     background-color: var(--tg-theme-secondary-bg-color, #f5f5f5);
-    border-radius: 16px 16px 16px 4px;
+    border-radius: 18px 18px 18px 4px;
     padding: 10px 14px;
     position: relative;
     word-break: break-word;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
 }
 
 .message.outgoing .message-content {
     background-color: var(--tg-theme-button-color, #3390ec);
     color: var(--tg-theme-button-text-color, #ffffff);
-    border-radius: 16px 16px 4px 16px;
+    border-radius: 18px 18px 4px 18px;
 }
 
 .message-sender {
@@ -255,18 +311,24 @@
     position: sticky;
     bottom: 0;
     z-index: 2;
+    transition: transform 0.3s ease;
 }
 
 .message-input input {
     flex: 1;
     border: none;
     padding: 12px 16px;
-    border-radius: 20px;
+    border-radius: 24px;
     font-size: 15px;
     background-color: var(--tg-theme-bg-color, #ffffff);
     color: var(--tg-theme-text-color, #222222);
     outline: none;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.message-input input:focus {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .message-input input::placeholder {
@@ -285,23 +347,18 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
     flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(51, 144, 236, 0.3);
 }
 
-.message-input button:disabled {
-    background-color: rgba(51, 144, 236, 0.5);
-    cursor: not-allowed;
+.message-input button:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 3px 8px rgba(51, 144, 236, 0.4);
 }
 
-.message-input button.sending {
-    animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(0.95); }
-    100% { transform: scale(1); }
+.message-input button:active:not(:disabled) {
+    transform: scale(0.95);
 }
 
 .send-loader {
@@ -420,6 +477,93 @@
     background-color: #c0392b;
 }
 
+/* Стили для модального окна завершения чата */
+.end-chat-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.end-chat-modal-content {
+    background-color: var(--tg-theme-bg-color, #ffffff);
+    border-radius: 12px;
+    padding: 20px;
+    width: 85%;
+    max-width: 320px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.end-chat-modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--tg-theme-text-color, #222222);
+    text-align: center;
+}
+
+.end-chat-modal-text {
+    font-size: 15px;
+    margin-bottom: 20px;
+    color: var(--tg-theme-text-color, #222222);
+    opacity: 0.8;
+    text-align: center;
+    line-height: 1.4;
+}
+
+.end-chat-modal-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.end-chat-modal-btn {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.end-chat-modal-btn.cancel {
+    background-color: var(--tg-theme-secondary-bg-color, #f5f5f5);
+    color: var(--tg-theme-text-color, #222222);
+}
+
+.end-chat-modal-btn.confirm {
+    background-color: #e74c3c;
+    color: white;
+}
+
+.end-chat-modal-btn.cancel:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.end-chat-modal-btn.confirm:hover {
+    background-color: #c0392b;
+}
+
 /* Telegram Mini App specific styles */
 .in-telegram .chat-container {
     height: 100%;
@@ -428,6 +572,23 @@
 
 .in-telegram .message-input {
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0));
+}
+
+/* Адаптация к клавиатуре на мобильных устройствах */
+.keyboard-open .chat-container {
+    height: calc(100vh - var(--keyboard-height, 0px));
+}
+
+.keyboard-open .message-input {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    transform: translateY(calc(-1 * var(--keyboard-height, 0px)));
+}
+
+.keyboard-open .chat-messages {
+    padding-bottom: 70px; /* Дополнительный отступ для ввода */
 }
 
 /* Поддержка темной темы */
@@ -447,6 +608,37 @@
     
     .scroll-bottom-btn {
         background-color: var(--tg-theme-secondary-bg-color, #333);
+    }
+    
+    .end-chat-btn {
+        background-color: rgba(231, 76, 60, 0.2);
+    }
+    
+    .end-chat-modal-content {
+        background-color: var(--tg-theme-secondary-bg-color, #333);
+    }
+    
+    .end-chat-modal-btn.cancel {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .date-separator::before,
+    .date-separator::after {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .date-separator span {
+        background-color: var(--tg-theme-bg-color, #222);
+        color: var(--tg-theme-hint-color, #aaa);
+    }
+    
+    .system-message span {
+        background-color: rgba(255, 255, 255, 0.08);
+        color: var(--tg-theme-hint-color, #aaa);
+    }
+    
+    .keyboard-visible {
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
     }
 }
 
@@ -489,6 +681,16 @@
         width: 40px;
         height: 40px;
     }
+    
+    .end-chat-btn {
+        padding: 6px 10px;
+        font-size: 13px;
+    }
+    
+    .end-chat-btn svg {
+        width: 16px;
+        height: 16px;
+    }
 }
 
 /* Анимации для сообщений */
@@ -505,4 +707,70 @@
 
 .message {
     animation: slideIn 0.2s ease;
+}
+
+/* Стили для разделителя дат */
+.date-separator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 16px 0;
+    position: relative;
+}
+
+.date-separator::before,
+.date-separator::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.date-separator span {
+    padding: 0 12px;
+    font-size: 13px;
+    color: var(--tg-theme-hint-color, #999);
+    background-color: var(--tg-theme-bg-color, #ffffff);
+    border-radius: 10px;
+}
+
+/* Стили для системных сообщений */
+.system-message {
+    display: flex;
+    justify-content: center;
+    margin: 12px 0;
+    width: 100%;
+}
+
+.system-message span {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 10px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: var(--tg-theme-hint-color, #999);
+    max-width: 80%;
+    text-align: center;
+    animation: systemMessageAppear 0.3s ease-out;
+}
+
+@keyframes systemMessageAppear {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Улучшенные стили для состояния клавиатуры */
+.keyboard-visible {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 5;
+    transition: transform 0.3s ease;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
 }
