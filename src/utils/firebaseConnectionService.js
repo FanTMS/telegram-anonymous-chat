@@ -13,12 +13,15 @@ class FirebaseConnectionService {
         this.retryCount = 0;
         this.maxRetries = 5;
         this.retryInterval = null;
+        this.isMonitoringSetup = false;
 
         // Подписываемся на изменения onLine статуса
         this._setupNetworkListeners();
 
-        // Инициализируем соединение
-        this._setupConnectionMonitoring();
+        // Инициализируем соединение с задержкой, чтобы дать время Firebase инициализироваться
+        setTimeout(() => {
+            this._setupConnectionMonitoring();
+        }, 1000);
     }
 
     /**
@@ -26,6 +29,12 @@ class FirebaseConnectionService {
      */
     _setupConnectionMonitoring() {
         try {
+            if (this.isMonitoringSetup) {
+                return; // Избегаем дублирования настройки
+            }
+            
+            this.isMonitoringSetup = true;
+            
             // Создаем или обновляем документ статуса соединения
             setDoc(this.connectionRef, {
                 lastOnline: serverTimestamp(),
@@ -45,20 +54,39 @@ class FirebaseConnectionService {
                     this._startRetryProcess();
                 });
 
-            // Подписываемся на изменения документа для мониторинга
-            this.unsubscribe = onSnapshot(this.connectionRef,
-                (doc) => {
-                    // Успешное получение обновлений означает активное соединение
-                    if (doc.exists()) {
-                        this._updateConnectionStatus(true);
-                    }
-                },
-                (error) => {
-                    console.error("❌ Ошибка при мониторинге соединения:", error);
-                    this._updateConnectionStatus(false, error);
-                    this._startRetryProcess();
+            // Очищаем предыдущую подписку, если есть
+            if (this.unsubscribe) {
+                try {
+                    this.unsubscribe();
+                } catch (error) {
+                    // Игнорируем ошибку отписки
                 }
-            );
+            }
+
+            // Подписываемся на изменения документа для мониторинга
+            try {
+                this.unsubscribe = onSnapshot(this.connectionRef,
+                    (doc) => {
+                        // Успешное получение обновлений означает активное соединение
+                        if (doc.exists()) {
+                            this._updateConnectionStatus(true);
+                        }
+                    },
+                    (error) => {
+                        console.error("❌ Ошибка при мониторинге соединения:", error);
+                        this._updateConnectionStatus(false, error);
+                        // Перезапускаем процесс мониторинга через некоторое время
+                        setTimeout(() => {
+                            this.isMonitoringSetup = false;
+                            this._setupConnectionMonitoring();
+                        }, 5000);
+                    }
+                );
+            } catch (error) {
+                console.error("❌ Ошибка при настройке мониторинга:", error);
+                this.isMonitoringSetup = false;
+                setTimeout(() => this._setupConnectionMonitoring(), 5000);
+            }
         } catch (error) {
             console.error("❌ Ошибка при настройке мониторинга соединения:", error);
             this._updateConnectionStatus(false, error);

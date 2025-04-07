@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, enableIndexedDbPersistence, initializeFirestore, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
+import { getFirestore, initializeFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
@@ -41,17 +41,13 @@ try {
 
     // Инициализация Firestore с оптимизированными настройками
     db = initializeFirestore(app, {
-        cacheSizeBytes: CACHE_SIZE_UNLIMITED,
         experimentalForceLongPolling: true,
-        useFetchStreams: false
-    });
-
-    // Включаем оффлайн-персистентность
-    enableIndexedDbPersistence(db).catch((err) => {
-        if (err.code === 'failed-precondition') {
-            console.warn('Firebase: Персистентность не может быть включена - открыто несколько вкладок');
-        } else if (err.code === 'unimplemented') {
-            console.warn('Firebase: Браузер не поддерживает персистентность');
+        useFetchStreams: false,
+        synchronizeTabs: true,
+        // Используем только настройку localCache без cacheSizeBytes
+        localCache: {
+            lruGarbageCollection: true,
+            tabSynchronization: true
         }
     });
 

@@ -97,6 +97,30 @@ const Ripple = styled.span`
   }
 `;
 
+// Компонент для рендеринга иконок
+const IconRenderer = ({ icon }) => {
+  // Если icon это React элемент, возвращаем его напрямую
+  if (React.isValidElement(icon)) {
+    return icon;
+  }
+  
+  // Если icon это строка, возвращаем соответствующую иконку из Font Awesome
+  if (typeof icon === 'string') {
+    const iconMap = {
+      'home': <i className="fas fa-home"></i>,
+      'chat': <i className="fas fa-comment-alt"></i>,
+      'group': <i className="fas fa-users"></i>,
+      'person': <i className="fas fa-user"></i>,
+      // Добавляем другие иконки по необходимости
+    };
+    
+    return iconMap[icon] || <i className={`fas fa-${icon}`}></i>;
+  }
+  
+  // Если ничего не подошло, возвращаем пустой div
+  return <div></div>;
+};
+
 // Главный компонент
 const BottomNavigation = ({ items = [] }) => {
     const navigate = useNavigate();
@@ -184,7 +208,9 @@ const BottomNavigation = ({ items = [] }) => {
                         $active={active}
                         onClick={(e) => handleNavClick(item.path, e, item.path)}
                     >
-                        <IconContainer>{item.icon}</IconContainer>
+                        <IconContainer>
+                            <IconRenderer icon={item.icon} />
+                        </IconContainer>
                         <Label $active={active}>{item.label}</Label>
 
                         {/* Эффект волны при нажатии */}

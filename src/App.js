@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { UserProvider, UserContext } from './contexts/UserContext';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { UserContext } from './contexts/UserContext';
 import { ToastProvider } from './components/Toast';
 import './styles/global.css';
 
@@ -124,8 +124,42 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
 function App() {
     const [isConnected, setIsConnected] = useState(true);
     const [connectionError, setConnectionError] = useState(null);
+    const [telegramInitialized, setTelegramInitialized] = useState(false);
+    const [error, setError] = useState(null);
 
     console.log('App компонент инициализирован');
+
+    // Инициализация и настройка Telegram WebApp
+    useEffect(() => {
+        try {
+            // Проверяем существование WebApp в глобальном объекте Telegram
+            if (window.Telegram && window.Telegram.WebApp) {
+                console.log('Telegram WebApp обнаружен, инициализация...');
+                
+                // Устанавливаем обработчик ошибок WebApp
+                const originalPostEvent = window.Telegram.WebApp.postEvent;
+                if (originalPostEvent) {
+                    window.Telegram.WebApp.postEvent = function() {
+                        try {
+                            return originalPostEvent.apply(this, arguments);
+                        } catch (err) {
+                            console.error('Ошибка в Telegram.WebApp.postEvent:', err);
+                            return null;
+                        }
+                    };
+                }
+                
+                setTelegramInitialized(true);
+            } else if (typeof WebApp !== 'undefined') {
+                console.log('Найден объект WebApp, но не в Telegram.WebApp');
+                setTelegramInitialized(true);
+            } else {
+                console.log('Telegram WebApp не обнаружен, работаем как обычное веб-приложение');
+            }
+        } catch (error) {
+            console.error('Ошибка при инициализации Telegram WebApp:', error);
+        }
+    }, []);
 
     // Инициализация Firebase и проверка соединения
     useEffect(() => {
@@ -184,121 +218,223 @@ function App() {
         initialize();
     }, []);
 
-    return (
-        <Router>
-            <UserProvider>
-                <ToastProvider>
-                    <div className="app">
-                        {/* Показываем сообщение о статусе соединения при необходимости */}
-                        {!isConnected && (
-                            <div style={{
-                                position: 'fixed',
-                                top: '0',
-                                left: '0',
-                                right: '0',
-                                padding: '10px',
-                                background: 'rgba(255, 59, 48, 0.9)',
-                                color: 'white',
-                                textAlign: 'center',
-                                zIndex: 9999
-                            }}>
-                                Соединение с базой данных потеряно. Пытаемся восстановить...
-                            </div>
-                        )}
+    // Обработка неперехваченных ошибок
+    useEffect(() => {
+        const handleError = (event) => {
+            console.error('Неперехваченная ошибка:', event.error);
+            setError(event.error);
+        };
 
+        window.addEventListener('error', handleError);
+        
+        return () => {
+            window.removeEventListener('error', handleError);
+        };
+    }, []);
+
+    return (
+        <ToastProvider>
+            <div className={`app-container ${!isConnected ? 'offline-mode' : ''}`}>
+                {/* Connection status indicator */}
+                {!isConnected && (
+                    <div className="connection-status offline">
+                        <span className="status-icon">⚠️</span>
+                        <span className="status-text">Оффлайн режим. {connectionError && `Ошибка: ${connectionError}`}</span>
+                    </div>
+                )}
+
+                {error ? (
+                    <div className="error-fallback">
+                        <h2>Произошла ошибка</h2>
+                        <p>{error.toString()}</p>
+                        <button onClick={() => window.location.reload()}>
+                            Перезагрузить приложение
+                        </button>
+                        {process.env.NODE_ENV === 'development' && (
+                            <pre className="error-stack">
+                                {error.stack}
+                            </pre>
+                        )}
+                    </div>
+                ) : (
+                    <>
                         <Routes>
-                            {/* Публичные маршруты - доступны всем */}
                             <Route path="/register" element={<RegistrationForm />} />
                             <Route path="/onboarding" element={<OnboardingTutorial />} />
-
-                            {/* Корневой маршрут и редиректы */}
-                            <Route index element={<Root />} />
-                            <Route path="/index.html" element={<Root />} />
-
-                            {/* Защищённые маршруты */}
-                            <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                                <Route path="/home" element={
-                                    <PageTransition>
-                                        <Home />
-                                    </PageTransition>
-                                } />
-                                <Route path="/chats" element={
-                                    <PageTransition>
-                                        <ChatsList />
-                                    </PageTransition>
-                                } />
-                                <Route path="/chat/:chatId" element={
-                                    <PageTransition>
-                                        <Chat />
-                                    </PageTransition>
-                                } />
-                                <Route path="/random-chat" element={
-                                    <PageTransition>
-                                        <RandomChat />
-                                    </PageTransition>
-                                } />
-                                <Route path="/profile" element={
-                                    <PageTransition>
-                                        <Profile />
-                                    </PageTransition>
-                                } />
-                                <Route path="/guide" element={
-                                    <PageTransition>
-                                        <BeginnerGuide />
-                                    </PageTransition>
-                                } />
-                                <Route path="/admin/support" element={<AdminSupport />} />
-                                <Route path="/groups" element={<Groups />} />
-                                <Route path="/groups/:groupId" element={<GroupDetail />} />
-                                <Route path="/groups/create" element={<GroupCreate />} />
-                                <Route path="/groups/:groupId/edit" element={<GroupEdit />} />
-                            </Route>
+                            <Route path="/" element={<Navigate to="/home" replace />} />
+                            <Route path="/index.html" element={<Navigate to="/home" replace />} />
                             
-                            {/* Диагностика и 404 */}
-                            <Route path="/diagnostics" element={<SupportDiagnostics />} />
+                            {/* Routes requiring authentication */}
+                            <Route path="/home" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <Home />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/chats" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <ChatsList />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/chat/:chatId" element={
+                                <ProtectedRoute>
+                                    <AppLayout hideNavigation>
+                                        <Chat />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/random-chat" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <RandomChat />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/profile" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <Profile />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/groups" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <Groups />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/groups/:groupId" element={
+                                <ProtectedRoute>
+                                    <AppLayout hideNavigation>
+                                        <GroupDetail />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/groups/create" element={
+                                <ProtectedRoute>
+                                    <AppLayout hideNavigation>
+                                        <GroupCreate />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/groups/:groupId/edit" element={
+                                <ProtectedRoute>
+                                    <AppLayout hideNavigation>
+                                        <GroupEdit />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/guide" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <BeginnerGuide />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/admin/support" element={
+                                <ProtectedRoute adminOnly={true}>
+                                    <AppLayout>
+                                        <AdminSupport />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/support/diagnostics" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <SupportDiagnostics />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
                             <Route path="*" element={<NotFoundPage />} />
                         </Routes>
-
-                        {/* Добавляем компонент для автоматической загрузки индексов */}
+                        
+                        {/* Компонент для автоматической загрузки индексов */}
                         <IndexLoader />
-
-                        {/* Навигация должна быть внутри div с классом app, но за пределами Routes */}
-                        <BottomNavigation items={navigationItems} />
-                    </div>
-                </ToastProvider>
-            </UserProvider>
-        </Router>
+                    </>
+                )}
+            </div>
+        </ToastProvider>
     );
 }
 
 // Обновленный компонент Root для обработки корневого маршрута
 const Root = () => {
-    const { isAuthenticated, loading } = useContext(UserContext);
+    const { isAuthenticated, loading, user } = useContext(UserContext);
     const navigate = useNavigate();
     const location = useLocation();
+    const [redirectAttempts, setRedirectAttempts] = useState(0);
     
     console.log('Root компонент загружен. Текущий путь:', location.pathname);
     console.log('Root: isAuthenticated =', isAuthenticated, 'loading =', loading);
     
+    // Добавляем безопасный механизм перенаправления с защитой от зацикливания
     useEffect(() => {
         console.log('Root: useEffect для перенаправления запущен');
+        
+        // Если еще загружается, ждем
         if (loading) {
             console.log('Root: Загрузка еще не завершена, ожидаем...');
             return;
         }
 
-        // Перенаправление на соответствующую страницу
-        if (isAuthenticated) {
-            console.log('Пользователь аутентифицирован, перенаправление на /home');
-            navigate('/home', { replace: true });
-        } else {
-            console.log('Пользователь не аутентифицирован, перенаправление на /register');
-            navigate('/register', { replace: true });
+        // Если слишком много попыток перенаправления, значит что-то не так
+        if (redirectAttempts > 5) {
+            console.error('Root: Слишком много попыток перенаправления. Возможно, есть проблема с маршрутизацией.');
+            return;
         }
-    }, [isAuthenticated, loading, navigate]);
+
+        // Увеличиваем счетчик попыток
+        setRedirectAttempts(prev => prev + 1);
+
+        // Используем setTimeout, чтобы дать приложению время на обработку состояния
+        const redirectTimer = setTimeout(() => {
+            // Перенаправление на соответствующую страницу
+            try {
+                if (isAuthenticated) {
+                    console.log('Пользователь аутентифицирован, перенаправление на /home');
+                    navigate('/home', { replace: true });
+                } else {
+                    console.log('Пользователь не аутентифицирован, перенаправление на /register');
+                    navigate('/register', { replace: true });
+                }
+            } catch (error) {
+                console.error('Root: Ошибка при перенаправлении:', error);
+            }
+        }, 300);
+
+        return () => {
+            clearTimeout(redirectTimer);
+        };
+    }, [isAuthenticated, loading, navigate, redirectAttempts]);
     
     // Показываем загрузку во время проверки аутентификации
-    return <div className="loading-screen">Загрузка приложения...</div>;
+    return (
+        <div className="loading-screen">
+            <div className="loading-spinner"></div>
+            <p>Загрузка приложения...</p>
+            {redirectAttempts > 3 && (
+                <p className="loading-warning">
+                    Загрузка занимает больше времени, чем обычно...
+                </p>
+            )}
+        </div>
+    );
 };
 
 export default App;

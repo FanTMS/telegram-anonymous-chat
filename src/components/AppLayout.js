@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useTelegram } from '../utils/useTelegram';
 import styled from 'styled-components';
 import ConnectionStatus from './ConnectionStatus';
+import BottomNavigation from './BottomNavigation';
 
 // Добавляем мобильный контейнер с безопасными зонами
 const MobileContainer = styled.div`
@@ -58,7 +59,35 @@ const DesktopContainer = styled.div`
   z-index: -1;
 `;
 
-const AppLayout = () => {
+// Элементы навигации
+const navigationItems = [
+    {
+        path: '/',
+        label: 'Главная',
+        icon: 'home',
+        includesPaths: ['/home']
+    },
+    {
+        path: '/chats',
+        label: 'Чаты',
+        icon: 'chat',
+        includesPaths: ['/chat/']
+    },
+    {
+        path: '/groups',
+        label: 'Группы',
+        icon: 'group',
+        includesPaths: ['/groups/']
+    },
+    {
+        path: '/profile',
+        label: 'Профиль',
+        icon: 'person',
+        includesPaths: ['/settings']
+    }
+];
+
+const AppLayout = ({ children, hideNavigation = false }) => {
     const { WebApp, isAvailable, supportsMethod } = useTelegram();
     const location = useLocation();
 
@@ -106,9 +135,10 @@ const AppLayout = () => {
                 <ConnectionStatus />
                 <SafeAreaView>
                     <PageContent>
-                        <Outlet />
+                        {children}
                     </PageContent>
                 </SafeAreaView>
+                {!hideNavigation && <BottomNavigation items={navigationItems} />}
             </MobileContainer>
         </>
     );

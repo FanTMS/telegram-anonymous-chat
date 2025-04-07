@@ -16,53 +16,130 @@ export const useTelegram = () => {
     // Проверяем доступность WebApp
     const isAvailable = isWebAppAvailable();
     const WebAppInstance = isAvailable ? window.Telegram.WebApp : null;
+    const [methodsSupported, setMethodsSupported] = useState({});
 
     useEffect(() => {
         if (WebAppInstance) {
-            WebAppInstance.ready();
+            try {
+                WebAppInstance.ready();
+            } catch (error) {
+                console.warn('Ошибка при вызове WebApp.ready():', error);
+            }
         }
     }, [WebAppInstance]);
 
     // Безопасно вызывает метод WebApp только если он доступен
     const safeWebAppCall = (methodName, ...args) => {
-        if (isAvailable && WebAppInstance && typeof WebAppInstance[methodName] === 'function') {
-            try {
-                return WebAppInstance[methodName](...args);
-            } catch (error) {
-                console.warn(`Ошибка при вызове ${methodName}:`, error);
+        if (!isAvailable || !WebAppInstance) {
+            console.warn(`WebApp не доступен, метод ${methodName} не вызван`);
+            return null;
+        }
+
+        // Проверяем путь к методу (может быть вложенным, например backButton.show)
+        const methodPath = methodName.split('.');
+        let method = WebAppInstance;
+        
+        for (const part of methodPath) {
+            method = method[part];
+            if (!method) {
+                console.warn(`Метод ${methodName} не найден в WebApp`);
                 return null;
             }
         }
-        return null;
+        
+        if (typeof method !== 'function') {
+            console.warn(`${methodName} не является функцией`);
+            return null;
+        }
+        
+        try {
+            const context = methodPath.length > 1 
+                ? methodPath.slice(0, -1).reduce((obj, key) => obj[key], WebAppInstance) 
+                : WebAppInstance;
+            return method.apply(context, args);
+        } catch (error) {
+            console.warn(`Ошибка при вызове ${methodName}:`, error);
+            
+            // Обновляем состояние поддержки метода
+            if (error.message && error.message.includes('not supported in version')) {
+                setMethodsSupported(prev => ({
+                    ...prev,
+                    [methodName]: false
+                }));
+                console.log(`\n [Telegram.WebApp] Method ${methodName} is not supported in current version`);
+            }
+            
+            return null;
+        }
     };
 
     // Проверяет поддержку метода в текущей версии WebApp
     const supportsMethod = (methodName) => {
+        // Если уже проверяли этот метод, вернем сохраненный результат
+        if (methodsSupported[methodName] !== undefined) {
+            return methodsSupported[methodName];
+        }
+        
         if (!isAvailable || !WebAppInstance) return false;
 
+        // Получаем версию WebApp
         const version = WebAppInstance.version || '6.0';
         const versionNumber = parseFloat(version);
 
         // Карта версий, в которых методы были добавлены
         const methodVersionMap = {
             'setHeaderColor': 6.2,
-            'setBackgroundColor': 6.2
+            'setBackgroundColor': 6.2,
+            'expand': 6.1,
+            'showPopup': 6.2,
+            'HapticFeedback.impactOccurred': 6.1,
+            'HapticFeedback.notificationOccurred': 6.1,
+            'HapticFeedback.selectionChanged': 6.1
             // Можно добавить другие методы при необходимости
         };
 
-        return versionNumber >= (methodVersionMap[methodName] || 0);
+        // Проверяем версию или наличие метода
+        const requiredVersion = methodVersionMap[methodName] || 0;
+        let isSupported = versionNumber >= requiredVersion;
+        
+        // Дополнительно проверяем наличие метода, если он должен быть поддержан
+        if (isSupported && methodName.includes('.')) {
+            const parts = methodName.split('.');
+            let obj = WebAppInstance;
+            for (const part of parts) {
+                if (!obj || typeof obj[part] === 'undefined') {
+                    isSupported = false;
+                    break;
+                }
+                obj = obj[part];
+            }
+            
+            // Проверяем, что последний элемент - функция
+            if (isSupported && typeof obj !== 'function') {
+                isSupported = false;
+            }
+        }
+        
+        // Сохраняем результат проверки
+        setMethodsSupported(prev => ({
+            ...prev,
+            [methodName]: isSupported
+        }));
+        
+        return isSupported;
     };
 
     /**
      * Безопасно вызывает метод HapticFeedback с проверкой поддержки
      * @param {string} type - Тип вибрации ('impact', 'notification', 'selection')
      * @param {string} [style] - Стиль вибрации (только для 'notification': 'error', 'success', 'warning')
+     * @param {string} [fallbackType] - Запасной тип, если основной не поддерживается
      * @returns {boolean} - true если успешно, false если не поддерживается
      */
-    const safeHapticFeedback = useCallback((type, style) => {
+    const safeHapticFeedback = useCallback((type, style, fallbackType) => {
         try {
             if (!WebAppInstance?.HapticFeedback) {
-                console.log('\n [Telegram.WebApp] HapticFeedback is not available');
+                console.log('\n [Telegram.WebApp] HapticFeedback is not supported');
                 return false;
             }
 
@@ -76,12 +153,21 @@ export const useTelegram = () => {
             } else if (type === 'selection' && typeof WebAppInstance.HapticFeedback.selectionChanged === 'function') {
                 WebAppInstance.HapticFeedback.selectionChanged();
                 return true;
+            } else if (fallbackType && fallbackType !== type) {
+                // Пробуем использовать запасной тип
+                return safeHapticFeedback(fallbackType, style, null);
             } else {
                 console.log(`\n [Telegram.WebApp] HapticFeedback method for ${type} is not supported`);
                 return false;
             }
         } catch (error) {
             console.log(`\n [Telegram.WebApp] HapticFeedback error: ${error.message}`);
+            
+            // Если есть запасной тип, пробуем использовать его
+            if (fallbackType && fallbackType !== type) {
+                return safeHapticFeedback(fallbackType, style, null);
+            }
+            
             return false;
         }
     }, [WebAppInstance]);
@@ -93,10 +179,11 @@ export const useTelegram = () => {
      */
     const safeShowPopup = useCallback(async (options) => {
         try {
-            // Если метод showPopup недоступен, используем alert в качестве запасного варианта
-            if (!WebAppInstance?.showPopup || typeof WebAppInstance.showPopup !== 'function') {
+            // Проверяем доступность метода showPopup
+            if (!WebAppInstance || typeof WebAppInstance.showPopup !== 'function') {
+                // Логгируем сообщение о недоступности метода
                 console.log('\n [Telegram.WebApp] Method showPopup is not supported');
-
+                
                 // Создаем простое сообщение из параметров
                 const message = `${options.title || 'Уведомление'}\n\n${options.message || ''}`;
 
@@ -110,13 +197,30 @@ export const useTelegram = () => {
                     }
                     return 'ok';
                 }
-
+                
+                // Отмечаем метод как неподдерживаемый
+                setMethodsSupported(prev => ({
+                    ...prev,
+                    'showPopup': false
+                }));
+                
                 throw new Error('WebAppMethodUnsupported');
             }
 
             return await WebAppInstance.showPopup(options);
         } catch (error) {
-            console.log(`\n Show popup failed: ${error}`);
+            console.log(`\n Show popup failed: ${error.message || error}`);
+
+            // Если это была проверка наличия метода, обновляем статус поддержки
+            if (error.message && (
+                error.message.includes('not supported') || 
+                error.message.includes('is not a function')
+            )) {
+                setMethodsSupported(prev => ({
+                    ...prev,
+                    'showPopup': false
+                }));
+            }
 
             // Возвращаем значение по умолчанию
             return 'error';
@@ -125,7 +229,7 @@ export const useTelegram = () => {
 
     return {
         isAvailable,
-        user: isAvailable ? WebAppInstance.initDataUnsafe?.user : null,
+        user: isAvailable ? WebAppInstance?.initDataUnsafe?.user : null,
         WebApp: WebAppInstance,
         onClose: () => safeWebAppCall('close'),
         onBack: () => safeWebAppCall('backButton.onClick'),
