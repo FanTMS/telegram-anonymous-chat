@@ -1,0 +1,6 @@
+# Игнорируем компоненты с предупреждениями о display-name
+src/components/RegistrationForm.js
+
+# Игнорируем сборку
+build/
+node_modules/ 
