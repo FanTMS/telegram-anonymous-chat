@@ -270,22 +270,27 @@ function App() {
 
 // Обновленный компонент Root для обработки корневого маршрута
 const Root = () => {
-    return (
-        <Routes>
-            <Route path="/" element={<Navigate to="/home" />} />
-            <Route path="/home" element={<Home />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="/chats" element={<ProtectedRoute><ChatsList /></ProtectedRoute>} />
-            <Route path="/chat/:chatId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
-            <Route path="/random-chat" element={<ProtectedRoute><RandomChat /></ProtectedRoute>} />
-            <Route path="/guide" element={<Guide />} />
-            <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminPanel /></ProtectedRoute>} />
-            <Route path="/debug" element={<DebugPanel />} />
-            <Route path="*" element={<NotFound />} />
-        </Routes>
-    );
+    const { isAuthenticated, loading } = useContext(UserContext);
+    const navigate = useNavigate();
+    const location = useLocation();
+    
+    console.log('Root компонент загружен. Текущий путь:', location.pathname);
+    
+    useEffect(() => {
+        if (loading) return;
+
+        // Перенаправление на соответствующую страницу
+        if (isAuthenticated) {
+            console.log('Пользователь аутентифицирован, перенаправление на /home');
+            navigate('/home', { replace: true });
+        } else {
+            console.log('Пользователь не аутентифицирован, перенаправление на /register');
+            navigate('/register', { replace: true });
+        }
+    }, [isAuthenticated, loading, navigate]);
+    
+    // Показываем загрузку во время проверки аутентификации
+    return <div className="loading-screen">Загрузка приложения...</div>;
 };
 
 export default App;
