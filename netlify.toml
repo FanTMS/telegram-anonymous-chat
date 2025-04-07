@@ -3,20 +3,18 @@
   publish = "build"
 
 [build.environment]
-  NODE_VERSION = "18.17.1"
-  NPM_FLAGS = "--no-audit --legacy-peer-deps --force"
+  NODE_ENV = "production"
   CI = "false"
   PUBLIC_URL = ""
   NETLIFY_NEXT_PLUGIN_SKIP = "true"
 
-# Одно правило редиректа для SPA
+# Редирект для имитации поведения React Router на локальной разработке
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-  force = true
 
-# Optimize asset caching
+# Оптимизация кеширования для статических ресурсов
 [[headers]]
   for = "/*.js"
   [headers.values]

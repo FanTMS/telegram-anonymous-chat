@@ -270,44 +270,20 @@ const Root = () => {
     console.log('Root компонент загружен. Текущий путь:', location.pathname);
     
     useEffect(() => {
-        // Проверяем наличие сохраненного пути в sessionStorage (от страницы 404)
-        const redirectPath = sessionStorage.getItem('redirectPath');
-        if (redirectPath) {
-            sessionStorage.removeItem('redirectPath');
-            console.log(`Перенаправление на сохраненный маршрут: ${redirectPath}`);
-            
-            // Используем таймаут, чтобы дать React время инициализироваться
-            setTimeout(() => navigate(redirectPath, { replace: true }), 300);
-            return;
+        if (loading) return;
+
+        // Перенаправление на соответствующую страницу
+        if (isAuthenticated) {
+            console.log('Пользователь аутентифицирован, перенаправление на /home');
+            navigate('/home', { replace: true });
+        } else {
+            console.log('Пользователь не аутентифицирован, перенаправление на /register');
+            navigate('/register', { replace: true });
         }
-        
-        // Определяем базовый путь приложения - для совместимости между development и production
-        const basePath = process.env.NODE_ENV === 'development' ? '' : '';
-        
-        // Стандартное перенаправление для корневого пути
-        if (location.pathname === '/' || location.pathname === `${basePath}/`) {
-            if (isAuthenticated) {
-                console.log('Пользователь аутентифицирован, перенаправление на /home');
-                navigate(`${basePath}/home`, { replace: true });
-            } else {
-                console.log('Пользователь не аутентифицирован, перенаправление на /register');
-                navigate(`${basePath}/register`, { replace: true });
-            }
-        }
-    }, [isAuthenticated, loading, navigate, location.pathname]);
+    }, [isAuthenticated, loading, navigate]);
     
     // Показываем загрузку во время проверки аутентификации
-    if (loading) {
-        return <div className="loading-screen">Loading...</div>;
-    }
-    
-    // Для корневого пути показываем загрузку до перенаправления
-    if (location.pathname === '/' || location.pathname === '/index.html') {
-        return <div className="loading-screen">Перенаправление...</div>;
-    }
-    
-    // Для стандартных путей просто прокидываем к компонентам
-    return null;
+    return <div className="loading-screen">Загрузка приложения...</div>;
 };
 
 export default App;
