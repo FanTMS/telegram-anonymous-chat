@@ -29,7 +29,8 @@
         "create-logos": "node scripts/create-simple-logo.js",
         "create-indexes": "node scripts/create-firestore-indexes.js",
         "fix-paths": "node scripts/fix-static-paths.js",
-        "prestart": "npm run fix-paths"
+        "prestart": "npm run fix-paths",
+        "build": "npm run fix-paths && react-scripts build"
     },
     "eslintConfig": {
         "extends": [
