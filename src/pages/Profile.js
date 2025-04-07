@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { updateUser, getUserById } from '../utils/userService';
 import { safeHapticFeedback, safeShowPopup } from '../utils/telegramWebAppUtils';
 import { getUserStatistics } from '../utils/statisticsService';
 import InterestSelector from '../components/InterestSelector';
 import '../styles/Profile.css';
+import { auth } from '../firebase';
 
 // Предопределенные интересы для выбора
 const PREDEFINED_INTERESTS = [
@@ -21,15 +23,13 @@ const PREDEFINED_INTERESTS = [
     { id: 'history', name: 'История', icon: '🏛️' }
 ];
 
-const Profile = ({ user, onUpdate }) => {
-    // Убедимся, что имеем актуальные данные
-    const userId = user?.id;
-
+const Profile = () => {
     const [formData, setFormData] = useState({
-        name: user?.name || '',
-        age: user?.age || '',
-        interests: user?.interests?.length > 0 ? user.interests : [],
-        aboutMe: user?.aboutMe || ''
+        name: '',
+        age: '',
+        gender: '',
+        interests: [],
+        bio: ''
     });
 
     const [userStats, setUserStats] = useState({
@@ -44,62 +44,93 @@ const Profile = ({ user, onUpdate }) => {
     const [error, setError] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Загрузка актуальных данных профиля и статистики
+    const navigate = useNavigate();
+
     useEffect(() => {
-        const loadUserData = async () => {
+        const loadUserProfile = async () => {
             try {
-                if (!userId) {
-                    console.warn("ID пользователя отсутствует");
-                    setIsLoading(false);
+                setIsLoading(true);
+                setError(null);
+
+                // Получаем идентификатор текущего пользователя из Firebase Auth
+                const currentUser = auth.currentUser;
+                const currentUserId = currentUser?.uid || localStorage.getItem('current_user_id');
+
+                if (!currentUserId) {
+                    console.error('ID пользователя не найден');
+                    setError('Не удалось определить пользователя. Пожалуйста, войдите заново.');
+                    redirectToRegistration();
                     return;
                 }
 
-                setIsLoading(true);
+                console.log('Загрузка профиля пользователя с ID:', currentUserId);
 
-                // Загружаем данные пользователя
-                const userData = await getUserById(userId);
-
-                if (userData) {
-                    // Преобразуем данные в нужный формат
-                    setFormData({
-                        name: userData.name || '',
-                        age: userData.age || '',
-                        interests: Array.isArray(userData.interests)
-                            ? userData.interests
-                            : userData.interests?.split(',').map(i => i.trim()) || [],
-                        aboutMe: userData.aboutMe || ''
-                    });
+                // Проверяем наличие пользователя в Firestore
+                const userDoc = await getUserById(currentUserId);
+                
+                if (!userDoc) {
+                    console.error('Пользователь не найден в базе данных');
+                    setError('Ваш профиль не найден. Необходимо зарегистрироваться.');
+                    redirectToRegistration();
+                    return;
                 }
 
-                // Загружаем статистику
-                try {
-                    const stats = await getUserStatistics(userId);
-                    setUserStats(stats);
-                } catch (statsError) {
-                    console.error('Ошибка при загрузке статистики:', statsError);
-                }
+                // Инициализируем форму с данными пользователя из базы данных
+                setFormData({
+                    name: userDoc.name || '',
+                    age: userDoc.age || '',
+                    gender: userDoc.gender || '',
+                    interests: userDoc.interests || [],
+                    bio: userDoc.bio || userDoc.aboutMe || ''
+                });
+
+                // Сохраняем статистику пользователя
+                setUserStats({
+                    totalChats: userDoc.chatsCount || 0,
+                    completedChats: userDoc.completedChatsCount || 0,
+                    totalMessages: userDoc.messagesCount || 0,
+                    activeChats: userDoc.activeChatsCount || 0
+                });
 
                 setIsLoading(false);
-            } catch (err) {
-                console.error('Ошибка загрузки профиля:', err);
-                setError('Не удалось загрузить данные профиля');
+            } catch (error) {
+                console.error('Ошибка при загрузке профиля:', error);
+                setError('Произошла ошибка при загрузке профиля. Пожалуйста, попробуйте позже.');
                 setIsLoading(false);
             }
         };
 
-        loadUserData();
-    }, [userId]);
+        const redirectToRegistration = () => {
+            setIsLoading(false);
+            // Очищаем localStorage перед перенаправлением
+            localStorage.removeItem('current_user');
+            localStorage.removeItem('current_user_id');
+            
+            // Перенаправление на регистрацию через 2 секунды
+            setTimeout(() => {
+                navigate('/register');
+            }, 2000);
+        };
+
+        loadUserProfile();
+    }, [navigate]);
 
     // Обработчик изменения полей формы
     const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        const { name, value, type, checked } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value
+        }));
     };
 
-    // Обработчик изменения интересов
-    const handleInterestsChange = (selectedInterests) => {
-        setFormData(prev => ({ ...prev, interests: selectedInterests }));
-    };
+    // Обработчик изменения интересов с использованием useCallback для стабильности
+    const handleInterestsChange = useCallback((newInterests) => {
+        setFormData(prev => ({
+            ...prev,
+            interests: newInterests
+        }));
+    }, []);
 
     // Получение инициалов пользователя для аватара
     const getUserInitials = () => {
@@ -129,6 +160,36 @@ const Profile = ({ user, onUpdate }) => {
         });
     }, [formData.interests]);
 
+    // Отображение списка интересов пользователя
+    const renderInterests = () => {
+        if (!formData.interests) return null;
+
+        // Проверяем, является ли interests массивом
+        const interestsArray = Array.isArray(formData.interests)
+            ? formData.interests
+            : typeof formData.interests === 'string'
+                ? formData.interests.split(',').map(interest => interest.trim())
+                : [];
+
+        if (interestsArray.length === 0) {
+            return <div className="empty-interests">Интересы не указаны</div>;
+        }
+
+        return (
+            <div className="interests-list">
+                {interestsArray.map((interest, index) => {
+                    // Если интерес - это объект, используем его name, иначе сам интерес
+                    const interestName = typeof interest === 'object' ? interest.name : interest;
+                    return (
+                        <span key={index} className="interest-tag">
+                            {interestName}
+                        </span>
+                    );
+                })}
+            </div>
+        );
+    };
+
     // Обработчик отправки формы
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -136,26 +197,26 @@ const Profile = ({ user, onUpdate }) => {
         setError(null);
 
         try {
-            if (!userId) {
+            // Получаем userId из Firebase Auth или из localStorage как запасной вариант
+            const currentUser = auth.currentUser;
+            const currentUserId = currentUser?.uid || localStorage.getItem('current_user_id');
+            
+            if (!currentUserId) {
                 throw new Error('Пользователь не авторизован');
             }
 
-            // Преобразуем данные для отправки на сервер
+            // Преобразуем данные для отправки в базу данных
             const dataToUpdate = {
-                ...formData,
-                // Преобразуем массив id интересов в строку для API
-                interests: formData.interests
+                name: formData.name,
+                age: formData.age ? parseInt(formData.age) : null,
+                gender: formData.gender,
+                interests: formData.interests,
+                bio: formData.bio,
+                updatedAt: new Date().toISOString()
             };
 
-            await updateUser(userId, dataToUpdate);
-
-            // Вызываем колбэк для обновления данных пользователя в родительском компоненте
-            if (onUpdate) {
-                onUpdate({
-                    ...user,
-                    ...dataToUpdate
-                });
-            }
+            // Сохраняем в Firestore
+            await updateUser(currentUserId, dataToUpdate);
 
             // Тактильная обратная связь
             safeHapticFeedback('notification', null, 'success');
@@ -263,21 +324,56 @@ const Profile = ({ user, onUpdate }) => {
                     </div>
 
                     <div className="form-group">
+                        <label>Пол</label>
+                        <div className="gender-selector">
+                            <label className="gender-option">
+                                <input
+                                    type="radio"
+                                    name="gender"
+                                    value="male"
+                                    checked={formData.gender === 'male'}
+                                    onChange={handleChange}
+                                />
+                                <span>Мужской</span>
+                            </label>
+                            <label className="gender-option">
+                                <input
+                                    type="radio"
+                                    name="gender"
+                                    value="female"
+                                    checked={formData.gender === 'female'}
+                                    onChange={handleChange}
+                                />
+                                <span>Женский</span>
+                            </label>
+                            <label className="gender-option">
+                                <input
+                                    type="radio"
+                                    name="gender"
+                                    value="other"
+                                    checked={formData.gender === 'other'}
+                                    onChange={handleChange}
+                                />
+                                <span>Другой</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div className="form-group">
                         <label>Интересы</label>
                         <InterestSelector
                             value={formData.interests}
                             onChange={handleInterestsChange}
-                            maxSelections={5}
                         />
                     </div>
 
                     <div className="form-group">
-                        <label htmlFor="aboutMe">О себе</label>
+                        <label htmlFor="bio">О себе</label>
                         <textarea
-                            id="aboutMe"
-                            name="aboutMe"
+                            id="bio"
+                            name="bio"
                             className="tg-textarea"
-                            value={formData.aboutMe}
+                            value={formData.bio}
                             onChange={handleChange}
                             placeholder="Расскажите немного о себе"
                             rows={4}
@@ -285,7 +381,7 @@ const Profile = ({ user, onUpdate }) => {
                         />
                     </div>
 
-                    <div className="profile-actions">
+                    <div className="form-actions">
                         <button
                             type="button"
                             className="tg-button tg-button-secondary"
@@ -317,26 +413,23 @@ const Profile = ({ user, onUpdate }) => {
                                 <span className="info-value">{formData.age ? `${formData.age} лет` : 'Не указан'}</span>
                             </div>
                             <div className="info-row">
+                                <span className="info-label">Пол:</span>
+                                <span className="info-value">
+                                    {formData.gender === 'male' ? 'Мужской' :
+                                     formData.gender === 'female' ? 'Женский' :
+                                     formData.gender === 'other' ? 'Другой' : 'Не указан'}
+                                </span>
+                            </div>
+                            <div className="info-row">
                                 <span className="info-label">Интересы:</span>
                                 <div className="info-value">
-                                    {formData.interests && formData.interests.length > 0 ? (
-                                        <div className="interest-tags">
-                                            {formatInterests().map((interest, index) => (
-                                                <span key={index} className="interest-tag">
-                                                    {interest.icon && <span style={{ marginRight: '4px' }}>{interest.icon}</span>}
-                                                    {interest.name}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        'Не указаны'
-                                    )}
+                                    {renderInterests()}
                                 </div>
                             </div>
-                            {formData.aboutMe && (
+                            {formData.bio && (
                                 <div className="info-row about-me-row">
                                     <span className="info-label">О себе:</span>
-                                    <span className="info-value">{formData.aboutMe}</span>
+                                    <span className="info-value">{formData.bio}</span>
                                 </div>
                             )}
                         </div>

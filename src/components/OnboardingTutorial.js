@@ -3,7 +3,7 @@ import '../styles/OnboardingTutorial.css';
 // Добавляем импорт хука useTelegram
 import { useTelegram } from '../hooks/useTelegram';
 // Добавляем импорт необходимых функций для работы с Telegram
-import { setupMainButton, hideMainButton } from '../utils/telegramUtils';
+import { setupMainButton, hideMainButton, triggerHapticFeedback } from '../utils/telegramUtils';
 // Добавляем импорт функции для работы с чатами
 import { findRandomChat } from '../utils/chatService';
 
@@ -11,6 +11,7 @@ import { findRandomChat } from '../utils/chatService';
 const chatExamples = [
     {
         title: 'Нейтральное начало',
+        icon: '👋',
         messages: [
             "Привет! Рад(а) познакомиться. Как твои дела сегодня?",
             "Привет! Чем обычно занимаешься в свободное время?"
@@ -18,6 +19,7 @@ const chatExamples = [
     },
     {
         title: 'Начало с общих интересов',
+        icon: '🎭',
         messages: [
             "Привет! Заметил(а), что тебе нравится музыка. Какие группы слушаешь в последнее время?",
             "Привет! Вижу, ты интересуешься кино. Какой фильм порекомендуешь посмотреть?"
@@ -25,6 +27,7 @@ const chatExamples = [
     },
     {
         title: 'Начало с открытого вопроса',
+        icon: '💭',
         messages: [
             "Привет! Что-нибудь интересное случилось с тобой на этой неделе?",
             "Привет! Если бы ты мог(ла) отправиться сейчас в любую точку мира, куда бы поехал(а)?"
@@ -36,6 +39,7 @@ const chatExamples = [
 const successfulDialogues = [
     {
         title: 'Разговор о путешествиях',
+        icon: '✈️',
         dialogue: [
             { sender: 'Пользователь 1', message: 'Привет! Ты когда-нибудь путешествовал(а) за границу?' },
             { sender: 'Пользователь 2', message: 'Привет! Да, был(а) в нескольких странах Европы. А ты?' },
@@ -47,6 +51,7 @@ const successfulDialogues = [
     },
     {
         title: 'Обсуждение книг',
+        icon: '📚',
         dialogue: [
             { sender: 'Пользователь 1', message: 'Привет! Любишь читать? Какую книгу сейчас читаешь?' },
             { sender: 'Пользователь 2', message: 'Привет! Да, обожаю! Сейчас читаю "Мастер и Маргарита". А ты?' },
@@ -89,11 +94,31 @@ const quizQuestions = [
             "Привет, можешь скинуть свое фото?"
         ],
         correctAnswer: 1
+    },
+    {
+        question: "Как лучше всего поддерживать диалог с собеседником?",
+        options: [
+            "Задавать только закрытые вопросы с ответами да/нет",
+            "Переводить тему, если собеседник увлекся рассказом",
+            "Показывать искренний интерес и задавать уточняющие вопросы по теме",
+            "Отвечать односложно, чтобы собеседник больше рассказывал о себе"
+        ],
+        correctAnswer: 2
+    },
+    {
+        question: "Что делать, если разговор зашел в тупик?",
+        options: [
+            "Сразу завершить беседу",
+            "Продолжать настаивать на прежней теме",
+            "Начать новую тему, связанную с увлечениями или интересами",
+            "Молчать и ждать, пока собеседник предложит новую тему"
+        ],
+        correctAnswer: 2
     }
 ];
 
 const OnboardingTutorial = ({ onComplete }) => {
-    const { isTelegramApp: isTelegram, WebApp } = useTelegram();
+    const { isTelegramApp, WebApp } = useTelegram();
 
     const [activeStep, setActiveStep] = useState(0);
     const [answers, setAnswers] = useState({});
@@ -102,22 +127,60 @@ const OnboardingTutorial = ({ onComplete }) => {
     const [showAlert, setShowAlert] = useState(false);
     const [alertMessage, setAlertMessage] = useState('');
     const [selectedDialogue, setSelectedDialogue] = useState(null);
-    const [animationKey, setAnimationKey] = useState(0);
-    const [isDarkMode, setIsDarkMode] = useState(false);
-    const [showTooltip, setShowTooltip] = useState(true);
-    const [error, setError] = useState(null);
+    const [darkMode, setDarkMode] = useState(false);
 
-    const totalSteps = 5; // Вступление, примеры, успешные диалоги, тест, результаты
+    const steps = [
+        { title: 'Введение', icon: '📝' },
+        { title: 'Примеры', icon: '💬' },
+        { title: 'Диалоги', icon: '👥' },
+        { title: 'Тест', icon: '✅' },
+        { title: 'Результаты', icon: '🏆' }
+    ];
+
+    // Проверяем цветовую схему Telegram
+    useEffect(() => {
+        if (isTelegramApp && WebApp) {
+            setDarkMode(WebApp.colorScheme === 'dark');
+        } else {
+            // Проверка темной темы системы для веб-версии
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            setDarkMode(prefersDark);
+        }
+        
+        // Слушатель изменения темы
+        const handleThemeChange = () => {
+            if (isTelegramApp && WebApp) {
+                setDarkMode(WebApp.colorScheme === 'dark');
+            }
+        };
+        
+        if (isTelegramApp && WebApp) {
+            WebApp.onEvent('themeChanged', handleThemeChange);
+        }
+        
+        return () => {
+            if (isTelegramApp && WebApp) {
+                WebApp.offEvent('themeChanged', handleThemeChange);
+            }
+        };
+    }, [isTelegramApp, WebApp]);
 
     const handleNext = () => {
         try {
+            // Проверка ответов на тест
             if (activeStep === 3 && !quizSubmitted) {
                 if (Object.keys(answers).length < quizQuestions.length) {
                     setAlertMessage('Пожалуйста, ответьте на все вопросы теста');
                     setShowAlert(true);
+                    
+                    if (isTelegramApp) {
+                        triggerHapticFeedback('error');
+                    }
+                    
                     return;
                 }
 
+                // Подсчет правильных ответов
                 let score = 0;
                 quizQuestions.forEach((q, index) => {
                     if (answers[index] === q.correctAnswer) {
@@ -127,28 +190,32 @@ const OnboardingTutorial = ({ onComplete }) => {
 
                 setQuizScore(score);
                 setQuizSubmitted(true);
+                
+                if (isTelegramApp) {
+                    triggerHapticFeedback('success');
+                }
+            }
+            
+            // Если пытаемся перейти на страницу результатов, но тест не пройден
+            if (activeStep === 3 && !quizSubmitted) {
+                return;
             }
 
-            if (activeStep === totalSteps - 1) {
-                const container = document.querySelector('.tutorial-container');
-                if (container) {
-                    container.classList.add('fade-out');
+            // Если последний шаг - завершаем руководство
+            if (activeStep === steps.length - 1) {
+                if (isTelegramApp) {
+                    triggerHapticFeedback('medium');
                 }
-
-                setTimeout(() => {
-                    if (onComplete) {
-                        onComplete();
-                    }
-                }, 500);
+                
+                if (onComplete) {
+                    onComplete();
+                }
             } else {
-                const stepContent = document.querySelector('.step-content');
-                if (stepContent) {
-                    stepContent.classList.add('step-exit');
+                if (isTelegramApp) {
+                    triggerHapticFeedback('light');
                 }
-
-                setTimeout(() => {
-                    setActiveStep((prevStep) => prevStep + 1);
-                }, 300);
+                
+                setActiveStep((prevStep) => prevStep + 1);
             }
         } catch (error) {
             console.error("Ошибка при переходе к следующему шагу:", error);
@@ -157,20 +224,21 @@ const OnboardingTutorial = ({ onComplete }) => {
 
     const handleBack = () => {
         try {
-            const stepContent = document.querySelector('.step-content');
-            if (stepContent) {
-                stepContent.classList.add('step-exit');
+            if (isTelegramApp) {
+                triggerHapticFeedback('light');
             }
-
-            setTimeout(() => {
-                setActiveStep((prevStep) => prevStep - 1);
-            }, 300);
+            
+            setActiveStep((prevStep) => prevStep - 1);
         } catch (error) {
             console.error("Ошибка при переходе к предыдущему шагу:", error);
         }
     };
 
     const handleAnswerChange = (questionIndex, optionIndex) => {
+        if (isTelegramApp) {
+            triggerHapticFeedback('selection');
+        }
+        
         setAnswers({
             ...answers,
             [questionIndex]: optionIndex
@@ -182,309 +250,289 @@ const OnboardingTutorial = ({ onComplete }) => {
     };
 
     const showFullDialogue = (index) => {
+        if (isTelegramApp) {
+            triggerHapticFeedback('light');
+        }
+        
         setSelectedDialogue(index);
     };
 
     const closeFullDialogue = () => {
+        if (isTelegramApp) {
+            triggerHapticFeedback('light');
+        }
+        
         setSelectedDialogue(null);
     };
 
-    const toggleDarkMode = () => {
-        setIsDarkMode(!isDarkMode);
-    };
-
-    useEffect(() => {
-        try {
-            const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-            setIsDarkMode(darkModeQuery.matches);
-
-            const handleChange = (e) => {
-                setIsDarkMode(e.matches);
-            };
-
-            darkModeQuery.addEventListener('change', handleChange);
-            return () => darkModeQuery.removeEventListener('change', handleChange);
-        } catch (error) {
-            console.error("Ошибка при настройке темного режима:", error);
+    // Выбор конкретного шага руководства
+    const goToStep = (stepIndex) => {
+        if (isTelegramApp) {
+            triggerHapticFeedback('light');
         }
-    }, []);
-
-    useEffect(() => {
-        try {
-            const timer = setTimeout(() => {
-                setAnimationKey(prevKey => prevKey + 1);
-            }, 50);
-
-            const container = document.querySelector('.tutorial-container');
-            if (container) {
-                container.style.setProperty('--active-step-index', activeStep.toString());
-            }
-
-            return () => clearTimeout(timer);
-        } catch (error) {
-            console.error("Ошибка при обновлении анимаций:", error);
-        }
-    }, [activeStep]);
-
-    useEffect(() => {
-        const tooltipTimer = setTimeout(() => {
-            setShowTooltip(false);
-        }, 5000);
-
-        return () => clearTimeout(tooltipTimer);
-    }, []);
-
-    useEffect(() => {
-        if (activeStep === 3) {
-            const timer = setTimeout(() => {
-                try {
-                    const activeQuestions = document.querySelectorAll('.quiz-question');
-                    if (activeQuestions.length > 0) {
-                        const unansweredIndex = quizQuestions.findIndex((_, index) => answers[index] === undefined);
-                        if (unansweredIndex !== -1 && activeQuestions[unansweredIndex]) {
-                            activeQuestions[unansweredIndex].scrollIntoView({
-                                behavior: 'smooth',
-                                block: 'center'
-                            });
-                        }
-                    }
-                } catch (error) {
-                    console.error("Ошибка при прокрутке:", error);
-                }
-            }, 500);
-
-            return () => clearTimeout(timer);
-        }
-    }, [activeStep, answers]);
-
-    useEffect(() => {
-        if (isTelegram) {
-            const buttonText = activeStep === totalSteps - 1 ? 'Завершить' : 'Далее';
-            setupMainButton(buttonText, handleNext);
-
-            return () => {
-                hideMainButton();
-            };
-        }
-    }, [activeStep, totalSteps, isTelegram]);
-
-    // Добавляем новый эффект для настройки прокрутки контента
-    useEffect(() => {
-        // Получаем контейнер с содержимым текущего шага
-        const stepContent = document.querySelector('.step-content');
-        if (stepContent) {
-            // Сбрасываем прокрутку при смене шага
-            stepContent.scrollTop = 0;
-        }
-    }, [activeStep]);
-
-    const handleFindRandomChat = async () => {
-        try {
-            const currentUserId = localStorage.getItem('current_user_id');
-
-            if (!currentUserId) {
-                setAlertMessage('Для поиска собеседника необходимо авторизоваться');
-                setShowAlert(true);
-                return;
-            }
-
-            const chatId = await findRandomChat(currentUserId);
-
-            if (chatId) {
-                window.location.href = `/chat/${chatId}`;
-            } else {
-                setAlertMessage('Вы добавлены в очередь поиска. Пожалуйста, подождите, пока найдется собеседник');
-                setShowAlert(true);
-            }
-        } catch (error) {
-            console.error('Ошибка при поиске собеседника:', error);
-            setAlertMessage(error.message || 'Произошла ошибка при поиске собеседника');
+        
+        // Проверка доступа к вкладке "Результаты"
+        if (stepIndex === 4 && !quizSubmitted) {
+            setAlertMessage('Пожалуйста, сначала пройдите тест');
             setShowAlert(true);
+            
+            if (isTelegramApp) {
+                triggerHapticFeedback('error');
+            }
+            return;
         }
+        
+        setActiveStep(stepIndex);
     };
 
-    const renderStepContent = (step) => {
-        switch (step) {
-            case 0:
+    // Отрисовка шагов навигации
+    const renderSteps = () => {
+        return (
+            <div className="tg-tutorial-tabs">
+                {steps.map((step, index) => (
+                    <div 
+                        key={index}
+                        className={`tg-tutorial-tab ${activeStep === index ? 'active' : ''} ${index === 4 && !quizSubmitted ? 'disabled' : ''}`}
+                        onClick={() => goToStep(index)}
+                    >
+                        {step.title}
+                    </div>
+                ))}
+                <div className="tg-tab-indicator" style={{ left: `${(activeStep / steps.length) * 100}%` }}></div>
+            </div>
+        );
+    };
+
+    // Отрисовка контента для текущего шага
+    const renderStepContent = () => {
+        switch (activeStep) {
+            case 0: // Введение
                 return (
-                    <div className="step-content">
-                        <h2>Руководство по общению в анонимном чате</h2>
-                        <p>
-                            Добро пожаловать в наш анонимный чат! Это руководство поможет вам начать общение
-                            и сделать его комфортным и приятным для всех участников.
+                    <div className="tg-step-content">
+                        <div className="tg-step-header">
+                            <div className="tg-step-icon">{steps[activeStep].icon}</div>
+                            <h2>Добро пожаловать в Анонимный чат!</h2>
+                        </div>
+                        
+                        <p className="tg-step-description">
+                            Это краткое руководство поможет вам разобраться, как начать общение и найти интересных собеседников.
                         </p>
-                        <p>
-                            Анонимный чат — это возможность познакомиться с новыми людьми,
-                            не раскрывая личную информацию. Но даже при анонимном общении
-                            важно соблюдать уважение и этикет.
-                        </p>
-                        <p>
-                            В этом руководстве мы рассмотрим примеры удачного начала разговора,
-                            примеры успешных диалогов и проверим ваши знания с помощью небольшого теста.
-                        </p>
+                        
+                        <div className="tg-content-card">
+                            <p>
+                                <strong>Анонимный чат</strong> — это сервис, который позволяет вам общаться с незнакомыми людьми по всему миру, сохраняя при этом вашу анонимность.
+                            </p>
+                            <p>
+                                Вы можете находить собеседников по интересам, вести как короткие, так и длительные беседы без необходимости раскрывать свою личность.
+                            </p>
+                        </div>
+                        
+                        <div className="tg-content-card">
+                            <p>
+                                <strong>Как это работает:</strong>
+                            </p>
+                            <p>
+                                1. Нажмите кнопку "Найти собеседника" на главном экране
+                            </p>
+                            <p>
+                                2. Дождитесь, пока система найдет вам подходящего собеседника
+                            </p>
+                            <p>
+                                3. Начните общение и наслаждайтесь беседой!
+                            </p>
+                        </div>
+                        
+                        <div className="tg-tip-block">
+                            <div className="tg-tip-icon">💡</div>
+                            <p>Используйте навигационные кнопки внизу для перехода между этапами руководства.</p>
+                        </div>
                     </div>
                 );
 
-            case 1:
+            case 1: // Примеры
                 return (
-                    <div className="step-content">
-                        <h2>Примеры начала общения</h2>
-                        <p>
-                            Начало разговора часто определяет его дальнейший ход. Вот несколько примеров,
-                            как можно начать общение:
+                    <div className="tg-step-content">
+                        <div className="tg-step-header">
+                            <div className="tg-step-icon">{steps[activeStep].icon}</div>
+                            <h2>Примеры начала общения</h2>
+                        </div>
+                        
+                        <p className="tg-step-description">
+                            Начать разговор иногда бывает сложно. Вот несколько примеров, которые помогут вам начать интересный диалог:
                         </p>
-
-                        <div className="examples-container">
+                        
+                        <div className="tg-examples-grid">
                             {chatExamples.map((example, index) => (
-                                <div className="example-card" key={index}>
-                                    <h3>{example.title}</h3>
-                                    {example.messages.map((message, msgIndex) => (
-                                        <div className="chat-example" key={msgIndex}>
-                                            <p>{message}</p>
-                                        </div>
-                                    ))}
+                                <div className="tg-example-card" key={index}>
+                                    <div className="tg-example-header">
+                                        <div className="tg-example-icon">{example.icon}</div>
+                                        <h3>{example.title}</h3>
+                                    </div>
+                                    <div className="tg-example-content">
+                                        {example.messages.map((message, msgIndex) => (
+                                            <div className="tg-example-message" key={msgIndex}>
+                                                <div className="tg-message-bubble">{message}</div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             ))}
                         </div>
-
-                        <div className="recommendations">
-                            <h3>Рекомендации:</h3>
-                            <ul>
-                                <li>Начинайте с приветствия и открытого вопроса</li>
-                                <li>Проявляйте искренний интерес к собеседнику</li>
-                                <li>Избегайте слишком личных вопросов в начале разговора</li>
-                                <li>Будьте вежливы и уважительны</li>
-                                <li>Дайте собеседнику время на ответ</li>
-                            </ul>
+                        
+                        <div className="tg-tip-block">
+                            <div className="tg-tip-icon">💡</div>
+                            <p>Задавайте открытые вопросы, которые требуют развернутого ответа, а не просто "да" или "нет".</p>
                         </div>
                     </div>
                 );
 
-            case 2:
+            case 2: // Диалоги
                 return (
-                    <div className="step-content">
-                        <h2>Примеры успешных диалогов</h2>
-                        <p>
-                            Посмотрите, как могут развиваться интересные диалоги между собеседниками:
+                    <div className="tg-step-content">
+                        <div className="tg-step-header">
+                            <div className="tg-step-icon">{steps[activeStep].icon}</div>
+                            <h2>Примеры успешных диалогов</h2>
+                        </div>
+                        
+                        <p className="tg-step-description">
+                            Посмотрите, как могут развиваться интересные беседы. Нажмите на любой пример, чтобы увидеть полный диалог:
                         </p>
-
-                        <div className="successful-dialogues">
+                        
+                        <div className="tg-dialogues-list">
                             {successfulDialogues.map((dialogue, index) => (
-                                <div className="dialogue-card" key={index}>
-                                    <h3>{dialogue.title}</h3>
-                                    <div className="dialogue-preview">
-                                        {dialogue.dialogue.slice(0, 2).map((msg, msgIndex) => (
-                                            <div className={`message ${msg.sender === 'Пользователь 1' ? 'user1' : 'user2'}`} key={msgIndex}>
-                                                <div className="sender">{msg.sender}:</div>
-                                                <div className="message-text">{msg.message}</div>
-                                            </div>
-                                        ))}
+                                <div 
+                                    className="tg-dialogue-card" 
+                                    key={index}
+                                    onClick={() => showFullDialogue(index)}
+                                >
+                                    <div className="tg-dialogue-icon">{dialogue.icon}</div>
+                                    <div className="tg-dialogue-info">
+                                        <h3>{dialogue.title}</h3>
+                                        <p>{dialogue.dialogue.length} сообщений · Нажмите, чтобы просмотреть</p>
                                     </div>
-                                    <button className="view-btn" onClick={() => showFullDialogue(index)}>
-                                        Посмотреть полный диалог
-                                    </button>
+                                    <div className="tg-dialogue-arrow">→</div>
                                 </div>
                             ))}
                         </div>
+                        
+                        <div className="tg-tip-block">
+                            <div className="tg-tip-icon">💡</div>
+                            <p>Хорошая беседа — это обмен мнениями и вопросами. Старайтесь поддерживать баланс между рассказом о себе и проявлением интереса к собеседнику.</p>
+                        </div>
+                    </div>
+                );
 
-                        {selectedDialogue !== null && (
-                            <div className="dialogue-modal">
-                                <div className="dialogue-content">
-                                    <h3>{successfulDialogues[selectedDialogue].title}</h3>
-                                    <div className="full-dialogue">
-                                        {successfulDialogues[selectedDialogue].dialogue.map((msg, msgIndex) => (
-                                            <div className={`message ${msg.sender === 'Пользователь 1' ? 'user1' : 'user2'}`} key={msgIndex}>
-                                                <div className="sender">{msg.sender}:</div>
-                                                <div className="message-text">{msg.message}</div>
+            case 3: // Тест
+                return (
+                    <div className="tg-step-content">
+                        <div className="tg-step-header">
+                            <div className="tg-step-icon">{steps[activeStep].icon}</div>
+                            <h2>Проверьте свои знания</h2>
+                        </div>
+                        
+                        <p className="tg-step-description">
+                            Ответьте на несколько вопросов, чтобы проверить, как хорошо вы усвоили материал:
+                        </p>
+                        
+                        <div className="tg-quiz-container">
+                            {quizQuestions.map((question, qIndex) => (
+                                <div className="tg-quiz-question" key={qIndex}>
+                                    <div className="tg-question-text">
+                                        <span className="tg-question-number">{qIndex + 1}.</span> {question.question}
+                                    </div>
+                                    <div className="tg-options-list">
+                                        {question.options.map((option, oIndex) => (
+                                            <div 
+                                                className={`tg-option ${answers[qIndex] === oIndex ? 'selected' : ''} ${
+                                                    quizSubmitted 
+                                                        ? (oIndex === question.correctAnswer ? 'correct' : answers[qIndex] === oIndex ? 'incorrect' : '') 
+                                                        : ''
+                                                }`}
+                                                key={oIndex}
+                                                onClick={() => !quizSubmitted && handleAnswerChange(qIndex, oIndex)}
+                                            >
+                                                <div className="tg-option-marker">
+                                                    {quizSubmitted && oIndex === question.correctAnswer && '✓'}
+                                                    {quizSubmitted && answers[qIndex] === oIndex && oIndex !== question.correctAnswer && '✗'}
+                                                </div>
+                                                <div className="tg-option-text">{option}</div>
                                             </div>
                                         ))}
                                     </div>
-                                    <button className="close-btn" onClick={closeFullDialogue}>Закрыть</button>
+                                </div>
+                            ))}
+                        </div>
+                        
+                        {quizSubmitted && (
+                            <div className={`tg-quiz-result ${quizScore === quizQuestions.length ? 'perfect' : ''}`}>
+                                <div className="tg-quiz-score-icon">
+                                    {quizScore === quizQuestions.length ? '🏆' : '📝'}
+                                </div>
+                                <div className="tg-quiz-score">
+                                    <h3>Ваш результат:</h3>
+                                    <div className="tg-score-text">{quizScore} из {quizQuestions.length}</div>
+                                    <p className="tg-score-message">
+                                        {quizScore === quizQuestions.length 
+                                            ? 'Отлично! Вы полностью усвоили материал.' 
+                                            : quizScore > quizQuestions.length / 2 
+                                                ? 'Хороший результат. Обратите внимание на вопросы с ошибками.' 
+                                                : 'Рекомендуем повторить материал и попробовать снова.'}
+                                    </p>
                                 </div>
                             </div>
                         )}
-
-                        <div className="dialogue-tips">
-                            <h3>Что делает эти диалоги успешными:</h3>
-                            <ul>
-                                <li>Собеседники задают открытые вопросы</li>
-                                <li>Они проявляют интерес к ответам друг друга</li>
-                                <li>Делятся своим опытом и мнениями</li>
-                                <li>Разговор развивается естественно, от общего к более конкретному</li>
-                                <li>Оба участника вносят вклад в беседу</li>
-                            </ul>
-                        </div>
                     </div>
                 );
 
-            case 3:
+            case 4: // Результаты
                 return (
-                    <div className="step-content">
-                        <h2>Проверьте свои знания</h2>
-                        <p>
-                            Пройдите небольшой тест, чтобы проверить, как хорошо вы усвоили материал:
-                        </p>
-
-                        <div className="quiz-container">
-                            {quizQuestions.map((q, index) => (
-                                <div className="quiz-question" key={index}>
-                                    <h3>{index + 1}. {q.question}</h3>
-                                    <div className="options-container">
-                                        {q.options.map((option, optionIndex) => (
-                                            <div className="option" key={optionIndex}>
-                                                <input
-                                                    type="radio"
-                                                    id={`q${index}o${optionIndex}`}
-                                                    name={`question${index}`}
-                                                    value={optionIndex}
-                                                    checked={answers[index] === optionIndex}
-                                                    onChange={() => handleAnswerChange(index, optionIndex)}
-                                                    disabled={quizSubmitted}
-                                                />
-                                                <label htmlFor={`q${index}o${optionIndex}`}>{option}</label>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    {quizSubmitted && (
-                                        <div className={`result ${answers[index] === q.correctAnswer ? 'correct' : 'incorrect'}`}>
-                                            {answers[index] === q.correctAnswer
-                                                ? '✓ Правильно!'
-                                                : `✗ Неверно. Правильный ответ: ${q.options[q.correctAnswer]}`}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                    <div className="tg-step-content">
+                        <div className="tg-step-header">
+                            <div className="tg-step-icon">{steps[activeStep].icon}</div>
+                            <h2>Готовы к общению!</h2>
                         </div>
-                    </div>
-                );
-
-            case 4:
-                return (
-                    <div className="step-content">
-                        <h2>Результаты теста</h2>
-                        <div className="results-container">
-                            <div className="score-card">
-                                <h3>Ваш результат: {quizScore} из {quizQuestions.length}</h3>
-                                <p>
-                                    {quizScore === quizQuestions.length
-                                        ? 'Отлично! Вы готовы к общению в анонимном чате.'
-                                        : quizScore >= quizQuestions.length / 2
-                                            ? 'Хороший результат! Обратите внимание на ошибки и продолжайте практиковаться.'
-                                            : 'Рекомендуем еще раз ознакомиться с материалами и повторить тест.'}
+                        
+                        <div className="tg-completion-content">
+                            <div className="tg-completion-icon">🎉</div>
+                            
+                            <p>
+                                Поздравляем! Вы прошли руководство по использованию Анонимного чата.
+                                Теперь вы знаете основы, которые помогут вам находить интересных собеседников и вести увлекательные беседы.
+                            </p>
+                            
+                            <div className="tg-quiz-result-summary">
+                                <h3>Результат теста:</h3>
+                                <div className="tg-score-text">{quizScore} из {quizQuestions.length} ({Math.round(quizScore / quizQuestions.length * 100)}%)</div>
+                                <p className="tg-score-message">
+                                    {quizScore === quizQuestions.length 
+                                        ? 'Отлично! Вы полностью усвоили материал.' 
+                                        : quizScore > quizQuestions.length / 2 
+                                            ? 'Хороший результат. Возможно, стоит повторить некоторые темы.' 
+                                            : 'Рекомендуем повторить материал и попробовать тест снова.'}
                                 </p>
                             </div>
-                        </div>
-                        <p>
-                            Теперь вы знаете, как начинать общение в анонимном чате. Желаем вам приятных и интересных бесед!
-                        </p>
-                        <div className="final-tips">
-                            <h3>Помните о главных принципах:</h3>
-                            <ul>
-                                <li>Уважение к собеседнику</li>
-                                <li>Интерес к разговору</li>
-                                <li>Позитивный настрой</li>
-                                <li>Терпение</li>
-                            </ul>
+                            
+                            <div className="tg-key-points">
+                                <h3>Ключевые моменты:</h3>
+                                <ul>
+                                    <li>
+                                        <div className="tg-point-icon">👤</div>
+                                        Уважайте собеседника
+                                    </li>
+                                    <li>
+                                        <div className="tg-point-icon">❓</div>
+                                        Задавайте открытые вопросы
+                                    </li>
+                                    <li>
+                                        <div className="tg-point-icon">👂</div>
+                                        Проявляйте искренний интерес
+                                    </li>
+                                </ul>
+                            </div>
+                            
+                            <p className="tg-final-message">
+                                Желаем вам приятных и интересных бесед!
+                            </p>
                         </div>
                     </div>
                 );
@@ -494,71 +542,79 @@ const OnboardingTutorial = ({ onComplete }) => {
         }
     };
 
+    // Определение классов для контейнера
+    const containerClasses = `tg-tutorial-container ${darkMode ? 'dark-mode' : 'light-mode'}`;
+
     return (
-        <div className={`tutorial-container ${isDarkMode ? 'dark-mode' : ''}`} data-step={activeStep} key={animationKey}>
-            <button
-                className="theme-toggle"
-                onClick={toggleDarkMode}
-                title={isDarkMode ? "Переключить на светлую тему" : "Переключить на темную тему"}>
-                {isDarkMode ? "☀️" : "🌙"}
-            </button>
-
-            {showTooltip && activeStep === 0 && (
-                <div className="navigation-tooltip">
-                    <p>Используйте кнопки "Далее" и "Назад" для навигации</p>
-                    <button className="tooltip-close" onClick={() => setShowTooltip(false)}>
-                        ✕
-                    </button>
-                </div>
-            )}
-
-            <div className="stepper">
-                <div className={`step ${activeStep === 0 ? 'active' : ''}`}>Введение</div>
-                <div className={`step ${activeStep === 1 ? 'active' : ''}`}>Примеры</div>
-                <div className={`step ${activeStep === 2 ? 'active' : ''}`}>Диалоги</div>
-                <div className={`step ${activeStep === 3 ? 'active' : ''}`}>Тест</div>
-                <div className={`step ${activeStep === 4 ? 'active' : ''}`}>Результаты</div>
+        <div className={containerClasses}>
+            {/* Навигационные табы */}
+            {renderSteps()}
+            
+            {/* Содержимое текущего шага */}
+            <div className="tg-step-container">
+                {renderStepContent()}
             </div>
-
-            <div className="tutorial-content-wrapper">
-                {/* Контейнер с прокруткой для содержимого шагов */}
-                <div className="scrollable-content">
-                    {renderStepContent(activeStep)}
-                </div>
-
-                {/* Выносим кнопки в отдельный контейнер вне области прокрутки */}
-                <div className="button-container">
-                    <button
-                        className="btn back-btn"
-                        disabled={activeStep === 0}
-                        onClick={handleBack}
-                    >
-                        Назад
-                    </button>
-                    <button
-                        className="btn next-btn"
-                        onClick={handleNext}
-                    >
-                        {activeStep === totalSteps - 1 ? 'Завершить' : 'Далее'}
-                    </button>
-                </div>
-            </div>
-
-            <button
-                className="share-button"
-                onClick={handleFindRandomChat}
-            >
-                Найти собеседника
-            </button>
-
+            
+            {/* Модальное окно с предупреждением */}
             {showAlert && (
-                <div className="alert">
-                    <div className="alert-content">
-                        <p>{alertMessage}</p>
-                        <button onClick={handleAlertClose}>ОК</button>
+                <div className="tg-alert">
+                    <div className="tg-alert-content">
+                        <div className="tg-alert-icon">⚠️</div>
+                        <div className="tg-alert-message">{alertMessage}</div>
+                        <button className="tg-alert-close" onClick={handleAlertClose}>
+                            OK
+                        </button>
                     </div>
                 </div>
             )}
+            
+            {/* Модальное окно с диалогом */}
+            {selectedDialogue !== null && (
+                <div className="tg-dialogue-modal">
+                    <div className="tg-dialogue-modal-content">
+                        <div className="tg-dialogue-modal-header">
+                            <h3>{successfulDialogues[selectedDialogue].title}</h3>
+                            <button className="tg-dialogue-close-btn" onClick={closeFullDialogue}>✕</button>
+                        </div>
+                        <div className="tg-dialogue-messages">
+                            {successfulDialogues[selectedDialogue].dialogue.map((msg, i) => (
+                                <div key={i} className={`tg-dialogue-message ${i % 2 === 0 ? 'user1' : 'user2'}`}>
+                                    <div className="tg-message-sender">{msg.sender}</div>
+                                    <div className="tg-message-bubble">{msg.message}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* Кнопки навигации */}
+            <div className="tg-navigation-buttons">
+                <button
+                    className="tg-nav-button tg-back-button"
+                    onClick={handleBack}
+                    disabled={activeStep === 0}
+                >
+                    Назад
+                </button>
+                
+                <div className="tg-progress-dots">
+                    {steps.map((_, index) => (
+                        <div 
+                            key={index}
+                            className={`tg-progress-dot ${activeStep === index ? 'active' : ''}`}
+                            onClick={() => goToStep(index)}
+                        ></div>
+                    ))}
+                </div>
+                
+                <button
+                    className="tg-nav-button tg-next-button"
+                    onClick={handleNext}
+                >
+                    {activeStep === steps.length - 1 ? 'Завершить' : 'Далее'}
+                </button>
+            </div>
         </div>
     );
 };

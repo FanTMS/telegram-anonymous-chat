@@ -1,16 +1,64 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase';
 import '../styles/Home.css';
+import AdminPanelWidget from '../components/AdminPanelWidget';
 
-const Home = ({ user }) => {
+const Home = () => {
     const navigate = useNavigate();
     const [isLoaded, setIsLoaded] = useState(false);
+    const [userData, setUserData] = useState(null);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
-        // Устанавливаем флаг загрузки страницы
-        setIsLoaded(true);
-    }, []);
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                try {
+                    // Fetch user data from Firestore
+                    const userDocRef = doc(db, 'users', user.uid);
+                    const userDoc = await getDoc(userDocRef);
+                    
+                    if (userDoc.exists()) {
+                        // Пользователь найден в базе данных
+                        setUserData({
+                            uid: user.uid,
+                            displayName: userDoc.data().displayName || user.displayName,
+                            ...userDoc.data()
+                        });
+                    } else {
+                        // Пользователь не найден в базе данных - перенаправляем на регистрацию
+                        console.error('Пользователь не найден в базе данных:', user.uid);
+                        
+                        // Очищаем данные перед переходом
+                        localStorage.removeItem('current_user');
+                        localStorage.removeItem('current_user_id');
+                        
+                        // Выходим из текущей сессии
+                        await signOut(auth);
+                        
+                        // Показываем ошибку и перенаправляем на регистрацию
+                        setError('Ваш профиль не найден. Необходимо зарегистрироваться.');
+                        setTimeout(() => {
+                            navigate('/register');
+                        }, 2000);
+                    }
+                } catch (error) {
+                    console.error('Error fetching user data:', error);
+                    setError('Ошибка загрузки данных пользователя');
+                }
+            } else {
+                // Пользователь не аутентифицирован
+                setUserData(null);
+                navigate('/register');
+            }
+            setIsLoaded(true);
+        });
+        
+        return () => unsubscribe();
+    }, [navigate]);
 
     const handleNavigate = (path) => {
         navigate(path);
@@ -44,6 +92,17 @@ const Home = ({ user }) => {
         return <div className="home-loading">Загрузка...</div>;
     }
 
+    if (error) {
+        return (
+            <div className="home-error">
+                <div className="error-icon">⚠️</div>
+                <h2>Ошибка</h2>
+                <p>{error}</p>
+                <p>Перенаправление на страницу регистрации...</p>
+            </div>
+        );
+    }
+
     return (
         <div className="home-container">
             <motion.div
@@ -52,9 +111,12 @@ const Home = ({ user }) => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
             >
-                <h1>Привет{user?.displayName ? `, ${user.displayName}` : ''}!</h1>
+                <h1>Привет{userData?.displayName ? `, ${userData.displayName}` : ''}!</h1>
                 <p>Добро пожаловать в анонимный чат Telegram</p>
             </motion.div>
+
+            {/* Добавляем виджет администратора */}
+            <AdminPanelWidget />
 
             <motion.div
                 className="features-section"

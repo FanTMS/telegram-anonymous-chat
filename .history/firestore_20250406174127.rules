@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Разрешаем доступ к системным коллекциям для всех запросов
+    match /{systemCollection}/{document=**} {
+      allow read, write: if systemCollection == '_test_connection';
+    }
+    
+    // Доступ к профилям пользователей
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if true;  // Разрешаем создание пользователей без авторизации
+      allow delete: if false;
+    }
+    
+    // Доступ к чатам
+    match /chats/{chatId} {
+      allow read, write: if true;  // Для упрощения разработки
+    }
+    
+    // Доступ к сообщениям
+    match /messages/{messageId} {
+      allow read, write: if true;  // Для упрощения разработки
+    }
+    
+    // Доступ к интересам
+    match /interests/{interestId} {
+      allow read, write: if true;  // Для упрощения разработки
+    }
+    
+    // Доступ к очереди поиска
+    match /searchQueue/{docId} {
+      allow read, write: if true;  // Для упрощения разработки
+    }
+    
+    // Доступ к группам
+    match /groups/{groupId} {
+      allow read, write: if true;  // Для упрощения разработки
+    }
+    
+    // Доступ к сообщениям групп
+    match /groupMessages/{messageId} {
+      allow read, write: if true;  // Для упрощения разработки
+    }
+  }
+}

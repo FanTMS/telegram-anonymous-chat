@@ -1,582 +1,703 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import WebApp from '@twa-dev/sdk';
-import { isBrowser } from '../utils/browserUtils';
-import { troubleshootCollection } from '../utils/firebaseUtils';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { signInAnonymously, updateProfile } from 'firebase/auth';
+import { collection, getDocs, query, limit, doc, setDoc } from 'firebase/firestore';
+import { motion, AnimatePresence } from 'framer-motion';
+import { auth, db } from '../firebase';
+import { createOrUpdateUser } from '../utils/userService';
+import InterestSelector from './InterestSelector';
+import { safeHapticFeedback, safeShowPopup, getWebAppTheme } from '../utils/telegramWebAppUtils';
 import '../styles/RegistrationForm.css';
 
-// Интересы для выбора пользователем
-const INTERESTS = [
+// Предопределенные интересы для выбора
+const PREDEFINED_INTERESTS = [
     { id: 'music', name: 'Музыка', icon: '🎵' },
-    { id: 'movies', name: 'Фильмы', icon: '🎬' },
-    { id: 'travel', name: 'Путешествия', icon: '✈️' },
     { id: 'sports', name: 'Спорт', icon: '⚽' },
-    { id: 'art', name: 'Искусство', icon: '🎨' },
     { id: 'gaming', name: 'Игры', icon: '🎮' },
-    { id: 'cooking', name: 'Готовка', icon: '🍳' },
-    { id: 'literature', name: 'Литература', icon: '📚' },
-    { id: 'technology', name: 'Технологии', icon: '💻' },
-    { id: 'fashion', name: 'Мода', icon: '👗' },
+    { id: 'movies', name: 'Кино', icon: '🎬' },
+    { id: 'books', name: 'Книги', icon: '📚' },
+    { id: 'travel', name: 'Путешествия', icon: '✈️' },
+    { id: 'cooking', name: 'Кулинария', icon: '🍳' },
+    { id: 'tech', name: 'Технологии', icon: '💻' },
+    { id: 'art', name: 'Искусство', icon: '🎨' },
+    { id: 'nature', name: 'Природа', icon: '🌲' },
     { id: 'science', name: 'Наука', icon: '🔬' },
-    { id: 'nature', name: 'Природа', icon: '🌿' },
-    { id: 'photography', name: 'Фотография', icon: '📸' },
-    { id: 'business', name: 'Бизнес', icon: '💼' },
-    { id: 'health', name: 'Здоровье', icon: '🧘‍♂️' },
-    { id: 'language', name: 'Языки', icon: '🗣️' },
-    { id: 'dance', name: 'Танцы', icon: '💃' },
-    { id: 'astrology', name: 'Астрология', icon: '✨' },
+    { id: 'history', name: 'История', icon: '🏛️' }
 ];
 
-// Генерация случайного никнейма
-const generateNickname = () => {
-    const adjectives = [
-        'Весёлый', 'Умный', 'Добрый', 'Мечтательный', 'Загадочный',
-        'Элегантный', 'Креативный', 'Энергичный', 'Задумчивый', 'Волшебный'
-    ];
+// Адъективы и существительные для генерации псевдонима
+const adjectives = [
+    'Веселый', 'Умный', 'Смелый', 'Добрый', 'Тихий', 'Громкий', 'Быстрый', 'Медленный',
+    'Сильный', 'Мягкий', 'Яркий', 'Темный', 'Креативный', 'Мудрый', 'Находчивый'
+];
 
-    const nouns = [
-        'Странник', 'Мыслитель', 'Художник', 'Искатель', 'Путешественник',
-        'Исследователь', 'Мечтатель', 'Наблюдатель', 'Творец', 'Философ'
-    ];
+const nouns = [
+    'Путешественник', 'Исследователь', 'Мечтатель', 'Художник', 'Музыкант', 'Писатель',
+    'Программист', 'Фотограф', 'Философ', 'Математик', 'Пекарь', 'Пилот', 'Архитектор'
+];
 
+// Функция для генерации случайного никнейма
+const generateRandomNickname = () => {
     const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
     const noun = nouns[Math.floor(Math.random() * nouns.length)];
-
-    return `${adjective}_${noun}${Math.floor(Math.random() * 999)}`;
+    const randomNumber = Math.floor(Math.random() * 1000);
+    return `${adjective}_${noun}${randomNumber}`;
 };
 
-const RegistrationForm = ({ onSubmit, telegramUser = null, isDevelopment = false }) => {
-    const [currentStep, setCurrentStep] = useState(0);
+const RegistrationForm = ({ telegramUser = null }) => {
+    // Текущий шаг регистрации
+    const [currentStep, setCurrentStep] = useState(1);
+    const [totalSteps] = useState(3);
+    
+    // Общие данные формы 
     const [formData, setFormData] = useState({
         name: '',
         age: '',
+        gender: 'not_specified',
         selectedInterests: [],
         aboutMe: ''
     });
-    const [errors, setErrors] = useState({});
+    
+    // Состояния процесса регистрации
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [_showSuccess, setShowSuccess] = useState(false);
-
-    // Refs для полей ввода
-    const nameInputRef = useRef(null);
-    const ageInputRef = useRef(null);
-    const aboutMeInputRef = useRef(null);
-
-    // Константы для шагов
-    const totalSteps = 3;
-    const _isFirstStep = currentStep === 0;
-    const isLastStep = currentStep === totalSteps - 1;
-
-    // Переход к следующему шагу
-    const goToNextStep = () => {
-        if (currentStep < totalSteps - 1) {
-            setCurrentStep(prev => prev + 1);
+    const [success, setSuccess] = useState(false);
+    const [error, setError] = useState(null);
+    const [theme, setTheme] = useState('light');
+    
+    // Валидация
+    const [validationErrors, setValidationErrors] = useState({});
+    
+    // Навигация
+    const navigate = useNavigate();
+    
+    // Ссылки на элементы для анимации прокрутки
+    const formContainerRef = useRef(null);
+    
+    // Добавляем ссылку для отслеживания активного поля ввода
+    const activeInputRef = useRef(null);
+    const inputRefs = useRef({
+        name: null,
+        age: null,
+        aboutMe: null
+    });
+    
+    // Определение темы Telegram
+    useEffect(() => {
+        setTheme(getWebAppTheme());
+    }, []);
+    
+    // Проверка коллекций в Firebase
+    useEffect(() => {
+        const checkCollections = async () => {
+            try {
+                const collections = ['users', 'chats', 'messages', 'interests', 'searchQueue'];
+                
+                for (const collName of collections) {
+                    const collRef = collection(db, collName);
+                    try {
+                        // Пытаемся получить документы из коллекции
+                        await getDocs(query(collRef, limit(1)));
+                    } catch (error) {
+                        console.error(`Ошибка при проверке коллекции ${collName}:`, error);
+                        // Пытаемся создать коллекцию, если она не существует
+                        try {
+                            // Создаем инициализирующий документ для создания коллекции
+                            const initDocRef = doc(db, collName, '_init');
+                            await setDoc(initDocRef, {
+                                system: true,
+                                createdAt: new Date().toISOString(),
+                                description: `Initialization document for ${collName} collection`
+                            });
+                            console.log(`Коллекция ${collName} была создана`);
+                        } catch (createError) {
+                            console.error(`Не удалось создать коллекцию ${collName}:`, createError);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка при проверке коллекций:', error);
+            }
+        };
+        
+        checkCollections();
+    }, []);
+    
+    // Прокрутка вверх при смене шага
+    useEffect(() => {
+        if (formContainerRef.current) {
+            formContainerRef.current.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
         }
-    };
-
-    // Переход к предыдущему шагу
-    const goToPreviousStep = () => {
-        if (currentStep > 0) {
-            setCurrentStep(prev => prev - 1);
-        }
-    };
-
-    // Обработка изменений в форме
-    const handleChange = (e) => {
+    }, [currentStep]);
+    
+    // Обработчики изменения полей формы
+    const handleChange = useCallback((e) => {
         const { name, value } = e.target;
+        
+        // Сохраняем активный элемент перед обновлением состояния
+        activeInputRef.current = {
+            name,
+            selectionStart: e.target.selectionStart,
+            selectionEnd: e.target.selectionEnd
+        };
+        
         setFormData(prev => ({
             ...prev,
             [name]: value
         }));
-        // Очищаем ошибку для данного поля при изменении
-        if (errors[name]) {
-            setErrors(prev => ({ ...prev, [name]: undefined }));
+        
+        // Сбрасываем ошибку валидации при изменении поля
+        if (validationErrors[name]) {
+            setValidationErrors(prev => ({
+                ...prev,
+                [name]: null
+            }));
         }
-    };
-
-    // Для компонента с вводом возраста можно добавить дополнительные ограничения
-    const handleAgeInput = (e) => {
-        // Ограничиваем ввод только цифрами
-        const value = e.target.value.replace(/\D/g, '');
-
-        // Ограничиваем максимальную длину значения
-        const limitedValue = value.slice(0, 3);
-
+    }, [validationErrors]);
+    
+    const handleInterestsChange = useCallback((selectedInterests) => {
         setFormData(prev => ({
             ...prev,
-            age: limitedValue
+            selectedInterests
         }));
-
-        // Очищаем ошибку для данного поля при изменении
-        if (errors.age) {
-            setErrors(prev => ({ ...prev, age: undefined }));
-        }
-    };
-
-    // Обработка выбора интересов
-    const handleInterestsChange = (interestId) => {
-        setFormData(prev => {
-            const newSelectedInterests = [...prev.selectedInterests];
-
-            if (newSelectedInterests.includes(interestId)) {
-                return {
-                    ...prev,
-                    selectedInterests: newSelectedInterests.filter(id => id !== interestId)
-                };
-            } else {
-                // Ограничиваем до 5 интересов
-                if (newSelectedInterests.length < 5) {
-                    return {
-                        ...prev,
-                        selectedInterests: [...newSelectedInterests, interestId]
-                    };
-                }
-            }
-            return prev;
-        });
-
-        // Очищаем ошибку интересов при изменении
-        if (errors.interests) {
-            setErrors(prev => ({ ...prev, interests: undefined }));
-        }
-    };
-
-    // Получение подсказки для текущего шага
-    const getStepHint = () => {
-        switch (currentStep) {
-            case 0:
-                return 'Можно оставить пустым для использования псевдонима';
-            case 1:
-                return 'Для участия в чате вам должно быть не менее 17 лет';
-            case 2:
-                return 'Выберите до 5 интересов для поиска подходящих собеседников';
-            default:
-                return '';
-        }
-    };
-
-    // Валидация текущего шага
-    const validateStep = useCallback((step) => {
-        const newErrors = {};
-
-        switch (step) {
-            case 0:
-                // Имя не обязательно
-                break;
-            case 1:
-                if (!formData.age) {
-                    newErrors.age = 'Укажите ваш возраст';
-                } else if (isNaN(parseInt(formData.age))) {
-                    newErrors.age = 'Возраст должен быть числом';
-                } else if (parseInt(formData.age) < 17) {
-                    newErrors.age = 'Вам должно быть не менее 17 лет';
-                } else if (parseInt(formData.age) > 100) {
-                    newErrors.age = 'Пожалуйста, укажите корректный возраст (до 100 лет)';
-                }
-                break;
-            case 2:
-                if (!formData.selectedInterests || formData.selectedInterests.length === 0) {
-                    newErrors.interests = 'Выберите хотя бы один интерес';
-                }
-                break;
-            default:
-                break;
-        }
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    }, [formData]);
-
-    // Кастомный обработчик отправки формы с дополнительной обработкой ошибок
-    const enhancedHandleSubmit = useCallback(async () => {
-        try {
-            console.log("Начало отправки формы...");
-
-            // Проверка валидации
-            const validationErrors = validateStep(currentStep);
-            if (Object.keys(validationErrors).length > 0) {
-                setErrors(validationErrors);
-                console.log("Ошибки валидации:", validationErrors);
-                return;
-            }
-
-            setIsSubmitting(true);
-
-            // Проверка коллекции users перед отправкой формы
-            try {
-                const collectionStatus = await troubleshootCollection('users');
-                console.log("Статус коллекции users:", collectionStatus);
-            } catch (collectionError) {
-                console.warn("Ошибка при диагностике коллекции:", collectionError);
-                // Продолжаем даже при ошибке диагностики
-            }
-
-            // Проверка блокировки регистрации
-            const registrationLock = localStorage.getItem('registration_in_progress');
-            if (registrationLock) {
-                const lockTime = parseInt(registrationLock);
-                const now = Date.now();
-
-                if (now - lockTime < 30000) {
-                    console.log("Регистрация уже выполняется (установлена блокировка)");
-                    return;
-                } else {
-                    localStorage.removeItem('registration_in_progress');
-                }
-            }
-
-            // Установка блокировки
-            localStorage.setItem('registration_in_progress', Date.now().toString());
-
-            // Обработка данных формы
-            let userData = { ...formData };
-
-            // Обработка имени
-            if (!userData.name?.trim()) {
-                userData.nickname = generateNickname();
-                console.log("Имя не указано, сгенерирован псевдоним:", userData.nickname);
-            }
-
-            // Обработка возраста
-            userData.age = parseInt(userData.age);
-
-            // Обработка интересов
-            if (formData.selectedInterests && formData.selectedInterests.length > 0) {
-                const interestNames = formData.selectedInterests.map((interestId) => {
-                    const interest = INTERESTS.find((i) => i.id === interestId);
-                    return interest?.name;
-                }).filter(Boolean);
-
-                userData.interests = interestNames.join(', ');
-            }
-
-            console.log("Отправка данных формы:", userData);
-            await onSubmit(userData);
-
-            localStorage.removeItem('registration_in_progress');
-            console.log("Регистрация успешно завершена!");
-
-            // Уведомление об успешной регистрации
-            try {
-                if (isBrowser() && WebApp && WebApp.HapticFeedback && WebApp.HapticFeedback.notificationOccurred) {
-                    WebApp.HapticFeedback.notificationOccurred('success');
-                }
-
-                if (isBrowser() && WebApp && WebApp.showPopup) {
-                    WebApp.showPopup({
-                        title: 'Успешная регистрация',
-                        message: 'Ваша регистрация успешно завершена!',
-                        buttons: [{ text: "Начать" }]
-                    });
-                }
-            } catch (popupError) {
-                console.warn("Не удалось показать уведомление:", popupError);
-            }
-
-            setShowSuccess(true);
-
-        } catch (error) {
-            console.error("Ошибка при отправке формы:", error);
-            setErrors((prev) => ({
+        
+        // Сбрасываем ошибку валидации при изменении интересов
+        if (validationErrors.interests) {
+            setValidationErrors(prev => ({
                 ...prev,
-                submit: error.message || "Произошла ошибка при регистрации. Пожалуйста, попробуйте снова."
+                interests: null
             }));
-            localStorage.removeItem('registration_in_progress');
+        }
+    }, [validationErrors]);
+    
+    // Эффект для восстановления фокуса после обновления компонента
+    useEffect(() => {
+        if (activeInputRef.current) {
+            const { name, selectionStart, selectionEnd } = activeInputRef.current;
+            const inputElement = inputRefs.current[name];
+            
+            if (inputElement) {
+                inputElement.focus();
+                
+                // Восстанавливаем позицию курсора, если это текстовое поле
+                if (selectionStart !== undefined && selectionEnd !== undefined) {
+                    try {
+                        inputElement.setSelectionRange(selectionStart, selectionEnd);
+                    } catch (e) {
+                        // Игнорируем ошибки для элементов, не поддерживающих выделение
+                    }
+                }
+            }
+        }
+    }, [formData]);
+    
+    // Валидация для каждого шага
+    const validateStep = useCallback((step) => {
+        const errors = {};
+        
+        switch (step) {
+            case 1:
+                // Проверка имени (опционально)
+                break;
+                
+            case 2:
+                // Проверка возраста (обязательно)
+                if (!formData.age) {
+                    errors.age = 'Возраст обязателен для заполнения';
+                } else {
+                    const age = parseInt(formData.age);
+                    if (isNaN(age) || age < 17) {
+                        errors.age = 'Минимальный возраст должен быть 17 лет';
+                    } else if (age > 100) {
+                        errors.age = 'Максимальный возраст не должен превышать 100 лет';
+                    }
+                }
+                break;
+                
+            case 3:
+                // Проверка интересов
+                if (formData.selectedInterests.length < 1) {
+                    errors.interests = 'Выберите хотя бы один интерес';
+                }
+                
+                // Проверка описания
+                if (formData.aboutMe && formData.aboutMe.length > 500) {
+                    errors.aboutMe = 'Описание не должно превышать 500 символов';
+                }
+                break;
+                
+            default:
+                break;
+        }
+        
+        setValidationErrors(errors);
+        return Object.keys(errors).length === 0;
+    }, [formData]);
+    
+    // Переход к следующему шагу
+    const goToNextStep = useCallback(() => {
+        // Проверяем валидность текущего шага
+        if (!validateStep(currentStep)) {
+            // Обратная связь об ошибке
+            safeHapticFeedback('notification', null, 'error');
+            return;
+        }
+        
+        // Тактильная обратная связь
+        safeHapticFeedback('selection');
+        
+        if (currentStep < totalSteps) {
+            setCurrentStep(prev => prev + 1);
+        } else {
+            // Отправляем форму на последнем шаге
+            handleSubmit();
+        }
+    }, [currentStep, totalSteps, validateStep]);
+    
+    // Переход к предыдущему шагу
+    const goToPrevStep = useCallback(() => {
+        // Тактильная обратная связь
+        safeHapticFeedback('selection');
+        
+        if (currentStep > 1) {
+            setCurrentStep(prev => prev - 1);
+        }
+    }, [currentStep]);
+    
+    // Отправка формы
+    const handleSubmit = useCallback(async () => {
+        console.log("Начало отправки формы...");
+        
+        // Валидация всей формы перед отправкой
+        if (!validateStep(currentStep)) {
+            console.log("Ошибки валидации при отправке формы:", validationErrors);
+            return;
+        }
+        
+        setIsSubmitting(true);
+        setError(null);
+        
+        try {
+            // Если имя не указано, генерируем псевдоним
+            const nickname = formData.name.trim() || generateRandomNickname();
+            if (!formData.name) {
+                console.log('Имя не указано, сгенерирован псевдоним:', nickname);
+            }
+            
+            // Создаем пользовательские данные
+            const userData = {
+                name: formData.name.trim() || nickname,
+                displayName: formData.name.trim() || nickname,
+                age: formData.age ? parseInt(formData.age) : null,
+                gender: formData.gender,
+                interests: formData.selectedInterests.map(interest => 
+                    typeof interest === 'string' ? interest : interest.id),
+                bio: formData.aboutMe,
+                nickname,
+                createdAt: new Date().toISOString(),
+                status: 'active',
+                telegramUser: telegramUser || null
+            };
+            
+            console.log("Отправка данных формы:", userData);
+            
+            // Регистрируем анонимного пользователя
+            const userCredential = await signInAnonymously(auth);
+            const user = userCredential.user;
+            
+            // Устанавливаем displayName
+            await updateProfile(user, { displayName: nickname });
+            
+            // Сохраняем данные в Firestore
+            await createOrUpdateUser(user.uid, userData);
+            
+            // Сохраняем идентификатор пользователя в localStorage
+            localStorage.setItem('current_user_id', user.uid);
+            
+            // Тактильная обратная связь об успехе
+            safeHapticFeedback('notification', null, 'success');
+            
+            // Показываем уведомление об успехе
+            setSuccess(true);
+            
+            // Показываем уведомление
+            await safeShowPopup({
+                title: 'Успешная регистрация',
+                message: 'Ваша регистрация успешно завершена!',
+                buttons: [{ text: "Начать" }]
+            });
+            
+            // Перенаправляем на главную страницу
+            navigate('/home');
+        } catch (err) {
+            console.error('Ошибка при регистрации:', err);
+            setError(err.message || 'Произошла ошибка при регистрации');
+            
+            // Тактильная обратная связь при ошибке
+            safeHapticFeedback('notification', null, 'error');
+            
+            try {
+                // Показываем уведомление об ошибке
+                await safeShowPopup({
+                    title: 'Ошибка регистрации',
+                    message: err.message || 'Произошла ошибка при регистрации',
+                    buttons: [{ text: "Понятно" }]
+                });
+            } catch (popupError) {
+                console.error('Ошибка при показе уведомления:', popupError);
+            }
         } finally {
             setIsSubmitting(false);
         }
-    }, [formData, currentStep, validateStep, onSubmit]);
-
-    const handleSubmit = () => {
-        enhancedHandleSubmit();
+    }, [formData, currentStep, navigate, telegramUser, validateStep, validationErrors]);
+    
+    // Расчет прогресса заполнения формы
+    const calculateProgress = () => {
+        return Math.max(33, (currentStep / totalSteps) * 100);
     };
 
-    // Эффект для взаимодействия с кнопкой Telegram WebApp
-    useEffect(() => {
-        if (isDevelopment || !isBrowser() || !WebApp.isSupported) return;
+    // Мемоизированные компоненты шагов формы для предотвращения перерисовки при вводе
+    const StepWelcomeComponent = memo(({ formData, handleChange, goToNextStep, isSubmitting, inputRefs }) => (
+        <div className="form-content">
+            <h2 className="form-title">Давайте познакомимся</h2>
+            <p className="form-subtitle">Как к вам обращаться?</p>
+            
+            <div className="form-field">
+                <div className="input-field with-icon">
+                    <i className="input-icon fas fa-user"></i>
+                    <input 
+                        type="text" 
+                        id="name" 
+                        name="name"
+                        value={formData.name}
+                        onChange={handleChange}
+                        placeholder="Введите ваше имя или псевдоним"
+                        maxLength={50}
+                        ref={el => inputRefs.current.name = el}
+                    />
+                    <label htmlFor="name">Имя или псевдоним</label>
+                </div>
+                <p className="input-hint">Имя необязательно. Если оставите пустым, мы сгенерируем уникальный псевдоним.</p>
+            </div>
 
-        try {
-            if (isLastStep) {
-                WebApp.MainButton.setText('Завершить регистрацию');
-                WebApp.MainButton.onClick(handleSubmit);
-            } else {
-                WebApp.MainButton.setText('Далее');
-                WebApp.MainButton.onClick(() => {
-                    if (validateStep(currentStep)) {
-                        goToNextStep();
-                    }
-                });
-            }
-            WebApp.MainButton.show();
-
-            return () => {
-                if (isLastStep) {
-                    WebApp.MainButton.offClick(handleSubmit);
-                } else {
-                    WebApp.MainButton.offClick(() => {
-                        if (validateStep(currentStep)) {
-                            goToNextStep();
-                        }
-                    });
-                }
-            };
-        } catch (error) {
-            console.warn("Не удалось настроить кнопку Telegram:", error);
-        }
-    }, [currentStep, isDevelopment, isLastStep, handleSubmit, validateStep]);
-
-    // Эффект для фокуса на нужном поле при изменении шага
-    useEffect(() => {
-        setTimeout(() => {
-            if (currentStep === 0 && nameInputRef.current) {
-                nameInputRef.current.focus();
-            } else if (currentStep === 1 && ageInputRef.current) {
-                ageInputRef.current.focus();
-            }
-        }, 300);
-    }, [currentStep]);
-
-    // Если есть ошибка отправки формы, показываем экран ошибки
-    if (errors.submit) {
-        return (
-            <div className="registration-error">
-                <div className="error-icon">❌</div>
-                <h2 className="error-title">Ошибка регистрации</h2>
-                <p className="error-message">{errors.submit}</p>
-                <button
-                    className="retry-button"
-                    onClick={() => setErrors(prev => ({ ...prev, submit: undefined }))}
+            <div className="form-navigation">
+                <button 
+                    className="nav-button next-button"
+                    onClick={goToNextStep}
+                    disabled={isSubmitting}
                 >
-                    Попробовать снова
+                    <span className="button-text">Далее</span>
+                    <i className="fas fa-arrow-right"></i>
                 </button>
             </div>
-        );
-    }
+        </div>
+    ));
 
-    // Компонент для отображения индикатора шага
-    const StepIndicator = ({ step, label, isCurrent, isComplete }) => {
-        const classes = ['step-indicator'];
-        if (isCurrent) classes.push('active');
-        if (isComplete) classes.push('completed');
-
-        return (
-            <div className="step-wrapper">
-                <div className={classes.join(' ')}>
-                    {isComplete ? (
-                        <span className="step-check">✓</span>
-                    ) : (
-                        <span className="step-number">{step + 1}</span>
-                    )}
+    const StepPersonalInfoComponent = memo(({ formData, validationErrors, handleChange, goToNextStep, goToPrevStep, isSubmitting, inputRefs }) => (
+        <div className="form-content">
+            <h2 className="form-title">Немного о вас</h2>
+            <p className="form-subtitle">Эта информация поможет найти собеседников</p>
+            
+            <div className="form-field">
+                <div className="input-field with-icon">
+                    <i className="input-icon fas fa-birthday-cake"></i>
+                    <input 
+                        type="number" 
+                        id="age" 
+                        name="age"
+                        value={formData.age}
+                        onChange={handleChange}
+                        placeholder="Введите ваш возраст"
+                        min={17}
+                        max={100}
+                        required
+                        ref={el => inputRefs.current.age = el}
+                    />
+                    <label htmlFor="age">Возраст<span className="required-mark">*</span></label>
                 </div>
-                <span className="step-label">{label}</span>
+                {validationErrors.age && (
+                    <p className="input-error">{validationErrors.age}</p>
+                )}
             </div>
-        );
-    };
-
-    // Определяем классы для шагов
-    const getStepClass = (stepIndex) => {
-        if (stepIndex === currentStep) return 'form-step active';
-        if (stepIndex < currentStep) return 'form-step previous';
-        return 'form-step';
-    };
-
-    // Если идет отправка формы, показываем индикатор загрузки
-    if (isSubmitting) {
-        return (
-            <div className="registration-container">
-                <div className="loading-spinner"></div>
-                <p className="loading-text">Регистрация...</p>
+            
+            <div className="form-field">
+                <label className="select-label">Пол</label>
+                <div className="gender-select">
+                    <div 
+                        className={`gender-option ${formData.gender === 'male' ? 'selected' : ''}`}
+                        onClick={() => handleChange({ target: { name: 'gender', value: 'male' } })}
+                    >
+                        <i className="fas fa-mars"></i>
+                        <span>Мужской</span>
+                    </div>
+                    <div 
+                        className={`gender-option ${formData.gender === 'female' ? 'selected' : ''}`}
+                        onClick={() => handleChange({ target: { name: 'gender', value: 'female' } })}
+                    >
+                        <i className="fas fa-venus"></i>
+                        <span>Женский</span>
+                    </div>
+                    <div 
+                        className={`gender-option ${formData.gender === 'not_specified' ? 'selected' : ''}`}
+                        onClick={() => handleChange({ target: { name: 'gender', value: 'not_specified' } })}
+                    >
+                        <i className="fas fa-genderless"></i>
+                        <span>Не указывать</span>
+                    </div>
+                </div>
             </div>
-        );
-    }
 
-    // Рассчитываем ширину линии прогресса
-    const progressWidth = `${((currentStep + 1) / totalSteps) * 100}%`;
-
-    // Обновляем функцию для рендеринга навигационных кнопок
-    const renderNavigationButtons = () => {
-        return (
             <div className="form-navigation">
-                {currentStep > 0 && (
-                    <button
-                        type="button"
-                        className="nav-button back-button"
-                        onClick={goToPreviousStep}
-                        disabled={isSubmitting}
-                    >
-                        <span>←</span>
-                        <span className="button-text">Назад</span>
-                    </button>
-                )}
+                <button 
+                    className="nav-button back-button"
+                    onClick={goToPrevStep}
+                    disabled={isSubmitting}
+                >
+                    <i className="fas fa-arrow-left"></i>
+                    <span className="button-text">Назад</span>
+                </button>
+                <button 
+                    className="nav-button next-button"
+                    onClick={goToNextStep}
+                    disabled={isSubmitting}
+                >
+                    <span className="button-text">Далее</span>
+                    <i className="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    ));
 
-                {currentStep < totalSteps - 1 && (
-                    <button
-                        type="button"
-                        className="nav-button next-button"
-                        onClick={goToNextStep}
-                        disabled={isSubmitting}
-                    >
-                        <span className="button-text">Далее</span>
-                        <span>→</span>
-                    </button>
+    const StepInterestsAndBioComponent = memo(({ formData, validationErrors, handleChange, handleInterestsChange, goToPrevStep, handleSubmit, isSubmitting, inputRefs }) => (
+        <div className="form-content">
+            <h2 className="form-title">Интересы и о себе</h2>
+            <p className="form-subtitle">Расскажите, что вам интересно</p>
+            
+            <div className="form-field">
+                <label>Выберите интересы (до 5)</label>
+                <InterestSelector
+                    value={formData.selectedInterests}
+                    onChange={handleInterestsChange}
+                />
+                {validationErrors.interests && (
+                    <p className="input-error">{validationErrors.interests}</p>
                 )}
             </div>
-        );
+            
+            <div className="form-field">
+                <div className="input-field textarea-field">
+                    <textarea
+                        id="aboutMe"
+                        name="aboutMe"
+                        value={formData.aboutMe}
+                        onChange={handleChange}
+                        placeholder="Расскажите немного о себе (необязательно)"
+                        rows={4}
+                        maxLength={500}
+                        ref={el => inputRefs.current.aboutMe = el}
+                    ></textarea>
+                    <label htmlFor="aboutMe">О себе</label>
+                </div>
+                <div className="char-counter">
+                    {formData.aboutMe ? formData.aboutMe.length : 0}/500
+                </div>
+                {validationErrors.aboutMe && (
+                    <p className="input-error">{validationErrors.aboutMe}</p>
+                )}
+            </div>
+
+            <div className="form-navigation">
+                <button 
+                    className="nav-button back-button"
+                    onClick={goToPrevStep}
+                    disabled={isSubmitting}
+                >
+                    <i className="fas fa-arrow-left"></i>
+                    <span className="button-text">Назад</span>
+                </button>
+                <button 
+                    className="nav-button next-button"
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                >
+                    <span className="button-text">
+                        {isSubmitting ? 'Регистрация...' : 'Завершить'}
+                    </span>
+                    {!isSubmitting && <i className="fas fa-check"></i>}
+                </button>
+            </div>
+        </div>
+    ));
+
+    // Вспомогательные компоненты для шагов формы с анимацией
+    const StepWelcome = () => (
+        <motion.div 
+            className="form-step active"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            key="step-welcome"
+        >
+            <StepWelcomeComponent 
+                formData={formData}
+                handleChange={handleChange}
+                goToNextStep={goToNextStep}
+                isSubmitting={isSubmitting}
+                inputRefs={inputRefs}
+            />
+        </motion.div>
+    );
+    
+    const StepPersonalInfo = () => (
+        <motion.div 
+            className="form-step active"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            key="step-personal-info"
+        >
+            <StepPersonalInfoComponent
+                formData={formData}
+                validationErrors={validationErrors}
+                handleChange={handleChange}
+                goToNextStep={goToNextStep}
+                goToPrevStep={goToPrevStep}
+                isSubmitting={isSubmitting}
+                inputRefs={inputRefs}
+            />
+        </motion.div>
+    );
+    
+    const StepInterestsAndBio = () => (
+        <motion.div 
+            className="form-step active"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            key="step-interests-bio"
+        >
+            <StepInterestsAndBioComponent
+                formData={formData}
+                validationErrors={validationErrors}
+                handleChange={handleChange}
+                handleInterestsChange={handleInterestsChange}
+                goToPrevStep={goToPrevStep}
+                handleSubmit={handleSubmit}
+                isSubmitting={isSubmitting}
+                inputRefs={inputRefs}
+            />
+        </motion.div>
+    );
+    
+    // Компонент успешной регистрации
+    const SuccessStep = () => (
+        <motion.div 
+            className="registration-success"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+        >
+            <div className="success-icon">✓</div>
+            <h2>Регистрация завершена!</h2>
+            <p>Добро пожаловать в анонимный чат Telegram</p>
+            <motion.button
+                className="complete-registration-button"
+                onClick={() => navigate('/home')}
+                whileTap={{ scale: 0.95 }}
+            >
+                Начать общение
+            </motion.button>
+        </motion.div>
+    );
+    
+    // Компонент ошибки регистрации
+    const ErrorStep = () => (
+        <motion.div 
+            className="registration-error"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
+        >
+            <div className="error-icon">⚠️</div>
+            <h2>Ошибка регистрации</h2>
+            <p>{error || 'Произошла ошибка при регистрации. Пожалуйста, попробуйте еще раз.'}</p>
+            <motion.button
+                className="retry-button"
+                onClick={() => {
+                    setError(null);
+                    setCurrentStep(1);
+                }}
+                whileTap={{ scale: 0.95 }}
+            >
+                Попробовать снова
+            </motion.button>
+        </motion.div>
+    );
+    
+    // Компонент для отображения активного шага формы
+    const getStepContent = () => {
+        if (success) return <SuccessStep key="success" />;
+        if (error) return <ErrorStep key="error" />;
+        
+        // Возвращаем нужный шаг в зависимости от currentStep
+        switch (currentStep) {
+            case 1:
+                return <StepWelcome key="step1" />;
+            case 2:
+                return <StepPersonalInfo key="step2" />;
+            case 3:
+                return <StepInterestsAndBio key="step3" />;
+            default:
+                return null;
+        }
     };
 
+    // Основной рендер
     return (
-        <div className="registration-container">
-            <div className="form-header">
-                <h1 className="form-title">Регистрация</h1>
-            </div>
-
-            {/* Индикаторы шагов */}
-            <div className="form-progress">
-                <div className="progress-line" style={{ width: progressWidth }}></div>
-                <StepIndicator
-                    step={0}
-                    label="Имя"
-                    isCurrent={currentStep === 0}
-                    isComplete={currentStep > 0}
-                />
-                <StepIndicator
-                    step={1}
-                    label="Возраст"
-                    isCurrent={currentStep === 1}
-                    isComplete={currentStep > 1}
-                />
-                <StepIndicator
-                    step={2}
-                    label="Интересы"
-                    isCurrent={currentStep === 2}
-                    isComplete={false}
-                />
-            </div>
-
-            {/* Контейнер для шагов формы */}
-            <div className="form-step-container">
-                {/* Шаг 1: Имя */}
-                <div className={getStepClass(0)}>
-                    <h2 className="form-title">Как вас зовут?</h2>
-
-                    {telegramUser && (
-                        <div className="telegram-user-info">
-                            <div className="user-avatar">
-                                {telegramUser.photoUrl ? (
-                                    <img src={telegramUser.photoUrl} alt="avatar" />
-                                ) : (
-                                    telegramUser.firstName?.charAt(0)
-                                )}
-                            </div>
-                            <div className="user-details">
-                                <div className="user-name">
-                                    {telegramUser.firstName} {telegramUser.lastName}
-                                </div>
-                                <div className="user-id">@{telegramUser.username || 'user'}</div>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="form-field">
-                        <div className="input-field with-icon">
-                            <input
-                                id="name"
-                                name="name"
-                                value={formData.name}
-                                onChange={handleChange}
-                                ref={nameInputRef}
-                                placeholder=" "
-                                autoComplete="off"
-                            />
-                            <label htmlFor="name">Имя или псевдоним</label>
-                            <div className="input-icon">👤</div>
-                            {errors.name && <div className="input-error">{errors.name}</div>}
-                            <div className="input-hint show">{getStepHint()}</div>
-                        </div>
-                    </div>
-
-                    {renderNavigationButtons()}
-                </div>
-
-                {/* Шаг 2: Возраст */}
-                <div className={getStepClass(1)}>
-                    <h2 className="form-title">Сколько вам лет?</h2>
-
-                    <div className="form-field">
-                        <div className="input-field with-icon">
-                            <input
-                                id="age"
-                                name="age"
-                                type="number"
-                                value={formData.age}
-                                onChange={handleAgeInput}
-                                ref={ageInputRef}
-                                placeholder="Укажите ваш возраст (от 17 лет)"
-                                min="17"
-                                max="100"
-                                className={errors.age ? "error" : ""}
-                                autoComplete="off"
-                            />
-                            <label htmlFor="age">Ваш возраст</label>
-                            <div className="input-icon">🗓️</div>
-                            {errors.age && <div className="input-error">{errors.age}</div>}
-                            <div className="input-hint show">{getStepHint()}</div>
-                        </div>
-                    </div>
-
-                    {renderNavigationButtons()}
-                </div>
-
-                {/* Шаг 3: Интересы */}
-                <div className={getStepClass(2)}>
-                    <h2 className="form-title">Ваши интересы</h2>
-
-                    <div className="form-field">
-                        <div className="input-hint show">{getStepHint()}</div>
-                        <div className="interests-grid">
-                            {INTERESTS.map((interest) => (
-                                <div
-                                    key={interest.id}
-                                    className={`interest-item ${formData.selectedInterests.includes(interest.id) ? 'selected' : ''}`}
-                                    onClick={() => handleInterestsChange(interest.id)}
+        <div 
+            className={`registration-container ${theme === 'dark' ? 'dark-theme' : 'light-theme'}`}
+            ref={formContainerRef}
+        >
+            {!success && !error && (
+                <div className="form-header">
+                    <div className="form-progress">
+                        {Array.from({ length: totalSteps }).map((_, index) => (
+                            <div className="step-wrapper" key={index}>
+                                <div 
+                                    className={`step-indicator ${
+                                        index + 1 === currentStep ? 'active' : 
+                                        index + 1 < currentStep ? 'completed' : ''
+                                    }`}
                                 >
-                                    <div className="interest-icon">{interest.icon}</div>
-                                    <div className="interest-name">{interest.name}</div>
-                                    <div className="interest-select-indicator">✓</div>
+                                    {index + 1 < currentStep ? (
+                                        <span className="step-check">✓</span>
+                                    ) : (
+                                        <span className="step-number">{index + 1}</span>
+                                    )}
                                 </div>
-                            ))}
-                        </div>
-                        {errors.interests && <div className="input-error">{errors.interests}</div>}
-                        <div className="input-hint show">
-                            Выбрано: {formData.selectedInterests.length} / 5
-                        </div>
+                                <span className="step-label">
+                                    {index === 0 ? 'Имя' : 
+                                     index === 1 ? 'Личное' : 'Интересы'}
+                                </span>
+                            </div>
+                        ))}
+                        <div 
+                            className="progress-line" 
+                            style={{ width: `${calculateProgress() - 33}%` }}
+                        ></div>
                     </div>
-
-                    <div className="input-field">
-                        <textarea
-                            id="aboutMe"
-                            name="aboutMe"
-                            value={formData.aboutMe}
-                            onChange={handleChange}
-                            ref={aboutMeInputRef}
-                            rows={3}
-                            placeholder=" "
-                        ></textarea>
-                        <label htmlFor="aboutMe">О себе (необязательно)</label>
-                        {errors.aboutMe && <div className="input-error">{errors.aboutMe}</div>}
-                    </div>
-
-                    {/* Кнопка "Завершить регистрацию" */}
-                    <button
-                        type="button"
-                        className="complete-registration-button"
-                        onClick={enhancedHandleSubmit}
-                        disabled={isSubmitting}
-                    >
-                        {isSubmitting ? 'Обработка...' : 'Завершить регистрацию'}
-                    </button>
-
-                    {renderNavigationButtons()}
                 </div>
+            )}
+            
+            <div className="form-step-container">
+                <AnimatePresence mode="wait" initial={false}>
+                    {getStepContent()}
+                </AnimatePresence>
             </div>
         </div>
     );

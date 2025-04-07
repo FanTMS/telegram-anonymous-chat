@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Общие разрешения для тестового режима разработки
+    // В продакшен-версии эти правила следует заменить на более строгие
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

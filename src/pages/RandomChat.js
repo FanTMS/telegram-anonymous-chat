@@ -2,47 +2,67 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { findRandomChat, cancelSearch, checkChatMatchStatus } from '../utils/chatService';
 import { useTelegram } from '../hooks/useTelegram';
+import { useAuth } from '../hooks/useAuth';
+import { db } from '../firebase';
+import { collection, doc, setDoc, getDoc, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import IndexCreationHelper from '../components/IndexCreationHelper';
+import DatabaseLoadingIndicator from '../components/DatabaseLoadingIndicator';
 import '../styles/RandomChat.css';
 
 const RandomChat = () => {
-    const [user, setUser] = useState(null);
+    const { user, isAuthenticated, loading: authLoading } = useAuth();
     const [isSearching, setIsSearching] = useState(false);
     const [searchTime, setSearchTime] = useState(0);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const [foundMatch, setFoundMatch] = useState(false);
+    const [showIndexInstructions, setShowIndexInstructions] = useState(false);
+    const [dbLoading, setDbLoading] = useState(true);
+    const [dbConnectionChecked, setDbConnectionChecked] = useState(false);
 
     const navigate = useNavigate();
-    const { _WebApp, hapticFeedback, showPopup } = useTelegram();
+    const { hapticFeedback, showPopup } = useTelegram();
 
     const timeIntervalRef = useRef(null);
     const searchIntervalRef = useRef(null);
 
-    // Получение данных пользователя
+    // Проверка соединения с базой данных
     useEffect(() => {
-        const savedUserId = localStorage.getItem('current_user_id');
-        const savedUserData = localStorage.getItem('current_user');
-
-        if (savedUserId && savedUserData) {
+        const checkDbConnection = async () => {
             try {
-                const parsedUser = JSON.parse(savedUserData);
-                setUser({
-                    id: savedUserId,
-                    ...parsedUser
+                // Устанавливаем таймаут для проверки
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Таймаут соединения с базой данных')), 10000);
                 });
-            } catch (e) {
-                console.error("Ошибка при загрузке данных пользователя:", e);
-                setError("Не удалось загрузить данные пользователя");
+
+                // Запрос к базе данных
+                const dbCheckPromise = getDoc(doc(db, 'system', 'config'));
+
+                // Ждем результат с таймаутом
+                await Promise.race([timeoutPromise, dbCheckPromise]);
+                setDbConnectionChecked(true);
+                setDbLoading(false);
+            } catch (error) {
+                console.error('Ошибка при проверке подключения к БД:', error);
+                // Все равно устанавливаем флаг проверки, чтобы показать интерфейс с ошибкой
+                setDbConnectionChecked(true);
+                setDbLoading(false);
+                setError('Ошибка подключения к базе данных. Пожалуйста, проверьте соединение с интернетом и перезагрузите страницу.');
             }
-        } else {
-            setError("Для поиска собеседника необходимо авторизоваться");
-        }
+        };
+
+        checkDbConnection();
     }, []);
+
+    // Обработчик завершения загрузки базы данных
+    const handleDbLoadComplete = () => {
+        setDbLoading(false);
+    };
 
     // Запуск поиска собеседника
     const startSearch = useCallback(async () => {
         try {
-            if (!user || !user.id) {
+            if (!isAuthenticated || !user) {
                 setError("Авторизуйтесь для поиска собеседника");
                 return;
             }
@@ -53,6 +73,9 @@ const RandomChat = () => {
 
             // Тактильная обратная связь при начале поиска
             if (hapticFeedback) hapticFeedback('impact', 'light');
+
+            // Обновляем статус пользователя в базе данных как "ищет собеседника"
+            await updateUserSearchStatus(user.id, true);
 
             const chatId = await findRandomChat(user.id);
 
@@ -78,6 +101,11 @@ const RandomChat = () => {
                 console.log("Инструкция для администратора: " + err.message);
             } else if (err.message && typeof err.message === 'string') {
                 setError(`Ошибка: ${err.message}`);
+
+                // Если ошибка связана с индексами, показываем инструкции
+                if (err.message.includes('индекс') || err.message.includes('index')) {
+                    setShowIndexInstructions(true);
+                }
             } else {
                 setError('Произошла ошибка при поиске собеседника. Попробуйте позже.');
             }
@@ -85,15 +113,18 @@ const RandomChat = () => {
             // Вибрация при ошибке
             if (hapticFeedback) hapticFeedback('notification', null, 'error');
         }
-    }, [user, navigate, hapticFeedback]);
+    }, [user, isAuthenticated, navigate, hapticFeedback]);
 
     // Отмена поиска
     const stopSearch = useCallback(async () => {
         try {
-            if (!user || !user.id) return;
+            if (!isAuthenticated || !user) return;
 
             setLoading(true);
             await cancelSearch(user.id);
+            // Обновляем статус пользователя в базе данных
+            await updateUserSearchStatus(user.id, false);
+            
             setIsSearching(false);
             setSearchTime(0);
             setLoading(false);
@@ -114,7 +145,32 @@ const RandomChat = () => {
             setError('Не удалось отменить поиск. Попробуйте еще раз.');
             setLoading(false);
         }
-    }, [user, hapticFeedback, showPopup]);
+    }, [user, isAuthenticated, hapticFeedback, showPopup]);
+
+    // Обновление статуса поиска пользователя в базе данных
+    const updateUserSearchStatus = async (userId, isSearching) => {
+        try {
+            const userStatusRef = doc(db, "userStatus", userId);
+            const userStatusDoc = await getDoc(userStatusRef);
+            
+            if (userStatusDoc.exists()) {
+                await setDoc(userStatusRef, { 
+                    isSearching,
+                    lastUpdated: new Date()
+                }, { merge: true });
+            } else {
+                await setDoc(userStatusRef, {
+                    userId,
+                    isSearching,
+                    lastUpdated: new Date(),
+                    isOnline: true
+                });
+            }
+        } catch (err) {
+            console.error("Ошибка при обновлении статуса пользователя:", err);
+            // Не прерываем процесс из-за ошибки статуса
+        }
+    };
 
     // Счетчик времени поиска и проверка статуса
     useEffect(() => {
@@ -135,7 +191,7 @@ const RandomChat = () => {
 
             // Интервал для проверки статуса поиска
             searchIntervalRef.current = setInterval(async () => {
-                if (!user || !user.id) return;
+                if (!isAuthenticated || !user) return;
 
                 try {
                     // Проверяем, был ли найден собеседник
@@ -147,6 +203,9 @@ const RandomChat = () => {
                         setFoundMatch(true);
                         clearInterval(timeIntervalRef.current);
                         clearInterval(searchIntervalRef.current);
+
+                        // Обновляем статус пользователя в базе данных
+                        await updateUserSearchStatus(user.id, false);
 
                         // Тактильная обратная связь при найденном совпадении
                         if (hapticFeedback) hapticFeedback('notification', null, 'success');
@@ -166,7 +225,7 @@ const RandomChat = () => {
             clearInterval(timeIntervalRef.current);
             clearInterval(searchIntervalRef.current);
         };
-    }, [isSearching, user, navigate, hapticFeedback]);
+    }, [isSearching, user, isAuthenticated, navigate, hapticFeedback]);
 
     // Форматирование времени поиска
     const formatSearchTime = () => {
@@ -175,41 +234,67 @@ const RandomChat = () => {
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
 
+    // Отображаем индикатор загрузки базы данных
+    if (dbLoading) {
+        return <DatabaseLoadingIndicator onComplete={handleDbLoadComplete} />;
+    }
+
     return (
         <div className="random-chat-container">
-            <h2 className="random-chat-title">Поиск собеседника</h2>
+            <h1 className="random-chat-title">Случайный собеседник</h1>
 
-            {error && <div className="error-message">{error}</div>}
-
-            {loading ? (
-                <div className="search-skeleton"></div>
-            ) : (
-                <div className="search-status">
-                    {isSearching ? (
-                        <>
-                            <div className="search-animation">
-                                <div className="search-pulse"></div>
-                            </div>
-                            <p className="search-text">Поиск собеседника...</p>
-                            <p className="search-time">{formatSearchTime()}</p>
-                            <button
-                                className="action-button cancel-button"
-                                onClick={stopSearch}
-                                disabled={loading}
-                            >
-                                Отменить поиск
-                            </button>
-                        </>
-                    ) : (
-                        <button
-                            className="action-button search-button"
-                            onClick={startSearch}
-                            disabled={loading}
-                        >
-                            Найти собеседника
-                        </button>
-                    )}
+            {error && (
+                <div className="error-message">
+                    {error}
+                    {showIndexInstructions && <IndexCreationHelper error={error} />}
                 </div>
+            )}
+
+            {!isAuthenticated && !authLoading ? (
+                <div className="auth-warning">
+                    <div className="auth-warning-icon">⚠️</div>
+                    <p>Авторизуйтесь для поиска собеседника</p>
+                    <button 
+                        className="action-button auth-button"
+                        onClick={() => navigate('/login')}
+                    >
+                        Авторизоваться
+                    </button>
+                </div>
+            ) : (
+                loading ? (
+                    <div className="search-skeleton"></div>
+                ) : (
+                    <div className="search-status">
+                        {isSearching ? (
+                            <>
+                                <div className="search-animation">
+                                    <div className="search-pulse"></div>
+                                </div>
+                                <p className="search-text">Поиск собеседника...</p>
+                                <p className="search-time">{formatSearchTime()}</p>
+                                <button
+                                    className="action-button cancel-button"
+                                    onClick={stopSearch}
+                                    disabled={loading}
+                                >
+                                    Отменить поиск
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <div className="search-icon">🔍</div>
+                                <button
+                                    className="action-button search-button"
+                                    onClick={startSearch}
+                                    disabled={loading || !isAuthenticated}
+                                >
+                                    Найти собеседника
+                                </button>
+                            </>
+                        )}
+                    </div>
+                )
             )}
 
             <div className="search-tips">

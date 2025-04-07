@@ -1,0 +1,96 @@
+.register-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 30px 16px;
+    background-color: var(--tg-theme-bg-color, #ffffff);
+    color: var(--tg-theme-text-color, #000000);
+}
+
+.register-content {
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.register-header {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.register-header h1 {
+    font-size: 26px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: var(--tg-theme-text-color, #000000);
+}
+
+.register-header p {
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--tg-theme-hint-color, #999999);
+}
+
+.register-loading {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--tg-theme-bg-color, #ffffff);
+    color: var(--tg-theme-text-color, #000000);
+    gap: 16px;
+}
+
+.register-loading .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top-color: var(--tg-theme-button-color, #3390ec);
+    animation: spinner 1s linear infinite;
+}
+
+.register-loading p {
+    font-size: 16px;
+    color: var(--tg-theme-hint-color, #999999);
+}
+
+/* Анимация для спиннера загрузки */
+@keyframes spinner {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Медиа запросы для адаптивности */
+@media (max-width: 380px) {
+    .register-header h1 {
+        font-size: 22px;
+    }
+    
+    .register-header p {
+        font-size: 14px;
+    }
+}
+
+/* Поддержка безопасной области внизу экрана для мобильных устройств */
+@media (max-width: 768px) {
+    .register-container {
+        padding-bottom: env(safe-area-inset-bottom, 16px);
+    }
+}
+
+/* Поддержка темной темы */
+.dark-theme.register-container,
+.dark-theme.register-loading {
+    background-color: var(--tg-theme-bg-color, #18222d);
+    color: var(--tg-theme-text-color, #ffffff);
+}
+
+.dark-theme .register-loading .loading-spinner {
+    border-color: rgba(255, 255, 255, 0.1);
+    border-top-color: var(--tg-theme-button-color, #3390ec);
+} 

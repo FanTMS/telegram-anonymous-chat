@@ -1,0 +1,11 @@
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--tg-theme-bg-color, #ffffff);
+}
+
+.content-container {
+  flex: 1;
+  padding-bottom: 76px; /* Оставляем место для навигации */
+}

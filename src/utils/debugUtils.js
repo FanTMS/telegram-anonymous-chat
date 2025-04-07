@@ -1,4 +1,4 @@
-import { db } from './firebase';
+import { db } from '../firebase';
 // Комментируем неиспользуемые импорты
 // import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { collection, getDocs, query, where, limit } from 'firebase/firestore';

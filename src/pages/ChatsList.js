@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getUserChats, getChatById, getSupportChatId } from '../utils/chatService';
 import { safeHapticFeedback } from '../utils/telegramUtils';
-import useAuth from '../hooks/useAuth';
+import { useAuth } from '../hooks/useAuth';
 import '../styles/ChatsList.css';
 
 const ChatsList = () => {

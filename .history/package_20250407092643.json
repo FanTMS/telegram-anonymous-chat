@@ -1,0 +1,68 @@
+{
+    "name": "telegram-anonymous-chat",
+    "version": "0.1.0",
+    "private": true,
+    "engines": {
+        "node": ">=16.0.0",
+        "npm": ">=8.0.0"
+    },
+    "dependencies": {
+        "@tma.js/sdk": "^2.7.0",
+        "@twa-dev/sdk": "^6.9.0",
+        "ajv": "6.12.6",
+        "ajv-keywords": "3.5.2",
+        "cross-env": "^7.0.3",
+        "firebase": "^10.14.1",
+        "framer-motion": "^10.18.0",
+        "moment": "^2.30.1",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "react-router-dom": "^6.20.0",
+        "react-scripts": "5.0.1",
+        "react-transition-group": "^4.4.5",
+        "styled-components": "^6.1.17"
+    },
+    "scripts": {
+        "init": "node scripts/init-project.js",
+        "start": "cross-env GENERATE_SOURCEMAP=false react-scripts start",
+        "prepare": "node scripts/prepare-project.js",
+        "create-logos": "node scripts/create-simple-logo.js",
+        "create-indexes": "node scripts/create-firestore-indexes.js",
+        "fix-paths": "node scripts/fix-static-paths.js",
+        "prestart": "npm run fix-paths"
+    },
+    "eslintConfig": {
+        "extends": [
+            "react-app",
+            "react-app/jest"
+        ]
+    },
+    "browserslist": {
+        "production": [
+            ">0.2%",
+            "not dead",
+            "not op_mini all"
+        ],
+        "development": [
+            "last 1 chrome version",
+            "last 1 firefox version",
+            "last 1 safari version"
+        ]
+    },
+    "resolutions": {},
+    "overrides": {},
+    "devDependencies": {},
+    "description": "1. Клонируйте репозиторий\r 2. Установите зависимости: `npm install`\r 3. Запустите приложение: `npm start`",
+    "main": ".eslintrc.js",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/FanTMS/telegram-anonymous-chat.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/FanTMS/telegram-anonymous-chat/issues"
+    },
+    "homepage": "https://github.com/FanTMS/telegram-anonymous-chat#readme"
+}

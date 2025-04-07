@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Доступ к профилям пользователей
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if request.auth != null && (request.auth.uid == userId || request.resource.data.telegramId == request.auth.uid);
+      allow delete: if false;
+    }
+    
+    // Доступ к группам
+    match /groups/{groupId} {
+      // Публичные группы может читать кто угодно, приватные - только участники
+      allow read: if resource.data.isPublic == true || 
+                    (request.auth != null && resource.data.members[request.auth.uid] != null);
+      
+      // Создавать группы может любой авторизованный пользователь
+      allow create: if request.auth != null;
+      
+      // Обновлять группу могут только админы группы
+      allow update: if request.auth != null && 
+                      resource.data.members[request.auth.uid] != null && 
+                      resource.data.members[request.auth.uid].role == 'admin';
+      
+      allow delete: if false;
+    }
+    
+    // Доступ к сообщениям групп
+    match /groupMessages/{messageId} {
+      // Читать сообщения группы могут только участники группы
+      allow read: if request.auth != null && 
+                    get(/databases/$(database)/documents/groups/$(resource.data.groupId)).data.members[request.auth.uid] != null;
+      
+      // Отправлять сообщения могут только участники группы
+      allow create: if request.auth != null && 
+                      get(/databases/$(database)/documents/groups/$(request.resource.data.groupId)).data.members[request.auth.uid] != null;
+      
+      // Обновлять сообщения может только отправитель или админ группы
+      allow update: if request.auth != null && 
+                      (request.auth.uid == resource.data.senderId || 
+                      get(/databases/$(database)/documents/groups/$(resource.data.groupId)).data.members[request.auth.uid].role == 'admin');
+      
+      allow delete: if false;
+    }
+    
+    // Доступ к чатам и сообщениям (существующие правила)
+    // ...
+  }
+}

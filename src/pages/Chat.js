@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import useAuth from '../hooks/useAuth';
+import { useAuth } from '../hooks/useAuth';
 import {
     getChatById,
     getChatMessages,
-    sendChatMessage,
-    addSupportChat
+    sendChatMessage
 } from '../utils/chatService';
+import { addSupportChat } from '../utils/supportService';
 import UserStatus from '../components/UserStatus';
 import { useToast } from '../components/Toast';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 import '../styles/Chat.css';
 
 const Chat = () => {
@@ -26,7 +28,10 @@ const Chat = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isPartnerTyping, _setIsPartnerTyping] = useState(false);
     const [showScrollButton, setShowScrollButton] = useState(false);
-    const [sendingMessage, setSendingMessage] = useState(false);
+    const [_sendingMessage, _setSendingMessage] = useState(false);
+    const [_showToast] = useState(null);
+    const [_addSupportChat] = useState(addSupportChat);
+    const [isSending, setIsSending] = useState(false);
 
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
@@ -84,6 +89,27 @@ const Chat = () => {
         loadChatDetails();
     }, [chatId, user]);
 
+    const loadMessages = async () => {
+        try {
+            const messagesRef = collection(db, 'messages');
+            const q = query(
+                messagesRef,
+                orderBy('timestamp', 'desc'),
+                limit(50)
+            );
+
+            const snapshot = await getDocs(q);
+            const messages = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+
+            setMessages(messages.reverse());
+        } catch (error) {
+            console.error('Ошибка при загрузке сообщений:', error);
+        }
+    };
+
     const scrollToBottom = (smooth = false) => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({
@@ -114,49 +140,39 @@ const Chat = () => {
         navigate(-1);
     };
 
-    const handleSendMessage = async (e) => {
-        e.preventDefault();
-        if (!inputMessage.trim() || sendingMessage) return;
+    const handleSendMessage = async (messageText) => {
+        if (!messageText.trim() || !chatId || !user?.id) return;
+
+        setIsSending(true);
 
         try {
-            setSendingMessage(true);
-
+            // Добавляем сообщение локально для мгновенного отображения
             const tempMessage = {
                 id: `temp-${Date.now()}`,
-                text: inputMessage.trim(),
-                senderId: user.telegramId || user.id,
-                timestamp: Date.now(),
-                isTemp: true
+                senderId: user.id,
+                senderName: user.name || "Вы",
+                text: messageText,
+                timestamp: new Date(),
+                pending: true
             };
 
-            setMessages(prev => [...prev, tempMessage]);
-            setInputMessage('');
-            scrollToBottom();
+            setMessages(prevMessages => [...prevMessages, tempMessage]);
 
-            const isSupportChat = chat?.type === 'support';
+            // Отправляем сообщение на сервер
+            await sendChatMessage(chatId, user.id, messageText);
 
-            if (isSupportChat) {
-                await addSupportChat(user.telegramId || user.id, tempMessage.text);
-            } else {
-                await sendChatMessage(chatId, user.telegramId || user.id, tempMessage.text);
-            }
-
-            const updatedMessages = await getChatMessages(chatId);
-            setMessages(updatedMessages);
-
+            // Обновляем список сообщений
+            loadMessages();
         } catch (error) {
-            console.error('Ошибка при отправке сообщения:', error);
-            setMessages(prev => prev.filter(msg => !msg.isTemp));
+            console.error("Ошибка при отправке сообщения:", error);
+            setError(error.message || "Не удалось отправить сообщение");
 
-            // Используем Toast для отображения ошибки
-            showToast('Не удалось отправить сообщение. Пожалуйста, попробуйте еще раз.', 'error');
-
-            // Тактильная обратная связь об ошибке, если доступно
-            if (window.TelegramWebApp?.HapticFeedback) {
-                window.TelegramWebApp.HapticFeedback.notificationOccurred('error');
-            }
+            // Убираем временное сообщение при ошибке
+            setMessages(prevMessages =>
+                prevMessages.filter(msg => !msg.id.startsWith('temp-'))
+            );
         } finally {
-            setSendingMessage(false);
+            setIsSending(false);
         }
     };
 
@@ -244,7 +260,11 @@ const Chat = () => {
                 <div className="scrollToBottom" onClick={() => scrollToBottom(true)}></div>
             )}
 
-            <form className="message-input-form" onSubmit={handleSendMessage}>
+            <form className="message-input-form" onSubmit={(e) => {
+                e.preventDefault();
+                handleSendMessage(inputMessage);
+                setInputMessage('');
+            }}>
                 <div className="message-input-container">
                     <input
                         type="text"
@@ -258,13 +278,15 @@ const Chat = () => {
                     <button
                         type="submit"
                         className="send-button"
-                        disabled={!inputMessage.trim() || sendingMessage}
+                        disabled={!inputMessage.trim() || isSending}
                         aria-label="Отправить сообщение"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="22" y1="2" x2="11" y2="13"></line>
-                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                        </svg>
+                        {isSending ? 'Отправка...' : (
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        )}
                     </button>
                 </div>
             </form>
