@@ -313,8 +313,12 @@ const RegistrationForm = ({ telegramUser = null }) => {
             // Сохраняем данные в Firestore
             await createOrUpdateUser(user.uid, userData);
             
-            // Сохраняем идентификатор пользователя в localStorage
-            localStorage.setItem('current_user_id', user.uid);
+            // Сохраняем текущий user объект в localStorage для сохранения авторизации
+            localStorage.setItem('current_user', JSON.stringify({
+                uid: user.uid,
+                displayName: nickname,
+                ...userData
+            }));
             
             // Тактильная обратная связь об успехе
             safeHapticFeedback('notification', null, 'success');

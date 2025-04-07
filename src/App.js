@@ -97,21 +97,28 @@ const navigationItems = [
     }
 ];
 
-// Add this protected route component
-const ProtectedRoute = ({ children }) => {
-    const { isAuthenticated, loading } = useContext(UserContext);
-    const location = useLocation();
+// Компонент для защиты маршрутов, требующих авторизации
+const ProtectedRoute = ({ children, adminOnly = false }) => {
+    const { isAuthenticated, loading, user } = useContext(UserContext);
+    const navigate = useNavigate();
+    
+    useEffect(() => {
+        if (!loading && !isAuthenticated) {
+            // Перенаправление на регистрацию, если пользователь не авторизован
+            navigate('/register', { replace: true });
+        }
+        
+        if (adminOnly && !loading && isAuthenticated && (!user || !user.isAdmin)) {
+            // Перенаправление на главную, если пользователь не администратор
+            navigate('/home', { replace: true });
+        }
+    }, [isAuthenticated, loading, navigate, adminOnly, user]);
     
     if (loading) {
-        return <div className="loading-screen">Loading...</div>;
+        return <div className="loading-screen">Загрузка...</div>;
     }
     
-    if (!isAuthenticated) {
-        // Redirect to register if not authenticated
-        return <Navigate to="/register" state={{ from: location }} replace />;
-    }
-    
-    return children;
+    return isAuthenticated ? children : null;
 };
 
 function App() {
@@ -263,27 +270,22 @@ function App() {
 
 // Обновленный компонент Root для обработки корневого маршрута
 const Root = () => {
-    const { isAuthenticated, loading } = useContext(UserContext);
-    const navigate = useNavigate();
-    const location = useLocation();
-    
-    console.log('Root компонент загружен. Текущий путь:', location.pathname);
-    
-    useEffect(() => {
-        if (loading) return;
-
-        // Перенаправление на соответствующую страницу
-        if (isAuthenticated) {
-            console.log('Пользователь аутентифицирован, перенаправление на /home');
-            navigate('/home', { replace: true });
-        } else {
-            console.log('Пользователь не аутентифицирован, перенаправление на /register');
-            navigate('/register', { replace: true });
-        }
-    }, [isAuthenticated, loading, navigate]);
-    
-    // Показываем загрузку во время проверки аутентификации
-    return <div className="loading-screen">Загрузка приложения...</div>;
+    return (
+        <Routes>
+            <Route path="/" element={<Navigate to="/home" />} />
+            <Route path="/home" element={<Home />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/chats" element={<ProtectedRoute><ChatsList /></ProtectedRoute>} />
+            <Route path="/chat/:chatId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
+            <Route path="/random-chat" element={<ProtectedRoute><RandomChat /></ProtectedRoute>} />
+            <Route path="/guide" element={<Guide />} />
+            <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminPanel /></ProtectedRoute>} />
+            <Route path="/debug" element={<DebugPanel />} />
+            <Route path="*" element={<NotFound />} />
+        </Routes>
+    );
 };
 
 export default App;
