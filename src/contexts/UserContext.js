@@ -18,17 +18,30 @@ export const UserProvider = ({ children }) => {
         // Пытаемся получить данные пользователя из localStorage
         const loadUser = () => {
             try {
+                console.log('UserContext: Проверка авторизации в localStorage');
+                
+                // Проверяем и current_user_id, и current_user
                 const savedUserId = localStorage.getItem('current_user_id');
-                if (savedUserId) {
-                    // Если находим ID, пытаемся получить полные данные из sessionStorage
-                    const userData = sessionStorage.getItem('userData');
+                const savedUserData = localStorage.getItem('current_user');
+                
+                if (savedUserData) {
+                    // Если есть полные данные пользователя
+                    const userData = JSON.parse(savedUserData);
+                    console.log('UserContext: Найдены данные пользователя в current_user');
+                    setUser(userData);
+                } else if (savedUserId) {
+                    // Если находим только ID, пытаемся получить полные данные из sessionStorage
+                    console.log('UserContext: Найден ID пользователя в current_user_id');
+                    const sessionData = sessionStorage.getItem('userData');
 
-                    if (userData) {
-                        setUser(JSON.parse(userData));
+                    if (sessionData) {
+                        setUser(JSON.parse(sessionData));
                     } else {
                         // В противном случае ставим минимальную информацию
                         setUser({ id: savedUserId, telegramId: savedUserId });
                     }
+                } else {
+                    console.log('UserContext: Пользователь не найден в localStorage');
                 }
             } catch (error) {
                 console.error('Ошибка при загрузке данных пользователя:', error);

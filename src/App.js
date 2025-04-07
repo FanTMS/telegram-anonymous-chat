@@ -125,8 +125,11 @@ function App() {
     const [isConnected, setIsConnected] = useState(true);
     const [connectionError, setConnectionError] = useState(null);
 
+    console.log('App компонент инициализирован');
+
     // Инициализация Firebase и проверка соединения
     useEffect(() => {
+        console.log('App: useEffect для проверки соединения запущен');
         const checkConnection = async () => {
             try {
                 // Проверка соединения с Firebase
@@ -275,9 +278,14 @@ const Root = () => {
     const location = useLocation();
     
     console.log('Root компонент загружен. Текущий путь:', location.pathname);
+    console.log('Root: isAuthenticated =', isAuthenticated, 'loading =', loading);
     
     useEffect(() => {
-        if (loading) return;
+        console.log('Root: useEffect для перенаправления запущен');
+        if (loading) {
+            console.log('Root: Загрузка еще не завершена, ожидаем...');
+            return;
+        }
 
         // Перенаправление на соответствующую страницу
         if (isAuthenticated) {

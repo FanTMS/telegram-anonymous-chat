@@ -320,6 +320,9 @@ const RegistrationForm = ({ telegramUser = null }) => {
                 ...userData
             }));
             
+            // Также сохраняем current_user_id для совместимости
+            localStorage.setItem('current_user_id', user.uid);
+            
             // Тактильная обратная связь об успехе
             safeHapticFeedback('notification', null, 'success');
             
