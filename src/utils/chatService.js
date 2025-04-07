@@ -67,14 +67,61 @@ export const _getUserById = async (userId) => {
  */
 export const createChat = async (user1Id, user2Id) => {
     try {
+        // Проверка существования ID пользователей
+        if (!user1Id || !user2Id) {
+            throw new Error("ID одного или обоих пользователей не указаны");
+        }
+
+        // Проверяем существование пользователей в базе данных
+        const user1Ref = doc(db, "users", user1Id);
+        const user2Ref = doc(db, "users", user2Id);
+        
+        const [user1Doc, user2Doc] = await Promise.all([
+            getDoc(user1Ref),
+            getDoc(user2Ref)
+        ]);
+        
+        // Если пользователей нет, создаем базовые документы для них
+        const createUserPromises = [];
+        
+        if (!user1Doc.exists()) {
+            console.log(`Пользователь ${user1Id} не существует, создаем базовый документ`);
+            createUserPromises.push(
+                setDoc(user1Ref, {
+                    id: user1Id,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                })
+            );
+        }
+        
+        if (!user2Doc.exists()) {
+            console.log(`Пользователь ${user2Id} не существует, создаем базовый документ`);
+            createUserPromises.push(
+                setDoc(user2Ref, {
+                    id: user2Id,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                })
+            );
+        }
+        
+        if (createUserPromises.length > 0) {
+            await Promise.all(createUserPromises);
+        }
+
         // Создаем новый чат в коллекции chats
         const chatRef = await addDoc(collection(db, "chats"), {
             participants: [user1Id, user2Id],
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-            active: true,
+            isActive: true,
             lastMessage: null,
-            messagesCount: 0
+            messagesCount: 0,
+            participantsNotified: {
+                [user1Id]: true,
+                [user2Id]: true
+            }
         });
 
         const chatId = chatRef.id;
@@ -103,6 +150,12 @@ export const createChat = async (user1Id, user2Id) => {
  */
 export const findRandomChat = async (userId) => {
     try {
+        // Проверка ID пользователя
+        if (!userId) {
+            console.error("ID пользователя не указан в запросе на поиск");
+            throw new Error("Для поиска собеседника требуется авторизация");
+        }
+
         // Проверка подключения к Firebase
         try {
             const testRef = doc(db, "system", "connection_test");
@@ -126,6 +179,19 @@ export const findRandomChat = async (userId) => {
         }
 
         try {
+            // Создаем документ пользователя, если он не существует
+            const userRef = doc(db, "users", userId);
+            const userDoc = await getDoc(userRef);
+            
+            if (!userDoc.exists()) {
+                console.log(`Создаем документ пользователя ${userId}`);
+                await setDoc(userRef, {
+                    id: userId,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                });
+            }
+
             // Ищем других пользователей в очереди поиска (кроме текущего)
             const queueQuery = query(
                 collection(db, "searchQueue"),
@@ -138,7 +204,7 @@ export const findRandomChat = async (userId) => {
                     id: doc.id,
                     userId: doc.data().userId,
                     timestamp: doc.data().timestamp
-                }));
+                })).filter(userObj => userObj.userId); // Фильтрация для удаления записей с undefined userId
 
                 const otherUsers = queueUsers.filter(queueUser => queueUser.userId !== userId);
 
@@ -209,6 +275,12 @@ export const findRandomChat = async (userId) => {
  */
 export const checkChatMatchStatus = async (userId) => {
     try {
+        // Проверка корректного ID пользователя
+        if (!userId) {
+            console.error("ID пользователя не определен при проверке статуса чата");
+            return null;
+        }
+
         const chatsQuery = query(
             collection(db, "chats"),
             where("participants", "array-contains", userId),
@@ -223,7 +295,7 @@ export const checkChatMatchStatus = async (userId) => {
             const chatDoc = chatSnapshot.docs[0];
             const chatData = chatDoc.data();
 
-            if (chatData.participantsNotified && chatData.participantsNotified[userId]) {
+            if (!chatData.participantsNotified || chatData.participantsNotified[userId]) {
                 return {
                     id: chatDoc.id,
                     ...chatData,
@@ -491,7 +563,7 @@ export const endChat = async (chatId, options = {}) => {
 
         // Обновляем статус чата
         await updateDoc(chatRef, {
-            active: false,
+            isActive: false,
             endedAt: serverTimestamp(),
             duration: durationMinutes
         });

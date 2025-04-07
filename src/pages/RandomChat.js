@@ -4,7 +4,7 @@ import { findRandomChat, cancelSearch, checkChatMatchStatus } from '../utils/cha
 import { useTelegram } from '../hooks/useTelegram';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../firebase';
-import { collection, doc, setDoc, getDoc, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, query, where, getDocs, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import IndexCreationHelper from '../components/IndexCreationHelper';
 import DatabaseLoadingIndicator from '../components/DatabaseLoadingIndicator';
 import '../styles/RandomChat.css';
@@ -150,6 +150,11 @@ const RandomChat = () => {
     // Обновление статуса поиска пользователя в базе данных
     const updateUserSearchStatus = async (userId, isSearching) => {
         try {
+            if (!userId) {
+                console.warn("Невозможно обновить статус поиска: ID пользователя не указан");
+                return;
+            }
+            
             const userStatusRef = doc(db, "userStatus", userId);
             const userStatusDoc = await getDoc(userStatusRef);
             
@@ -164,6 +169,19 @@ const RandomChat = () => {
                     isSearching,
                     lastUpdated: new Date(),
                     isOnline: true
+                });
+            }
+            
+            // Проверяем существование пользователя и создаем его, если необходимо
+            const userRef = doc(db, "users", userId);
+            const userDoc = await getDoc(userRef);
+            
+            if (!userDoc.exists()) {
+                console.log(`Создаем документ пользователя ${userId}`);
+                await setDoc(userRef, {
+                    id: userId,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
                 });
             }
         } catch (err) {
@@ -217,6 +235,20 @@ const RandomChat = () => {
                     }
                 } catch (err) {
                     console.error("Ошибка при проверке статуса поиска:", err);
+                    // Если ошибка связана с неопределенным значением или индексом, не прерываем поиск
+                    if (err.message && (
+                        err.message.includes('undefined') || 
+                        err.message.includes('index') || 
+                        err.message.includes('permission')
+                    )) {
+                        // Ничего не делаем, просто продолжаем попытки
+                    } else {
+                        // Для других ошибок останавливаем поиск и показываем ошибку
+                        setIsSearching(false);
+                        clearInterval(timeIntervalRef.current);
+                        clearInterval(searchIntervalRef.current);
+                        setError(`Ошибка поиска: ${err.message}`);
+                    }
                 }
             }, 2000); // Проверяем каждые 2 секунды
         }
