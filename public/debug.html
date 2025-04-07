@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - Telegram Anonymous Chat</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+            line-height: 1.6;
+            padding: 2rem;
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #f5f7fa;
+            color: #333;
+        }
+        h1 {
+            color: #3390ec;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 0.5rem;
+        }
+        .status {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        pre {
+            background-color: #f1f1f1;
+            padding: 1rem;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .success {
+            color: #00a550;
+        }
+        .error {
+            color: #e53935;
+        }
+    </style>
+</head>
+<body>
+    <h1>Deployment Debug Page</h1>
+    
+    <div class="status">
+        <h2>Site Status</h2>
+        <div id="status">Checking...</div>
+    </div>
+    
+    <div class="status">
+        <h2>Browser Information</h2>
+        <pre id="browser-info"></pre>
+    </div>
+    
+    <div class="status">
+        <h2>URL & Path Information</h2>
+        <pre id="url-info"></pre>
+    </div>
+    
+    <div class="status">
+        <h2>Try Navigation</h2>
+        <p>Click these links to test navigation:</p>
+        <ul>
+            <li><a href="/" id="home-link">Home</a></li>
+            <li><a href="/home" id="home-direct-link">Direct Home</a></li>
+            <li><a href="/profile" id="profile-link">Profile</a></li>
+            <li><a href="/chats" id="chats-link">Chats</a></li>
+            <li><a href="/guide" id="guide-link">Guide</a></li>
+        </ul>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check site status
+            const statusDiv = document.getElementById('status');
+            
+            fetch('/index.html')
+                .then(response => {
+                    if (response.ok) {
+                        statusDiv.innerHTML = '<span class="success">✓ Main page accessible</span>';
+                    } else {
+                        statusDiv.innerHTML = '<span class="error">✗ Main page returned status: ' + response.status + '</span>';
+                    }
+                })
+                .catch(error => {
+                    statusDiv.innerHTML = '<span class="error">✗ Error accessing main page: ' + error.message + '</span>';
+                });
+            
+            // Browser info
+            const browserInfoDiv = document.getElementById('browser-info');
+            browserInfoDiv.textContent = `User Agent: ${navigator.userAgent}
+Platform: ${navigator.platform}
+Cookies Enabled: ${navigator.cookieEnabled}
+Language: ${navigator.language}`;
+            
+            // URL info
+            const urlInfoDiv = document.getElementById('url-info');
+            urlInfoDiv.textContent = `Full URL: ${window.location.href}
+Protocol: ${window.location.protocol}
+Host: ${window.location.host}
+Pathname: ${window.location.pathname}
+Search Params: ${window.location.search}
+Hash: ${window.location.hash}`;
+        });
+    </script>
+</body>
+</html> 

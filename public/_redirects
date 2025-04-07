@@ -1,5 +1,2 @@
-# Редирект всех запросов на index.html для SPA роутинга
-/* /index.html 200!
-
-# Fallback для 404 страниц
-/* /index.html 404
+# Redirect all requests to index.html for SPA routing
+/* /index.html 200
