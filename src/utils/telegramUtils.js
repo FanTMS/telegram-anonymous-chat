@@ -31,6 +31,14 @@ export const getTelegramUser = () => {
         if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
             const userData = window.Telegram.WebApp.initDataUnsafe.user;
             console.log('Получены данные пользователя из Telegram WebApp (window.Telegram):', userData);
+            
+            // Сохраняем данные для последующего восстановления
+            try {
+                localStorage.setItem('telegram_last_user', JSON.stringify(userData));
+            } catch (e) {
+                console.warn('Не удалось сохранить данные Telegram в localStorage:', e);
+            }
+            
             return userData;
         }
         
@@ -38,6 +46,14 @@ export const getTelegramUser = () => {
         if (typeof WebApp !== 'undefined' && WebApp.initDataUnsafe && WebApp.initDataUnsafe.user) {
             const userData = WebApp.initDataUnsafe.user;
             console.log('Получены данные пользователя из Telegram WebApp (twa-dev/sdk):', userData);
+            
+            // Сохраняем данные для последующего восстановления
+            try {
+                localStorage.setItem('telegram_last_user', JSON.stringify(userData));
+            } catch (e) {
+                console.warn('Не удалось сохранить данные Telegram в localStorage:', e);
+            }
+            
             return userData;
         }
         
@@ -52,16 +68,37 @@ export const getTelegramUser = () => {
                 if (userId) {
                     console.log('Получен ID пользователя из URL параметров:', userId);
                     const telegramId = userId.replace('tg', '');
-                    return {
+                    const userData = {
                         id: telegramId,
                         first_name: urlParams.get('first_name') || 'Пользователь Telegram',
                         username: urlParams.get('username'),
                         language_code: urlParams.get('language') || 'ru'
                     };
+                    
+                    // Сохраняем данные для последующего восстановления
+                    try {
+                        localStorage.setItem('telegram_last_user', JSON.stringify(userData));
+                    } catch (e) {
+                        console.warn('Не удалось сохранить данные Telegram в localStorage:', e);
+                    }
+                    
+                    return userData;
                 }
             } catch (e) {
                 console.error('Ошибка при обработке данных из URL:', e);
             }
+        }
+        
+        // Проверяем сохраненные данные из предыдущей сессии
+        try {
+            const cachedData = localStorage.getItem('telegram_last_user');
+            if (cachedData) {
+                const userData = JSON.parse(cachedData);
+                console.log('Используем кешированные данные пользователя Telegram из прошлой сессии:', userData);
+                return userData;
+            }
+        } catch (e) {
+            console.warn('Ошибка при извлечении кешированных данных Telegram:', e);
         }
         
         // Если все способы не сработали
@@ -75,11 +112,20 @@ export const getTelegramUser = () => {
         if (isMobileTelegram) {
             console.log('Обнаружен мобильный Telegram, создаем временные данные пользователя');
             // Генерируем временный ID для пользователя мобильного Telegram
-            return {
+            const tempUserData = {
                 id: 'tg_mobile_' + Date.now(),
                 first_name: 'Пользователь Telegram',
                 is_mobile_telegram: true
             };
+            
+            // Сохраняем временные данные
+            try {
+                localStorage.setItem('telegram_mobile_user', JSON.stringify(tempUserData));
+            } catch (e) {
+                console.warn('Не удалось сохранить временные данные мобильного Telegram:', e);
+            }
+            
+            return tempUserData;
         }
         
         return null;

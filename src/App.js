@@ -149,12 +149,65 @@ function App() {
                     };
                 }
                 
+                // Расширяем WebApp для лучшего пользовательского опыта
+                if (window.Telegram.WebApp.expand) {
+                    try {
+                        window.Telegram.WebApp.expand();
+                    } catch (err) {
+                        console.warn('Ошибка при расширении WebApp:', err);
+                    }
+                }
+                
+                // Сообщаем Telegram, что приложение готово к работе
+                if (window.Telegram.WebApp.ready) {
+                    try {
+                        window.Telegram.WebApp.ready();
+                    } catch (err) {
+                        console.warn('Ошибка при вызове WebApp.ready():', err);
+                    }
+                }
+                
+                // Сохраняем информацию о том, что мы в Telegram мини-приложении
+                localStorage.setItem('is_telegram_webapp', 'true');
+                
                 setTelegramInitialized(true);
             } else if (typeof WebApp !== 'undefined') {
                 console.log('Найден объект WebApp, но не в Telegram.WebApp');
+                
+                // Попытка использовать внешний WebApp если доступен
+                try {
+                    if (WebApp.expand) WebApp.expand();
+                    if (WebApp.ready) WebApp.ready();
+                    localStorage.setItem('is_telegram_webapp', 'true');
+                } catch (err) {
+                    console.warn('Ошибка при инициализации внешнего WebApp:', err);
+                }
+                
                 setTelegramInitialized(true);
             } else {
                 console.log('Telegram WebApp не обнаружен, работаем как обычное веб-приложение');
+                localStorage.removeItem('is_telegram_webapp');
+            }
+            
+            // Восстановление сессии из предыдущего визита
+            const isTelegramApp = localStorage.getItem('is_telegram_webapp') === 'true';
+            if (isTelegramApp) {
+                // Проверяем, если мы в Telegram, но потеряли состояние аутентификации
+                const hasUserData = localStorage.getItem('current_user') || localStorage.getItem('current_user_id');
+                if (!hasUserData) {
+                    console.log('Обнаружена потеря состояния авторизации в Telegram WebApp, пытаемся восстановить.');
+                    // Попытка восстановить данные из сохраненных
+                    const cachedTelegramUser = localStorage.getItem('telegram_last_user') || 
+                                              localStorage.getItem('telegram_mobile_user');
+                    if (cachedTelegramUser) {
+                        try {
+                            console.log('Восстанавливаем данные пользователя из кеша.');
+                            // Дальнейшая обработка будет в UserContext
+                        } catch (err) {
+                            console.error('Ошибка при восстановлении кешированных данных:', err);
+                        }
+                    }
+                }
             }
         } catch (error) {
             console.error('Ошибка при инициализации Telegram WebApp:', error);

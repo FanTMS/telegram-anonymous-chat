@@ -42,7 +42,7 @@ export const UserProvider = ({ children }) => {
                     // Сохраняем ID пользователя для автоматического входа
                     localStorage.setItem('current_user_id', userId);
                     
-                    // Проверяем и при необходимости создаем пользователя в Firebase
+                    // Создаем или обновляем пользователя с использованием Telegram данных
                     createOrUpdateUser(userId, tgUser);
                 }
             } else {
@@ -58,6 +58,9 @@ export const UserProvider = ({ children }) => {
                         const telegramId = parsedData.id ? parsedData.id.toString() : '';
                         const userId = `tg_${telegramId}`;
                         localStorage.setItem('current_user_id', userId);
+                        
+                        // Используем кэшированные данные для создания/обновления пользователя
+                        createOrUpdateUser(userId, parsedData);
                     }
                 }
             }
@@ -151,13 +154,26 @@ export const UserProvider = ({ children }) => {
     // Проверка авторизации при загрузке
     useEffect(() => {
         // Пытаемся получить данные пользователя из localStorage
-        const loadUser = () => {
+        const loadUser = async () => {
             try {
                 console.log('UserContext: Проверка авторизации в localStorage');
                 
                 // Проверяем и current_user_id, и current_user
                 const savedUserId = localStorage.getItem('current_user_id');
                 const savedUserData = localStorage.getItem('current_user');
+
+                if (!savedUserData && !savedUserId && isMobileTelegram) {
+                    // Для мобильного Telegram без сохраненных данных - пробуем получить данные снова
+                    const tgUser = getTelegramUser();
+                    if (tgUser) {
+                        const telegramId = tgUser.id ? tgUser.id.toString() : '';
+                        const userId = `tg_${telegramId}`;
+                        
+                        // Создаем пользователя сразу с использованием данных Telegram
+                        createOrUpdateUser(userId, tgUser);
+                        return;
+                    }
+                }
                 
                 if (savedUserData) {
                     // Если есть полные данные пользователя
@@ -258,7 +274,7 @@ export const UserProvider = ({ children }) => {
                 setLoading(false);
             }
         };
-
+        
         loadUser();
     }, [telegramData]);
 
