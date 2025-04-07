@@ -265,6 +265,9 @@ function App() {
 const Root = () => {
     const { isAuthenticated, loading } = useContext(UserContext);
     const navigate = useNavigate();
+    const location = useLocation();
+    
+    console.log('Root компонент загружен. Текущий путь:', location.pathname);
     
     useEffect(() => {
         // Проверяем наличие сохраненного пути в sessionStorage (от страницы 404)
@@ -274,27 +277,49 @@ const Root = () => {
             console.log(`Перенаправление на сохраненный маршрут: ${redirectPath}`);
             
             // Используем таймаут, чтобы дать React время инициализироваться
-            setTimeout(() => navigate(redirectPath, { replace: true }), 100);
+            setTimeout(() => navigate(redirectPath, { replace: true }), 300);
             return;
         }
         
-        // Стандартное перенаправление, если нет сохраненного пути
-        if (!loading) {
+        // Специальная обработка для прямых URL
+        if (location.pathname === '/home' || location.pathname === '/register') {
+            // Эти пути обрабатываются напрямую, не перенаправляем
+            console.log('Обнаружен прямой путь:', location.pathname);
+            return;
+        }
+        
+        // Стандартное перенаправление для корневого пути
+        if (location.pathname === '/' && !loading) {
             if (isAuthenticated) {
+                console.log('Пользователь аутентифицирован, перенаправление на /home');
                 navigate("/home", { replace: true });
             } else {
+                console.log('Пользователь не аутентифицирован, перенаправление на /register');
                 navigate("/register", { replace: true });
             }
         }
-    }, [isAuthenticated, loading, navigate]);
+    }, [isAuthenticated, loading, navigate, location.pathname]);
     
     // Показываем загрузку во время проверки аутентификации
     if (loading) {
         return <div className="loading-screen">Loading...</div>;
     }
     
-    // Этот возврат будет использоваться только до завершения эффекта
-    return <div className="loading-screen">Перенаправление...</div>;
+    // Если это корневой путь, показываем загрузку до перенаправления
+    if (location.pathname === '/') {
+        return <div className="loading-screen">Перенаправление...</div>;
+    }
+    
+    // Для путей /home или /register возвращаем соответствующий компонент
+    if (location.pathname === '/home') {
+        return <Navigate to="/home" replace />;
+    }
+    if (location.pathname === '/register') {
+        return <Navigate to="/register" replace />;
+    }
+    
+    // Для всех остальных путей
+    return <div className="loading-screen">Обработка маршрута...</div>;
 };
 
 export default App;

@@ -6,36 +6,50 @@
   <script type="text/javascript">
     // Скрипт для правильного перенаправления в SPA
     (function() {
-      // Проверяем, что мы на странице 404
-      if (window.location.pathname.indexOf('/404') !== 0) {
-        // Сохраняем исходный путь в sessionStorage
-        var path = window.location.pathname;
-        sessionStorage.setItem('redirectPath', path);
-        
-        // Перенаправляем на корневой путь для обработки React Router
-        var rootPath = '/';
-        
-        // Проверяем запрошенный путь
-        if (path.indexOf('/register') === 0) {
-          rootPath = '/register';
-        } else if (path.indexOf('/home') === 0) {
-          rootPath = '/home';
-        } else if (path.indexOf('/profile') === 0) {
-          rootPath = '/profile';
-        } else if (path.indexOf('/chats') === 0) {
-          rootPath = '/chats';
-        } else if (path.indexOf('/chat/') === 0) {
-          rootPath = '/chat/' + path.split('/').pop();
-        } else if (path.indexOf('/random-chat') === 0) {
-          rootPath = '/random-chat';
-        } else if (path.indexOf('/guide') === 0) {
-          rootPath = '/guide';
-        }
-        
-        // Перенаправляем на корень с параметром перенаправления
-        var redirectUrl = window.location.origin + rootPath;
-        window.location.replace(redirectUrl);
+      // Сохраняем исходный путь в sessionStorage
+      var path = window.location.pathname;
+      console.log("404 обработчик: запрошенный путь = " + path);
+      sessionStorage.setItem('redirectPath', path);
+      
+      // Определяем базовый URL (может быть пустым, если URL = домен/)
+      var baseUrl = window.location.origin;
+      
+      // Если путь начинается с / и длина > 1, то убираем первый /
+      var segment = path;
+      if (segment.startsWith('/') && segment.length > 1) {
+        segment = segment.substring(1);
       }
+      
+      // Проверяем запрошенный путь и выбираем правильное перенаправление
+      var redirectUrl = baseUrl;
+      
+      if (segment === 'home' || segment.startsWith('home/')) {
+        redirectUrl = baseUrl + '/';
+      } else if (segment === 'register' || segment.startsWith('register/')) {
+        redirectUrl = baseUrl + '/';
+      } else if (segment === 'profile' || segment.startsWith('profile/')) {
+        redirectUrl = baseUrl + '/';
+      } else if (segment === 'chats' || segment.startsWith('chats/')) {
+        redirectUrl = baseUrl + '/';
+      } else if (segment === 'chat' || segment.startsWith('chat/')) {
+        redirectUrl = baseUrl + '/';
+      } else if (segment === 'random-chat' || segment.startsWith('random-chat/')) {
+        redirectUrl = baseUrl + '/';
+      } else if (segment === 'guide' || segment.startsWith('guide/')) {
+        redirectUrl = baseUrl + '/';
+      } else if (segment === 'groups' || segment.startsWith('groups/')) {
+        redirectUrl = baseUrl + '/';
+      } else {
+        // Если ничего не подошло, перенаправляем на корень
+        redirectUrl = baseUrl + '/';
+      }
+      
+      console.log("404 обработчик: перенаправление на " + redirectUrl);
+      
+      // Устанавливаем таймаут, чтобы показать пользователю страницу 404 на мгновение
+      setTimeout(function() {
+        window.location.replace(redirectUrl);
+      }, 1000);  // 1 секунда
     })();
   </script>
   <style>

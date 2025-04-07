@@ -8,54 +8,65 @@
   CI = "false"
   PUBLIC_URL = ""
 
-# Основное правило редиректа для SPA - самый высокий приоритет
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Правила редиректа с самым высоким приоритетом
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
   force = true
 
-# Специальное правило для корневого пути
+# Дополнительное правило для корневого пути
 [[redirects]]
   from = "/"
   to = "/index.html"
   status = 200
+  force = true
 
-# Правила для конкретных маршрутов (добавьте все основные маршруты)
+# Прямые правила для конкретных маршрутов
 [[redirects]]
   from = "/register"
   to = "/index.html"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/home"
   to = "/index.html"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/profile"
   to = "/index.html"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/chats"
   to = "/index.html"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/chat/*"
   to = "/index.html"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/random-chat"
   to = "/index.html"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/guide"
   to = "/index.html"
   status = 200
+  force = true
 
 # Optimize asset caching
 [[headers]]
