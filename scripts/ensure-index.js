@@ -61,7 +61,6 @@ if (!fs.existsSync(indexPath)) {
     <title>Telegram Anonymous Chat</title>
     <base href="/" />
     <link rel="icon" href="${publicUrl}/favicon.ico" />
-    <link rel="apple-touch-icon" href="${publicUrl}/logo192.png" />
     <link rel="manifest" href="${publicUrl}/manifest.json" />
     <script>
         // Перенаправляем на главную страницу

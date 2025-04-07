@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build && cp public/netlify-index.html build/index.html"
+  command = "npm run build && cp public/netlify-index.html build/index.html && rm -f build/logo*.png"
   publish = "build"
 
 [build.environment]

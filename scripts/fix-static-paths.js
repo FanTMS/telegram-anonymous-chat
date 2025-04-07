@@ -71,62 +71,55 @@ const fixManifestPaths = () => {
 // Проверяем наличие необходимых статических файлов
 const checkStaticFiles = () => {
     const publicDir = path.join(__dirname, '..', 'public');
-    const requiredFiles = ['favicon.ico', 'logo192.png', 'logo512.png', 'manifest.json'];
+    const requiredFiles = ['favicon.ico', 'manifest.json'];
 
     const missingFiles = requiredFiles.filter(file => !fs.existsSync(path.join(publicDir, file)));
 
     if (missingFiles.length > 0) {
         console.error(`❌ Отсутствуют следующие статические файлы: ${missingFiles.join(', ')}`);
-        console.log('🔍 Запускаем скрипт создания логотипов...');
-
-        try {
-            // Пробуем использовать простой генератор вместо canvas
-            require('./create-simple-logo');
-        } catch (error) {
-            console.error('❌ Ошибка при создании логотипов:', error);
-            console.log('⚠️ Создание логотипов вручную...');
-
-            // Если даже простой генератор не сработал, создаем пустые файлы
-            missingFiles.forEach(file => {
-                const filePath = path.join(publicDir, file);
-                try {
-                    if (file === 'manifest.json') {
-                        // Создаем базовый manifest.json
-                        const baseManifest = {
-                            "short_name": "Telegram Chat",
-                            "name": "Telegram Anonymous Chat",
-                            "icons": [
-                                {
-                                    "src": "favicon.ico",
-                                    "sizes": "64x64 32x32 24x24 16x16",
-                                    "type": "image/x-icon"
-                                },
-                                {
-                                    "src": "logo192.png",
-                                    "type": "image/png",
-                                    "sizes": "192x192"
-                                },
-                                {
-                                    "src": "logo512.png",
-                                    "type": "image/png",
-                                    "sizes": "512x512"
-                                }
-                            ],
-                            "start_url": ".",
-                            "display": "standalone",
-                            "theme_color": "#0088cc",
-                            "background_color": "#ffffff"
-                        };
-                        fs.writeFileSync(filePath, JSON.stringify(baseManifest, null, 2));
-                    } else {
-                        // Создаем пустой файл
-                        fs.writeFileSync(filePath, '');
-                    }
-                    console.log(`✅ Создан пустой файл: ${file}`);
-                } catch (err) {
-                    console.error(`❌ Ошибка при создании файла ${file}:`, err);
-                }
-            });
+        
+        // Если отсутствует favicon.ico, создаем его
+        if (missingFiles.includes('favicon.ico')) {
+            try {
+                // Создаем простой favicon.ico
+                const faviconPath = path.join(publicDir, 'favicon.ico');
+                const icoHeader = Buffer.from([
+                    0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x10, 0x10, 
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x68, 0x00, 
+                    0x00, 0x00, 0x16, 0x00, 0x00, 0x00
+                ]);
+                fs.writeFileSync(faviconPath, icoHeader);
+                console.log(`✅ Создан простой файл: favicon.ico`);
+            } catch (err) {
+                console.error(`❌ Ошибка при создании файла favicon.ico:`, err);
+            }
+        }
+        
+        // Если отсутствует manifest.json, создаем его
+        if (missingFiles.includes('manifest.json')) {
+            try {
+                const manifestPath = path.join(publicDir, 'manifest.json');
+                // Создаем базовый manifest.json без ссылок на PNG-иконки
+                const baseManifest = {
+                    "short_name": "Telegram Chat",
+                    "name": "Telegram Anonymous Chat",
+                    "icons": [
+                        {
+                            "src": "favicon.ico",
+                            "sizes": "64x64 32x32 24x24 16x16",
+                            "type": "image/x-icon"
+                        }
+                    ],
+                    "start_url": ".",
+                    "display": "standalone",
+                    "theme_color": "#0088cc",
+                    "background_color": "#ffffff"
+                };
+                fs.writeFileSync(manifestPath, JSON.stringify(baseManifest, null, 2));
+                console.log(`✅ Создан базовый manifest.json`);
+            } catch (err) {
+                console.error(`❌ Ошибка при создании файла manifest.json:`, err);
+            }
         }
     } else {
         console.log('✅ Все необходимые статические файлы присутствуют');
