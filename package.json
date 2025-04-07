@@ -26,12 +26,12 @@
         "init": "node scripts/init-project.js",
         "start": "react-scripts start",
         "prepare": "node scripts/prepare-project.js",
-        "create-logos": "node scripts/create-simple-logo.js",
+        "create-logos": "node scripts/create-logos.js",
         "create-indexes": "node scripts/create-firestore-indexes.js",
         "fix-paths": "node scripts/fix-static-paths.js",
         "ensure-index": "node scripts/ensure-index.js",
         "prestart": "npm run fix-paths",
-        "build": "npm run fix-paths && react-scripts build && npm run ensure-index"
+        "build": "npm run create-logos && npm run fix-paths && react-scripts build && npm run ensure-index"
     },
     "eslintConfig": {
         "extends": [
