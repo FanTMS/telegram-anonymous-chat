@@ -8,7 +8,7 @@
  * @returns {string} - Абсолютный путь к ресурсу
  */
 export const getPublicUrl = (path) => {
-    const publicUrl = process.env.PUBLIC_URL || '';
+    const publicUrl = '' || '';
     return `${publicUrl}${path.startsWith('/') ? path : `/${path}`}`;
 };
 

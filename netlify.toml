@@ -6,7 +6,7 @@
   NODE_VERSION = "18.17.1"
   NPM_FLAGS = "--no-audit --legacy-peer-deps --force"
   CI = "false"
-  PUBLIC_URL = "/"
+  PUBLIC_URL = ""
 
 # Single redirect rule for SPA
 [[redirects]]
