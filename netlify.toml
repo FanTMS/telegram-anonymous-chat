@@ -8,11 +8,12 @@
   CI = "false"
   PUBLIC_URL = ""
 
-# Single redirect rule for SPA
+# Single redirect rule for SPA - обновленная версия
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+  force = true
 
 # Optimize asset caching
 [[headers]]

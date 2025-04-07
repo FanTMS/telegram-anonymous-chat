@@ -31,7 +31,7 @@
         "fix-paths": "node scripts/fix-static-paths.js",
         "ensure-index": "node scripts/ensure-index.js",
         "prestart": "npm run fix-paths",
-        "build": "cross-env NODE_ENV=production CI=false npm run create-logos && npm run fix-paths && react-scripts build && npm run ensure-index"
+        "build": "cross-env NODE_ENV=production CI=false npm run create-logos && npm run fix-paths && react-scripts build && npm run ensure-index && cp public/_redirects build/"
     },
     "eslintConfig": {
         "extends": [
