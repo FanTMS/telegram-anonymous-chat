@@ -7,13 +7,30 @@
     <!-- Добавляем base href для корректной работы SPA -->
     <base href="/" />
     <title>Анонимный чат в Telegram</title>
-    <!-- Мета-теги и стили будут автоматически добавлены при сборке -->
+    <!-- Добавляем иконку и основные мета-теги -->
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="description" content="Анонимный чат в Telegram для общения с незнакомцами" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
 </head>
 
 <body>
     <noscript>Для работы приложения необходимо включить JavaScript.</noscript>
     <div id="root"></div>
-    <!-- Скрипты будут добавлены автоматически при сборке -->
+    <!-- Добавляем скрипт для проверки маршрута -->
+    <script>
+        // Для SPA на Netlify, убедимся, что мы перенаправляем на правильный маршрут
+        if (typeof window !== 'undefined' && window.location.pathname === '/') {
+            // Проверяем авторизацию
+            const isAuthenticated = !!localStorage.getItem('current_user_id');
+            // Перенаправляем соответствующим образом
+            if (isAuthenticated) {
+                window.location.href = '/home';
+            } else {
+                window.location.href = '/register';
+            }
+        }
+    </script>
 </body>
 
 </html>

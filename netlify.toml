@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build"
+  command = "npm run build && [ -f build/index.html ] || cp build/index-spa.html build/index.html"
   publish = "build"
 
 [build.environment]
