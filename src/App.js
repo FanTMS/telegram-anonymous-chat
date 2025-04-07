@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { UserProvider } from './contexts/UserContext';
+import React, { useState, useEffect, useContext } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { UserProvider, UserContext } from './contexts/UserContext';
 import { ToastProvider } from './components/Toast';
 import './styles/global.css';
 
@@ -97,6 +97,23 @@ const navigationItems = [
     }
 ];
 
+// Add this protected route component
+const ProtectedRoute = ({ children }) => {
+    const { isAuthenticated, loading } = useContext(UserContext);
+    const location = useLocation();
+    
+    if (loading) {
+        return <div className="loading-screen">Loading...</div>;
+    }
+    
+    if (!isAuthenticated) {
+        // Redirect to register if not authenticated
+        return <Navigate to="/register" state={{ from: location }} replace />;
+    }
+    
+    return children;
+};
+
 function App() {
     const [isConnected, setIsConnected] = useState(true);
     const [connectionError, setConnectionError] = useState(null);
@@ -180,14 +197,20 @@ function App() {
                         )}
 
                         <Routes>
-                            {/* Авторизация/регистрация */}
+                            {/* Авторизация/регистрация - публичные маршруты */}
                             <Route path="/register" element={<RegistrationForm />} />
                             <Route path="/onboarding" element={<OnboardingTutorial />} />
 
-                            {/* Основные маршруты внутри AppLayout */}
-                            <Route path="/" element={<AppLayout />}>
-                                <Route index element={<Navigate to="/home" replace />} />
-                                <Route path="index.html" element={<Navigate to="/home" replace />} />
+                            {/* Root path handler */}
+                            <Route path="/" element={<Root />} />
+                            <Route path="/index.html" element={<Root />} />
+
+                            {/* Основные маршруты внутри AppLayout - защищенные */}
+                            <Route path="/" element={
+                                <ProtectedRoute>
+                                    <AppLayout />
+                                </ProtectedRoute>
+                            }>
                                 <Route path="home" element={
                                     <PageTransition>
                                         <Home />
@@ -239,5 +262,22 @@ function App() {
         </Router>
     );
 }
+
+// Add this component to handle the root routing
+const Root = () => {
+    const { isAuthenticated, loading } = useContext(UserContext);
+    
+    // Show loading while checking authentication
+    if (loading) {
+        return <div className="loading-screen">Loading...</div>;
+    }
+    
+    // Redirect based on authentication status
+    if (isAuthenticated) {
+        return <Navigate to="/home" replace />;
+    } else {
+        return <Navigate to="/register" replace />;
+    }
+};
 
 export default App;
