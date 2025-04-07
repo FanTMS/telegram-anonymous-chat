@@ -197,58 +197,56 @@ function App() {
                         )}
 
                         <Routes>
-                            {/* Авторизация/регистрация - публичные маршруты */}
+                            {/* Публичные маршруты - доступны всем */}
                             <Route path="/register" element={<RegistrationForm />} />
                             <Route path="/onboarding" element={<OnboardingTutorial />} />
 
-                            {/* Root path handler */}
-                            <Route path="/" element={<Root />} />
+                            {/* Корневой маршрут и редиректы */}
+                            <Route index element={<Root />} />
                             <Route path="/index.html" element={<Root />} />
 
-                            {/* Основные маршруты внутри AppLayout - защищенные */}
-                            <Route path="/" element={
-                                <ProtectedRoute>
-                                    <AppLayout />
-                                </ProtectedRoute>
-                            }>
-                                <Route path="home" element={
+                            {/* Защищённые маршруты */}
+                            <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                                <Route path="/home" element={
                                     <PageTransition>
                                         <Home />
                                     </PageTransition>
                                 } />
-                                <Route path="chats" element={
+                                <Route path="/chats" element={
                                     <PageTransition>
                                         <ChatsList />
                                     </PageTransition>
                                 } />
-                                <Route path="chat/:chatId" element={
+                                <Route path="/chat/:chatId" element={
                                     <PageTransition>
                                         <Chat />
                                     </PageTransition>
                                 } />
-                                <Route path="random-chat" element={
+                                <Route path="/random-chat" element={
                                     <PageTransition>
                                         <RandomChat />
                                     </PageTransition>
                                 } />
-                                <Route path="profile" element={
+                                <Route path="/profile" element={
                                     <PageTransition>
                                         <Profile />
                                     </PageTransition>
                                 } />
-                                <Route path="guide" element={
+                                <Route path="/guide" element={
                                     <PageTransition>
                                         <BeginnerGuide />
                                     </PageTransition>
                                 } />
-                                <Route path="admin/support" element={<AdminSupport />} />
-                                <Route path="groups" element={<Groups />} />
-                                <Route path="groups/:groupId" element={<GroupDetail />} />
-                                <Route path="groups/create" element={<GroupCreate />} />
-                                <Route path="groups/:groupId/edit" element={<GroupEdit />} />
-                                <Route path="*" element={<NotFoundPage />} />
+                                <Route path="/admin/support" element={<AdminSupport />} />
+                                <Route path="/groups" element={<Groups />} />
+                                <Route path="/groups/:groupId" element={<GroupDetail />} />
+                                <Route path="/groups/create" element={<GroupCreate />} />
+                                <Route path="/groups/:groupId/edit" element={<GroupEdit />} />
                             </Route>
+                            
+                            {/* Диагностика и 404 */}
                             <Route path="/diagnostics" element={<SupportDiagnostics />} />
+                            <Route path="*" element={<NotFoundPage />} />
                         </Routes>
 
                         {/* Добавляем компонент для автоматической загрузки индексов */}
@@ -263,7 +261,7 @@ function App() {
     );
 }
 
-// Add this component to handle the root routing
+// Обновленный компонент Root для обработки корневого маршрута
 const Root = () => {
     const { isAuthenticated, loading } = useContext(UserContext);
     

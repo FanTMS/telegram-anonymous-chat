@@ -17,12 +17,15 @@ try {
     const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
     publicUrl = packageJson.homepage || '';
     
-    // Уберем trailing slash если он есть
-    if (publicUrl && publicUrl.endsWith('/')) {
+    // Если homepage не задан или равен "/", используем пустую строку
+    if (publicUrl === '/' || publicUrl === '') {
+        publicUrl = '';
+    } else if (publicUrl && publicUrl.endsWith('/')) {
+        // Уберем trailing slash если он есть
         publicUrl = publicUrl.slice(0, -1);
     }
     
-    console.log(`📦 Найден homepage: ${publicUrl}`);
+    console.log(`📦 Найден homepage: ${publicUrl || '/'}`);
 } catch (error) {
     console.error('❌ Ошибка при чтении package.json:', error);
 }
@@ -60,8 +63,8 @@ if (!fs.existsSync(indexPath)) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Telegram Anonymous Chat</title>
     <base href="/" />
-    <link rel="icon" href="${publicUrl}/favicon.ico" />
-    <link rel="manifest" href="${publicUrl}/manifest.json" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="manifest" href="/manifest.json" />
     <script>
         // Перенаправляем на главную страницу
         window.location.href = '/register';
@@ -83,7 +86,7 @@ if (!fs.existsSync(indexPath)) {
         console.log('⚠️ Обнаружен шаблон %PUBLIC_URL% в существующем index.html, заменяем...');
         content = content.replace(/%PUBLIC_URL%/g, publicUrl);
         fs.writeFileSync(indexPath, content);
-        console.log('✅ %PUBLIC_URL% заменен на', publicUrl);
+        console.log('✅ %PUBLIC_URL% заменен на', publicUrl || '/');
     } else {
         console.log('✅ Файл index.html уже существует и не содержит шаблонов');
     }
