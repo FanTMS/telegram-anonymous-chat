@@ -4,7 +4,7 @@ import { findRandomChat, cancelSearch, checkChatMatchStatus } from '../utils/cha
 import { useTelegram } from '../hooks/useTelegram';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../firebase';
-import { collection, doc, setDoc, getDoc, query, where, getDocs, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, query, where, getDocs, orderBy, limit, serverTimestamp, updateDoc } from 'firebase/firestore';
 import IndexCreationHelper from '../components/IndexCreationHelper';
 import DatabaseLoadingIndicator from '../components/DatabaseLoadingIndicator';
 import '../styles/RandomChat.css';
@@ -155,19 +155,52 @@ const RandomChat = () => {
                 return;
             }
             
+            // Получаем данные Telegram из sessionStorage
+            let telegramData = null;
+            try {
+                const cachedTelegramUser = sessionStorage.getItem('telegramUser');
+                if (cachedTelegramUser) {
+                    telegramData = JSON.parse(cachedTelegramUser);
+                }
+            } catch (err) {
+                console.warn('Ошибка при получении данных Telegram из sessionStorage:', err);
+            }
+            
+            // Определяем платформу пользователя
+            let platform = 'web';
+            if (telegramData) {
+                platform = telegramData.is_mobile_telegram ? 'telegram_mobile' : 'telegram_web';
+            } else if (/Mobi|Android/i.test(navigator.userAgent)) {
+                platform = 'mobile_web';
+            }
+            
+            console.log(`Обновление статуса поиска для пользователя ${userId} (${platform})`);
+            
             const userStatusRef = doc(db, "userStatus", userId);
             const userStatusDoc = await getDoc(userStatusRef);
             
+            const statusData = {
+                isSearching,
+                lastUpdated: new Date(),
+                platform
+            };
+            
+            // Добавляем данные Telegram в статус поиска
+            if (telegramData) {
+                statusData.telegramData = {
+                    telegramId: telegramData.id?.toString(),
+                    username: telegramData.username || '',
+                    firstName: telegramData.first_name || '',
+                    lastName: telegramData.last_name || ''
+                };
+            }
+            
             if (userStatusDoc.exists()) {
-                await setDoc(userStatusRef, { 
-                    isSearching,
-                    lastUpdated: new Date()
-                }, { merge: true });
+                await setDoc(userStatusRef, statusData, { merge: true });
             } else {
                 await setDoc(userStatusRef, {
                     userId,
-                    isSearching,
-                    lastUpdated: new Date(),
+                    ...statusData,
                     isOnline: true
                 });
             }
@@ -177,16 +210,39 @@ const RandomChat = () => {
             const userDoc = await getDoc(userRef);
             
             if (!userDoc.exists()) {
-                console.log(`Создаем документ пользователя ${userId}`);
                 await setDoc(userRef, {
                     id: userId,
                     createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp()
+                    lastActive: serverTimestamp(),
+                    platform,
+                    telegramData: telegramData ? {
+                        telegramId: telegramData.id?.toString(),
+                        username: telegramData.username || '',
+                        firstName: telegramData.first_name || '',
+                        lastName: telegramData.last_name || ''
+                    } : null
                 });
+            } else {
+                // Обновляем информацию о платформе и последней активности
+                await updateDoc(userRef, {
+                    lastActive: serverTimestamp(),
+                    platform
+                });
+                
+                // Если есть данные Telegram и их еще нет в документе, добавляем их
+                if (telegramData && !userDoc.data().telegramData) {
+                    await updateDoc(userRef, {
+                        telegramData: {
+                            telegramId: telegramData.id?.toString(),
+                            username: telegramData.username || '',
+                            firstName: telegramData.first_name || '',
+                            lastName: telegramData.last_name || ''
+                        }
+                    });
+                }
             }
-        } catch (err) {
-            console.error("Ошибка при обновлении статуса пользователя:", err);
-            // Не прерываем процесс из-за ошибки статуса
+        } catch (error) {
+            console.error("Ошибка при обновлении статуса поиска:", error);
         }
     };
 

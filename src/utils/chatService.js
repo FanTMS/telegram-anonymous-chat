@@ -81,28 +81,89 @@ export const createChat = async (user1Id, user2Id) => {
             getDoc(user2Ref)
         ]);
         
+        // Получаем данные Telegram из sessionStorage
+        let telegramData = null;
+        try {
+            const cachedTelegramUser = sessionStorage.getItem('telegramUser');
+            if (cachedTelegramUser) {
+                telegramData = JSON.parse(cachedTelegramUser);
+            }
+        } catch (err) {
+            console.warn('Ошибка при получении данных Telegram из sessionStorage:', err);
+        }
+        
+        // Определяем платформу пользователя
+        let platform = 'web';
+        if (telegramData) {
+            platform = telegramData.is_mobile_telegram ? 'telegram_mobile' : 'telegram_web';
+        } else if (/Mobi|Android/i.test(navigator.userAgent)) {
+            platform = 'mobile_web';
+        }
+        
         // Если пользователей нет, создаем базовые документы для них
         const createUserPromises = [];
         
         if (!user1Doc.exists()) {
             console.log(`Пользователь ${user1Id} не существует, создаем базовый документ`);
+            
+            // Проверяем, соответствует ли текущий пользователь первому ID
+            let userData = {
+                id: user1Id,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                platform: platform,
+                userColor: '#' + Math.floor(Math.random()*16777215).toString(16)
+            };
+            
+            // Добавляем данные Telegram, если это текущий пользователь
+            if (telegramData) {
+                const currentUserId = localStorage.getItem('current_user_id');
+                if (currentUserId === user1Id) {
+                    userData.telegramData = {
+                        telegramId: telegramData.id?.toString(),
+                        username: telegramData.username || '',
+                        firstName: telegramData.first_name || '',
+                        lastName: telegramData.last_name || '',
+                        languageCode: telegramData.language_code || 'ru'
+                    };
+                    userData.name = telegramData.first_name || "Пользователь";
+                }
+            }
+            
             createUserPromises.push(
-                setDoc(user1Ref, {
-                    id: user1Id,
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp()
-                })
+                setDoc(user1Ref, userData)
             );
         }
         
         if (!user2Doc.exists()) {
             console.log(`Пользователь ${user2Id} не существует, создаем базовый документ`);
+            
+            // Проверяем, соответствует ли текущий пользователь второму ID
+            let userData = {
+                id: user2Id,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                platform: platform,
+                userColor: '#' + Math.floor(Math.random()*16777215).toString(16)
+            };
+            
+            // Добавляем данные Telegram, если это текущий пользователь
+            if (telegramData) {
+                const currentUserId = localStorage.getItem('current_user_id');
+                if (currentUserId === user2Id) {
+                    userData.telegramData = {
+                        telegramId: telegramData.id?.toString(),
+                        username: telegramData.username || '',
+                        firstName: telegramData.first_name || '',
+                        lastName: telegramData.last_name || '',
+                        languageCode: telegramData.language_code || 'ru'
+                    };
+                    userData.name = telegramData.first_name || "Пользователь";
+                }
+            }
+            
             createUserPromises.push(
-                setDoc(user2Ref, {
-                    id: user2Id,
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp()
-                })
+                setDoc(user2Ref, userData)
             );
         }
         
@@ -110,8 +171,17 @@ export const createChat = async (user1Id, user2Id) => {
             await Promise.all(createUserPromises);
         }
 
+        // Получаем данные пользователей после создания (если были созданы)
+        const [updatedUser1Doc, updatedUser2Doc] = await Promise.all([
+            getDoc(user1Ref),
+            getDoc(user2Ref)
+        ]);
+        
+        const user1Data = updatedUser1Doc.data();
+        const user2Data = updatedUser2Doc.data();
+        
         // Создаем новый чат в коллекции chats
-        const chatRef = await addDoc(collection(db, "chats"), {
+        const chatData = {
             participants: [user1Id, user2Id],
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -121,11 +191,26 @@ export const createChat = async (user1Id, user2Id) => {
             participantsNotified: {
                 [user1Id]: true,
                 [user2Id]: true
+            },
+            // Добавляем метаданные для участников
+            participantsData: {
+                [user1Id]: {
+                    name: user1Data?.name || 'Пользователь 1',
+                    platform: user1Data?.platform || platform,
+                    userColor: user1Data?.userColor || '#' + Math.floor(Math.random()*16777215).toString(16)
+                },
+                [user2Id]: {
+                    name: user2Data?.name || 'Пользователь 2',
+                    platform: user2Data?.platform || 'unknown',
+                    userColor: user2Data?.userColor || '#' + Math.floor(Math.random()*16777215).toString(16)
+                }
             }
-        });
+        };
+        
+        const chatRef = await addDoc(collection(db, "chats"), chatData);
 
         const chatId = chatRef.id;
-        console.log(`Создан новый чат между пользователями ${user1Id} и ${user2Id}`);
+        console.log(`Создан новый чат между пользователями ${user1Id} (${user1Data?.platform || platform}) и ${user2Id} (${user2Data?.platform || 'unknown'})`);
 
         // Обновляем статистику для обоих пользователей
         try {
@@ -146,125 +231,128 @@ export const createChat = async (user1Id, user2Id) => {
 /**
  * Поиск случайного собеседника
  * @param {string} userId ID пользователя
- * @returns {Promise<string|null>} ID созданного чата или null, если пользователь добавлен в очередь поиска
+ * @returns {Promise<string|null>} ID созданного чата или null, если собеседник не найден
  */
 export const findRandomChat = async (userId) => {
     try {
-        // Проверка ID пользователя
         if (!userId) {
-            console.error("ID пользователя не указан в запросе на поиск");
-            throw new Error("Для поиска собеседника требуется авторизация");
+            console.error("ID пользователя не указан");
+            return null;
         }
 
-        // Проверка подключения к Firebase
+        console.log(`Поиск собеседника для ${userId}`);
+
+        // Проверяем, существует ли пользователь в Firebase
+        const userRef = doc(db, "users", userId);
+        const userDoc = await getDoc(userRef);
+
+        // Определяем платформу пользователя
+        let platform = 'web';
+        let telegramData = null;
+        
         try {
-            const testRef = doc(db, "system", "connection_test");
-            await getDoc(testRef);
-        } catch (connectionError) {
-            console.error("Ошибка подключения к Firebase:", connectionError);
-            throw new Error("Нет соединения с базой данных. Пожалуйста, проверьте подключение к интернету.");
+            // Получаем данные Telegram из sessionStorage, если они там есть
+            const cachedTelegramUser = sessionStorage.getItem('telegramUser');
+            if (cachedTelegramUser) {
+                telegramData = JSON.parse(cachedTelegramUser);
+                platform = telegramData.is_mobile_telegram ? 'telegram_mobile' : 'telegram_web';
+            } else if (/Mobi|Android/i.test(navigator.userAgent)) {
+                platform = 'mobile_web';
+            }
+        } catch (err) {
+            console.warn('Ошибка при получении данных Telegram из sessionStorage:', err);
         }
 
-        // Проверяем, есть ли уже пользователь в очереди поиска
-        const userQueueQuery = query(
-            collection(db, "searchQueue"),
-            where("userId", "==", userId)
-        );
-        const userQueueSnapshot = await getDocs(userQueueQuery);
-
-        // Если пользователь уже в очереди, удаляем его
-        if (!userQueueSnapshot.empty) {
-            await deleteDoc(doc(db, "searchQueue", userQueueSnapshot.docs[0].id));
-            console.log(`Удален существующий запрос поиска для пользователя ${userId}`);
-        }
-
-        try {
-            // Создаем документ пользователя, если он не существует
-            const userRef = doc(db, "users", userId);
-            const userDoc = await getDoc(userRef);
+        // Создаем или обновляем пользователя с данными телеграм, если они доступны
+        if (!userDoc.exists()) {
+            await setDoc(userRef, {
+                id: userId,
+                createdAt: serverTimestamp(),
+                lastActive: serverTimestamp(),
+                platform,
+                telegramData: telegramData ? {
+                    telegramId: telegramData.id?.toString(),
+                    username: telegramData.username || '',
+                    firstName: telegramData.first_name || '',
+                    lastName: telegramData.last_name || ''
+                } : null
+            });
+        } else {
+            // Обновляем последнюю активность и платформу
+            await updateDoc(userRef, {
+                lastActive: serverTimestamp(),
+                platform
+            });
             
-            if (!userDoc.exists()) {
-                console.log(`Создаем документ пользователя ${userId}`);
-                await setDoc(userRef, {
-                    id: userId,
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp()
+            // Добавляем данные Telegram, если их еще нет
+            if (telegramData && !userDoc.data().telegramData) {
+                await updateDoc(userRef, {
+                    telegramData: {
+                        telegramId: telegramData.id?.toString(),
+                        username: telegramData.username || '',
+                        firstName: telegramData.first_name || '',
+                        lastName: telegramData.last_name || ''
+                    }
                 });
             }
+        }
 
-            // Ищем других пользователей в очереди поиска (кроме текущего)
-            const queueQuery = query(
-                collection(db, "searchQueue"),
-                orderBy("timestamp", "asc")
-            );
+        // Ищем пользователя, ожидающего в очереди подбора
+        const searchQueueQuery = query(
+            collection(db, "searchQueue"),
+            where("userId", "!=", userId),
+            where("status", "==", "waiting"),
+            orderBy("userId"),
+            orderBy("createdAt", "asc"),
+            limit(1)
+        );
 
-            try {
-                const queueSnapshot = await getDocs(queueQuery);
-                const queueUsers = queueSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    userId: doc.data().userId,
-                    timestamp: doc.data().timestamp
-                })).filter(userObj => userObj.userId); // Фильтрация для удаления записей с undefined userId
+        const queueSnapshot = await getDocs(searchQueueQuery);
 
-                const otherUsers = queueUsers.filter(queueUser => queueUser.userId !== userId);
+        if (!queueSnapshot.empty) {
+            // Нашли подходящего собеседника
+            const queueDoc = queueSnapshot.docs[0];
+            const queueData = queueDoc.data();
+            
+            console.log(`Найден собеседник: ${queueData.userId} (платформа: ${queueData.platform || 'unknown'})`);
 
-                if (otherUsers.length > 0) {
-                    // Выбираем случайного пользователя из очереди
-                    const randomIndex = Math.floor(Math.random() * otherUsers.length);
-                    const partnerQueueDoc = otherUsers[randomIndex];
+            // Создаем чат с найденным собеседником
+            const chatId = await createChat(userId, queueData.userId);
 
-                    // Удаляем выбранного пользователя из очереди
-                    await deleteDoc(doc(db, "searchQueue", partnerQueueDoc.id));
+            // Удаляем запись из очереди поиска
+            await deleteDoc(doc(db, "searchQueue", queueDoc.id));
 
-                    // Создаем чат между текущим пользователем и выбранным партнером
-                    const chatId = await createChat(userId, partnerQueueDoc.userId);
-                    console.log(`Найден собеседник ${partnerQueueDoc.userId} для ${userId}, создан чат ${chatId}`);
-                    return chatId;
-                }
-            } catch (indexError) {
-                // Если возникла ошибка с индексами, пытаемся их создать
-                if (indexError.code === 'failed-precondition' && indexError.message.includes('index')) {
-                    console.error('Ошибка индекса:', indexError);
-
-                    // Пытаемся автоматически создать индексы
-                    const indexCreated = await createRequiredIndexes();
-
-                    if (!indexCreated) {
-                        // Если не удалось автоматически создать индекс, возвращаем ошибку с инструкциями
-                        throw new Error("Требуется создание индекса в Firebase. Пожалуйста, следуйте инструкции по ссылке: " +
-                            "https://console.firebase.google.com/project/_/firestore/indexes");
-                    }
-
-                    // Повторяем запрос после создания индекса
-                    throw new Error("Индекс запрошен. Пожалуйста, подождите несколько секунд и повторите поиск.");
-                } else {
-                    throw indexError;
-                }
-            }
-
-            // Если нет подходящих пользователей, добавляем текущего пользователя в очередь
-            await addDoc(collection(db, "searchQueue"), {
-                userId: userId,
-                timestamp: serverTimestamp()
+            return chatId;
+        } else {
+            // Не нашли собеседника, добавляем пользователя в очередь поиска
+            console.log(`Добавляем пользователя ${userId} (${platform}) в очередь поиска`);
+            
+            const searchQueueRef = collection(db, "searchQueue");
+            await addDoc(searchQueueRef, {
+                userId,
+                platform, // Добавляем информацию о платформе
+                status: "waiting",
+                createdAt: serverTimestamp(),
+                telegramData: telegramData ? {
+                    telegramId: telegramData.id?.toString(),
+                    username: telegramData.username || '',
+                    firstName: telegramData.first_name || '',
+                    lastName: telegramData.last_name || ''
+                } : null
             });
-            console.log(`Пользователь ${userId} добавлен в очередь поиска`);
-            return null;
-        } catch (firestoreError) {
-            if (firestoreError.code === 'failed-precondition' && firestoreError.message.includes('index')) {
-                // Пытаемся автоматически создать индексы
-                await createRequiredIndexes();
 
-                // Возвращаем более понятное сообщение об ошибке
-                throw new Error("Индекс создается, пожалуйста подождите несколько секунд и повторите поиск.");
-            }
-            else if (firestoreError.code === 'permission-denied') {
-                throw new Error("Нет прав доступа к базе данных. Проверьте правила безопасности Firestore.");
-            }
-            throw firestoreError;
+            return null;
         }
     } catch (error) {
         console.error("Ошибка при поиске собеседника:", error);
-        throw error;
+        
+        if (error.code === "resource-exhausted") {
+            throw new Error("Превышены лимиты запросов. Пожалуйста, попробуйте позже.");
+        } else if (error.code === "permission-denied") {
+            throw new Error("Необходимо создать индекс для коллекции searchQueue. Обратитесь к администратору.");
+        } else {
+            throw error;
+        }
     }
 };
 
@@ -294,13 +382,78 @@ export const checkChatMatchStatus = async (userId) => {
         if (!chatSnapshot.empty) {
             const chatDoc = chatSnapshot.docs[0];
             const chatData = chatDoc.data();
+            
+            // Определяем платформу пользователя
+            let platform = 'web';
+            let telegramData = null;
+            try {
+                const cachedTelegramUser = sessionStorage.getItem('telegramUser');
+                if (cachedTelegramUser) {
+                    telegramData = JSON.parse(cachedTelegramUser);
+                    platform = telegramData.is_mobile_telegram ? 'telegram_mobile' : 'telegram_web';
+                } else if (/Mobi|Android/i.test(navigator.userAgent)) {
+                    platform = 'mobile_web';
+                }
+            } catch (err) {
+                console.warn('Ошибка при определении платформы:', err);
+            }
 
+            // Проверяем для отладки
+            console.log(`Проверка чата ${chatDoc.id} для пользователя ${userId} (${platform})`);
+            
+            // Обновляем платформу пользователя в метаданных чата, если необходимо
+            if (chatData.participantsData && chatData.participantsData[userId]) {
+                if (chatData.participantsData[userId].platform !== platform) {
+                    console.log(`Обновляем платформу пользователя ${userId} с ${chatData.participantsData[userId].platform} на ${platform}`);
+                    try {
+                        await updateDoc(doc(db, "chats", chatDoc.id), {
+                            [`participantsData.${userId}.platform`]: platform,
+                            updatedAt: serverTimestamp()
+                        });
+                    } catch (updateErr) {
+                        console.warn('Ошибка при обновлении платформы пользователя:', updateErr);
+                    }
+                }
+            }
+
+            // Проверяем уведомления для пользователя
             if (!chatData.participantsNotified || chatData.participantsNotified[userId]) {
-                return {
+                // Готовим данные для ответа
+                const result = {
                     id: chatDoc.id,
                     ...chatData,
-                    createdAt: chatData.createdAt ? chatData.createdAt.toDate() : new Date()
+                    createdAt: chatData.createdAt ? chatData.createdAt.toDate() : new Date(),
+                    currentPlatform: platform
                 };
+                
+                // Находим информацию о собеседнике
+                if (chatData.participants && chatData.participants.length > 1) {
+                    const partnerId = chatData.participants.find(id => id !== userId);
+                    if (partnerId) {
+                        result.partner = {
+                            id: partnerId,
+                            ...((chatData.participantsData && chatData.participantsData[partnerId]) || {})
+                        };
+                        
+                        // Пытаемся получить дополнительную информацию о партнере
+                        try {
+                            const partnerDoc = await getDoc(doc(db, "users", partnerId));
+                            if (partnerDoc.exists()) {
+                                const partnerData = partnerDoc.data();
+                                result.partner = {
+                                    ...result.partner,
+                                    name: partnerData.name || result.partner.name || 'Собеседник',
+                                    telegramData: partnerData.telegramData,
+                                    platform: partnerData.platform || result.partner.platform || 'unknown'
+                                };
+                            }
+                        } catch (err) {
+                            console.warn(`Ошибка при получении данных партнера ${partnerId}:`, err);
+                        }
+                    }
+                }
+                
+                return result;
             }
         }
 
@@ -353,6 +506,35 @@ export const sendChatMessage = async (chatId, senderId, text) => {
         const userDoc = await getDoc(doc(db, "users", senderId));
         const userData = userDoc.exists() ? userDoc.data() : { name: "Неизвестный пользователь" };
 
+        // Получаем данные Telegram из пользователя или из sessionStorage
+        let telegramData = null;
+        if (userData.telegramData) {
+            telegramData = userData.telegramData;
+        } else {
+            try {
+                const cachedTelegramUser = sessionStorage.getItem('telegramUser');
+                if (cachedTelegramUser) {
+                    telegramData = JSON.parse(cachedTelegramUser);
+                    
+                    // Обновляем документ пользователя с данными Telegram, если они не сохранены
+                    if (userDoc.exists()) {
+                        await updateDoc(doc(db, "users", senderId), {
+                            telegramData: {
+                                telegramId: telegramData.id?.toString(),
+                                username: telegramData.username || '',
+                                firstName: telegramData.first_name || '',
+                                lastName: telegramData.last_name || '',
+                                languageCode: telegramData.language_code || 'ru'
+                            },
+                            updatedAt: serverTimestamp()
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn('Ошибка при получении данных Telegram из sessionStorage:', err);
+            }
+        }
+
         // Текущее время для использования в нескольких местах
         const currentTime = new Date();
 
@@ -360,13 +542,23 @@ export const sendChatMessage = async (chatId, senderId, text) => {
         const messageData = {
             chatId,
             senderId,
-            senderName: userData.name || "Неизвестный пользователь",
+            senderName: userData.name || (telegramData?.firstName || "Неизвестный пользователь"),
             text,
             timestamp: serverTimestamp(), // Серверное время
             clientTimestamp: currentTime, // Время клиента
             read: false,
             type: 'text'
         };
+        
+        // Добавляем данные Telegram, если они доступны
+        if (telegramData) {
+            messageData.telegramData = {
+                telegramId: telegramData.id?.toString() || telegramData.telegramId,
+                username: telegramData.username || '',
+                firstName: telegramData.firstName || telegramData.first_name || '',
+                lastName: telegramData.lastName || telegramData.last_name || ''
+            };
+        }
 
         // Добавляем сообщение в коллекцию
         const messageRef = await addDoc(collection(db, "messages"), messageData);
@@ -374,13 +566,25 @@ export const sendChatMessage = async (chatId, senderId, text) => {
 
         // Обновляем информацию о последнем сообщении в чате
         // Важно: не используем serverTimestamp() внутри arrayUnion()
+        const lastMessageData = {
+            text,
+            senderId,
+            senderName: userData.name || (telegramData?.firstName || "Неизвестный пользователь"),
+            timestamp: currentTime // Используем время клиента вместо serverTimestamp()
+        };
+        
+        // Добавляем данные Telegram в последнее сообщение, если они доступны
+        if (telegramData) {
+            lastMessageData.telegramData = {
+                telegramId: telegramData.id?.toString() || telegramData.telegramId,
+                username: telegramData.username || '',
+                firstName: telegramData.firstName || telegramData.first_name || '',
+                lastName: telegramData.lastName || telegramData.last_name || ''
+            };
+        }
+        
         await updateDoc(doc(db, "chats", chatId), {
-            lastMessage: {
-                text,
-                senderId,
-                senderName: userData.name || "Неизвестный пользователь",
-                timestamp: currentTime // Используем время клиента вместо serverTimestamp()
-            },
+            lastMessage: lastMessageData,
             updatedAt: serverTimestamp(),
             messagesCount: increment(1),
             // Если нужно обновить массив с сообщениями, используем clientTimestamp вместо serverTimestamp()
@@ -388,7 +592,7 @@ export const sendChatMessage = async (chatId, senderId, text) => {
                 id: messageId,
                 text: text.substring(0, 50) + (text.length > 50 ? "..." : ""),
                 senderId,
-                senderName: userData.name || "Неизвестный пользователь",
+                senderName: userData.name || (telegramData?.firstName || "Неизвестный пользователь"),
                 timestamp: currentTime.toISOString() // Преобразуем Date в строку ISO
             })
         });

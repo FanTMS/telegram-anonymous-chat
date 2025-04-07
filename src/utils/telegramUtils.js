@@ -27,12 +27,64 @@ export const getTelegramWebApp = () => {
  */
 export const getTelegramUser = () => {
     try {
-        if (WebApp && WebApp.initDataUnsafe && WebApp.initDataUnsafe.user) {
-            return WebApp.initDataUnsafe.user;
+        // Проверяем WebApp через window.Telegram
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+            const userData = window.Telegram.WebApp.initDataUnsafe.user;
+            console.log('Получены данные пользователя из Telegram WebApp (window.Telegram):', userData);
+            return userData;
         }
+        
+        // Проверяем WebApp через twa-dev/sdk
+        if (typeof WebApp !== 'undefined' && WebApp.initDataUnsafe && WebApp.initDataUnsafe.user) {
+            const userData = WebApp.initDataUnsafe.user;
+            console.log('Получены данные пользователя из Telegram WebApp (twa-dev/sdk):', userData);
+            return userData;
+        }
+        
+        // Проверяем data из URL параметров (часто используется на мобильных устройствах)
+        const urlParams = new URLSearchParams(window.location.search);
+        const initData = urlParams.get('tgWebAppData');
+        if (initData) {
+            try {
+                console.log('Найдены данные в URL параметрах', initData);
+                // Получаем user_id из параметров
+                const userId = urlParams.get('tgWebAppUser') || urlParams.get('user');
+                if (userId) {
+                    console.log('Получен ID пользователя из URL параметров:', userId);
+                    const telegramId = userId.replace('tg', '');
+                    return {
+                        id: telegramId,
+                        first_name: urlParams.get('first_name') || 'Пользователь Telegram',
+                        username: urlParams.get('username'),
+                        language_code: urlParams.get('language') || 'ru'
+                    };
+                }
+            } catch (e) {
+                console.error('Ошибка при обработке данных из URL:', e);
+            }
+        }
+        
+        // Если все способы не сработали
+        console.warn('Данные пользователя Telegram не доступны через стандартные методы');
+        
+        // Проверяем, возможно мы на мобильном Telegram без явных данных в WebApp
+        const isMobileTelegram = /Telegram/i.test(navigator.userAgent) || 
+                               document.referrer.includes('t.me') || 
+                               window.location.href.includes('tg://');
+        
+        if (isMobileTelegram) {
+            console.log('Обнаружен мобильный Telegram, создаем временные данные пользователя');
+            // Генерируем временный ID для пользователя мобильного Telegram
+            return {
+                id: 'tg_mobile_' + Date.now(),
+                first_name: 'Пользователь Telegram',
+                is_mobile_telegram: true
+            };
+        }
+        
         return null;
     } catch (error) {
-        console.warn('Failed to get Telegram user data:', error);
+        console.error('Ошибка при получении данных пользователя Telegram:', error);
         return null;
     }
 };

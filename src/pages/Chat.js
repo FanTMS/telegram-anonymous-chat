@@ -4,7 +4,8 @@ import { useAuth } from '../hooks/useAuth';
 import {
     getChatById,
     getChatMessages,
-    sendChatMessage
+    sendChatMessage,
+    checkChatMatchStatus
 } from '../utils/chatService';
 import { addSupportChat } from '../utils/supportService';
 import UserStatus from '../components/UserStatus';
@@ -56,20 +57,61 @@ const Chat = () => {
                 setIsLoading(true);
                 setError(null);
 
-                const chatDetails = await getChatById(chatId);
-                setChat(chatDetails);
-
-                if (chatDetails.type === 'support') {
-                    setPartnerInfo({
-                        name: 'Техническая поддержка',
-                        isOnline: true,
-                        profilePicture: null,
-                        lastSeen: null,
-                        isSupportChat: true
-                    });
+                // Сначала проверяем статус чата для получения подробной информации о партнере
+                const chatStatus = await checkChatMatchStatus(user.id);
+                let chatDetails;
+                
+                if (chatStatus && chatStatus.id === chatId) {
+                    // Используем данные из checkChatMatchStatus, которые содержат информацию о партнере
+                    chatDetails = chatStatus;
+                    
+                    // Если есть информация о партнере, обрабатываем её
+                    if (chatStatus.partner) {
+                        const partnerData = chatStatus.partner;
+                        setPartnerInfo({
+                            id: partnerData.id,
+                            name: partnerData.name || 'Собеседник',
+                            platform: partnerData.platform || 'unknown',
+                            telegramData: partnerData.telegramData || null,
+                            profilePicture: null, // Можно добавить аватар из telegramData если доступен
+                            isOnline: true, // Можно обновить на основе статуса партнера
+                            lastSeen: null
+                        });
+                        
+                        console.log('Информация о партнере:', partnerData);
+                    }
                 } else {
-                    // Для обычных чатов - получаем информацию о собеседнике
+                    // Если не получили данные из checkChatMatchStatus, используем обычный getChatById
+                    chatDetails = await getChatById(chatId);
+                    
+                    if (chatDetails.type === 'support') {
+                        setPartnerInfo({
+                            name: 'Техническая поддержка',
+                            isOnline: true,
+                            profilePicture: null,
+                            lastSeen: null,
+                            isSupportChat: true
+                        });
+                    } else if (chatDetails.participants && chatDetails.participants.length > 0) {
+                        // Находим ID партнера
+                        const partnerId = chatDetails.participants.find(id => id !== user.id);
+                        
+                        if (partnerId && chatDetails.participantsData && chatDetails.participantsData[partnerId]) {
+                            const partner = chatDetails.participantsData[partnerId];
+                            setPartnerInfo({
+                                id: partnerId,
+                                name: partner.name || 'Собеседник',
+                                platform: partner.platform || 'unknown',
+                                telegramData: partner.telegramData || null,
+                                profilePicture: null,
+                                isOnline: true,
+                                lastSeen: null
+                            });
+                        }
+                    }
                 }
+                
+                setChat(chatDetails);
 
                 const chatMessages = await getChatMessages(chatId);
                 setMessages(chatMessages);
@@ -207,6 +249,15 @@ const Chat = () => {
                             lastSeen={partnerInfo.lastSeen}
                             isSupportChat={chat?.type === 'support'}
                         />
+                        {partnerInfo.platform && (
+                            <span className="platform-indicator">
+                                {partnerInfo.platform === 'telegram_web' && 'Telegram Web'}
+                                {partnerInfo.platform === 'telegram_mobile' && 'Telegram Mobile'}
+                                {partnerInfo.platform === 'web' && 'Web'}
+                                {partnerInfo.platform === 'mobile_web' && 'Mobile Web'}
+                                {partnerInfo.platform === 'unknown' && ''}
+                            </span>
+                        )}
                     </div>
                 </div>
             </div>
