@@ -21,11 +21,37 @@ export const UserProvider = ({ children }) => {
     // Проверка, запущено ли приложение в мобильном Telegram
     const isMobileTelegram = /Telegram/i.test(navigator.userAgent) || 
                            document.referrer.includes('t.me') || 
-                           window.location.href.includes('tg://');
+                           window.location.href.includes('tg://') ||
+                           localStorage.getItem('is_telegram_webapp') === 'true' ||
+                           sessionStorage.getItem('is_telegram_webapp') === 'true';
+
+    // Вспомогательная функция для сохранения данных пользователя
+    const saveUserToStorage = (userData) => {
+        if (!userData) return;
+        
+        try {
+            // Сохраняем в оба хранилища для лучшей надежности
+            localStorage.setItem('current_user', JSON.stringify(userData));
+            sessionStorage.setItem('current_user', JSON.stringify(userData));
+            
+            // Сохраняем ID отдельно для быстрого доступа
+            if (userData.id) {
+                localStorage.setItem('current_user_id', userData.id);
+                sessionStorage.setItem('current_user_id', userData.id);
+            }
+            
+            console.log('UserContext: Данные пользователя сохранены в хранилища', userData.id);
+        } catch (e) {
+            console.error('Ошибка при сохранении данных пользователя:', e);
+        }
+    };
 
     // Загрузка Telegram данных
     useEffect(() => {
         try {
+            console.log('UserContext: Запущено в мобильном Telegram?', isMobileTelegram);
+            
+            // Получаем данные пользователя Telegram
             const tgUser = getTelegramUser();
             if (tgUser) {
                 console.log('UserContext: Получены данные пользователя Telegram', tgUser);
@@ -35,15 +61,28 @@ export const UserProvider = ({ children }) => {
                 sessionStorage.setItem('telegramUser', JSON.stringify(tgUser));
 
                 // Если мы на мобильном устройстве и получили данные пользователя, автоматически создаем/обновляем пользователя
-                if (isMobileTelegram || tgUser.is_mobile_telegram) {
+                if (isMobileTelegram || tgUser.is_mobile_telegram || tgUser.from_init_data || tgUser.from_url_params) {
                     const telegramId = tgUser.id ? tgUser.id.toString() : '';
                     const userId = `tg_${telegramId}`;
                     
                     // Сохраняем ID пользователя для автоматического входа
                     localStorage.setItem('current_user_id', userId);
+                    sessionStorage.setItem('current_user_id', userId);
                     
                     // Создаем или обновляем пользователя с использованием Telegram данных
                     createOrUpdateUser(userId, tgUser);
+                    
+                    // Запись в sessionStorage отдельно для совместимости с существующим кодом
+                    sessionStorage.setItem('userData', JSON.stringify({
+                        id: userId,
+                        telegramData: {
+                            telegramId: tgUser.id,
+                            username: tgUser.username,
+                            firstName: tgUser.first_name,
+                            lastName: tgUser.last_name,
+                            languageCode: tgUser.language_code
+                        }
+                    }));
                 }
             } else {
                 console.log('UserContext: Данные пользователя Telegram не найдены');
@@ -58,6 +97,7 @@ export const UserProvider = ({ children }) => {
                         const telegramId = parsedData.id ? parsedData.id.toString() : '';
                         const userId = `tg_${telegramId}`;
                         localStorage.setItem('current_user_id', userId);
+                        sessionStorage.setItem('current_user_id', userId);
                         
                         // Используем кэшированные данные для создания/обновления пользователя
                         createOrUpdateUser(userId, parsedData);
@@ -108,8 +148,8 @@ export const UserProvider = ({ children }) => {
                     }
                 };
                 
-                // Сохраняем в localStorage для восстановления сессии
-                localStorage.setItem('current_user', JSON.stringify(newUser));
+                // Сохраняем в localStorage и sessionStorage для восстановления сессии
+                saveUserToStorage(newUser);
                 setUser(newUser);
             } else {
                 // Обновляем существующего пользователя
@@ -142,8 +182,8 @@ export const UserProvider = ({ children }) => {
                     }
                 };
                 
-                // Сохраняем в localStorage для восстановления сессии
-                localStorage.setItem('current_user', JSON.stringify(contextUser));
+                // Сохраняем в localStorage и sessionStorage для восстановления сессии
+                saveUserToStorage(contextUser);
                 setUser(contextUser);
             }
         } catch (error) {
@@ -153,32 +193,56 @@ export const UserProvider = ({ children }) => {
 
     // Проверка авторизации при загрузке
     useEffect(() => {
-        // Пытаемся получить данные пользователя из localStorage
+        // Пытаемся получить данные пользователя из localStorage и sessionStorage
         const loadUser = async () => {
             try {
-                console.log('UserContext: Проверка авторизации в localStorage');
+                console.log('UserContext: Проверка авторизации в хранилищах');
                 
-                // Проверяем и current_user_id, и current_user
-                const savedUserId = localStorage.getItem('current_user_id');
-                const savedUserData = localStorage.getItem('current_user');
+                // Проверяем и current_user_id, и current_user в обоих хранилищах
+                const savedUserId = localStorage.getItem('current_user_id') || sessionStorage.getItem('current_user_id');
+                const savedUserData = localStorage.getItem('current_user') || sessionStorage.getItem('current_user');
 
+                // В Telegram Mini App могут быть проблемы с хранилищем
                 if (!savedUserData && !savedUserId && isMobileTelegram) {
-                    // Для мобильного Telegram без сохраненных данных - пробуем получить данные снова
+                    console.log('UserContext: В Telegram Mini App нет сохраненных данных, пробуем получить данные');
+                    
+                    // Получаем данные из Telegram параметров
                     const tgUser = getTelegramUser();
                     if (tgUser) {
                         const telegramId = tgUser.id ? tgUser.id.toString() : '';
                         const userId = `tg_${telegramId}`;
                         
-                        // Создаем пользователя сразу с использованием данных Telegram
+                        // Создаем пользователя с данными Telegram
                         createOrUpdateUser(userId, tgUser);
+                        setLoading(false);
                         return;
+                    }
+                    
+                    // Ещё одна попытка - проверяем сохраненные данные Telegram
+                    const telegramCached = localStorage.getItem('telegram_last_user') || 
+                                         sessionStorage.getItem('telegram_last_user') || 
+                                         sessionStorage.getItem('telegramUser');
+                    
+                    if (telegramCached) {
+                        try {
+                            const parsedTgData = JSON.parse(telegramCached);
+                            const telegramId = parsedTgData.id ? parsedTgData.id.toString() : '';
+                            const userId = `tg_${telegramId}`;
+                            
+                            // Создаем пользователя с кешированными данными Telegram
+                            createOrUpdateUser(userId, parsedTgData);
+                            setLoading(false);
+                            return;
+                        } catch (e) {
+                            console.error('Ошибка при работе с кешированными данными Telegram:', e);
+                        }
                     }
                 }
                 
                 if (savedUserData) {
                     // Если есть полные данные пользователя
                     const userData = JSON.parse(savedUserData);
-                    console.log('UserContext: Найдены данные пользователя в current_user');
+                    console.log('UserContext: Найдены данные пользователя в хранилище', userData);
                     
                     // Обновляем данные Telegram, если они доступны
                     if (telegramData && (!userData.telegramData || !userData.telegramData.telegramId)) {
@@ -190,7 +254,7 @@ export const UserProvider = ({ children }) => {
                             languageCode: telegramData.language_code
                         };
                         // Сохраняем обновленные данные
-                        localStorage.setItem('current_user', JSON.stringify(userData));
+                        saveUserToStorage(userData);
                         
                         // Обновляем пользователя в Firebase
                         if (userData.id) {
@@ -201,7 +265,7 @@ export const UserProvider = ({ children }) => {
                     setUser(userData);
                 } else if (savedUserId) {
                     // Если находим только ID, пытаемся получить полные данные из sessionStorage
-                    console.log('UserContext: Найден ID пользователя в current_user_id');
+                    console.log('UserContext: Найден ID пользователя:', savedUserId);
                     const sessionData = sessionStorage.getItem('userData');
 
                     if (sessionData) {
@@ -221,31 +285,80 @@ export const UserProvider = ({ children }) => {
                         }
                         setUser(parsedData);
                     } else {
-                        // В противном случае ставим минимальную информацию с данными Telegram, если доступны
-                        const baseUser = { id: savedUserId };
-                        if (telegramData) {
-                            baseUser.telegramData = {
-                                telegramId: telegramData.id?.toString(),
-                                username: telegramData.username,
-                                firstName: telegramData.first_name,
-                                lastName: telegramData.last_name,
-                                languageCode: telegramData.language_code
-                            };
-                            baseUser.name = telegramData.first_name || "Пользователь";
+                        // Пытаемся получить пользователя из Firebase
+                        try {
+                            const userRef = doc(db, "users", savedUserId);
+                            const userDoc = await getDoc(userRef);
                             
-                            // Обновляем пользователя в Firebase
-                            createOrUpdateUser(savedUserId, telegramData);
+                            if (userDoc.exists()) {
+                                const userData = userDoc.data();
+                                console.log('UserContext: Получены данные пользователя из Firebase', userData);
+                                
+                                // Создаем объект пользователя для контекста
+                                const contextUser = {
+                                    ...userData,
+                                    id: savedUserId
+                                };
+                                
+                                // Обновляем с данными Telegram, если доступны
+                                if (telegramData) {
+                                    contextUser.telegramData = {
+                                        telegramId: telegramData.id?.toString(),
+                                        username: telegramData.username,
+                                        firstName: telegramData.first_name,
+                                        lastName: telegramData.last_name,
+                                        languageCode: telegramData.language_code
+                                    };
+                                }
+                                
+                                // Сохраняем данные
+                                saveUserToStorage(contextUser);
+                                setUser(contextUser);
+                            } else {
+                                // В противном случае ставим минимальную информацию с данными Telegram, если доступны
+                                const baseUser = { id: savedUserId };
+                                if (telegramData) {
+                                    baseUser.telegramData = {
+                                        telegramId: telegramData.id?.toString(),
+                                        username: telegramData.username,
+                                        firstName: telegramData.first_name,
+                                        lastName: telegramData.last_name,
+                                        languageCode: telegramData.language_code
+                                    };
+                                    baseUser.name = telegramData.first_name || "Пользователь";
+                                    
+                                    // Обновляем пользователя в Firebase
+                                    createOrUpdateUser(savedUserId, telegramData);
+                                }
+                                setUser(baseUser);
+                            }
+                        } catch (e) {
+                            console.error('Ошибка при получении данных пользователя из Firebase:', e);
+                            
+                            // В случае ошибки - минимальная информация
+                            const baseUser = { id: savedUserId };
+                            if (telegramData) {
+                                baseUser.telegramData = {
+                                    telegramId: telegramData.id?.toString(),
+                                    username: telegramData.username,
+                                    firstName: telegramData.first_name,
+                                    lastName: telegramData.last_name,
+                                    languageCode: telegramData.language_code
+                                };
+                                baseUser.name = telegramData.first_name || "Пользователь";
+                            }
+                            setUser(baseUser);
                         }
-                        setUser(baseUser);
                     }
                 } else if (telegramData) {
-                    console.log('UserContext: Пользователь не найден в localStorage, но есть данные Telegram');
+                    console.log('UserContext: Пользователь не найден в хранилищах, но есть данные Telegram');
                     // Если есть данные Telegram, создаем временного пользователя
                     const telegramId = telegramData.id?.toString();
                     const userId = `tg_${telegramId}`;
                     
                     // Сохраняем ID для автоматического входа в следующий раз
                     localStorage.setItem('current_user_id', userId);
+                    sessionStorage.setItem('current_user_id', userId);
                     
                     const tempUser = {
                         id: userId,
@@ -259,8 +372,8 @@ export const UserProvider = ({ children }) => {
                         }
                     };
                     
-                    // Сохраняем пользователя в localStorage
-                    localStorage.setItem('current_user', JSON.stringify(tempUser));
+                    // Сохраняем пользователя в хранилище
+                    saveUserToStorage(tempUser);
                     setUser(tempUser);
                     
                     // Создаем пользователя в Firebase

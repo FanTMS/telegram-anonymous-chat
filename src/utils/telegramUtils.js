@@ -32,9 +32,10 @@ export const getTelegramUser = () => {
             const userData = window.Telegram.WebApp.initDataUnsafe.user;
             console.log('Получены данные пользователя из Telegram WebApp (window.Telegram):', userData);
             
-            // Сохраняем данные для последующего восстановления
+            // Сохраняем данные для последующего восстановления - используем оба хранилища
             try {
                 localStorage.setItem('telegram_last_user', JSON.stringify(userData));
+                sessionStorage.setItem('telegram_last_user', JSON.stringify(userData));
             } catch (e) {
                 console.warn('Не удалось сохранить данные Telegram в localStorage:', e);
             }
@@ -59,28 +60,66 @@ export const getTelegramUser = () => {
         
         // Проверяем data из URL параметров (часто используется на мобильных устройствах)
         const urlParams = new URLSearchParams(window.location.search);
-        const initData = urlParams.get('tgWebAppData');
+        const initData = urlParams.get('tgWebAppData') || window.location.hash.replace('#tgWebAppData=', '');
+        
         if (initData) {
             try {
                 console.log('Найдены данные в URL параметрах', initData);
-                // Получаем user_id из параметров
-                const userId = urlParams.get('tgWebAppUser') || urlParams.get('user');
+                
+                // Пытаемся декодировать и разобрать initData
+                let initDataObj = {};
+                try {
+                    // Разбираем параметры initData из формата ключ=значение&ключ=значение
+                    const paramPairs = decodeURIComponent(initData).split('&');
+                    paramPairs.forEach(pair => {
+                        const [key, value] = pair.split('=');
+                        initDataObj[key] = value;
+                    });
+                    
+                    // Если есть поле user, пытаемся его распарсить
+                    if (initDataObj.user) {
+                        try {
+                            const user = JSON.parse(initDataObj.user);
+                            if (user && user.id) {
+                                const userData = {
+                                    id: user.id.toString(),
+                                    first_name: user.first_name || 'Пользователь Telegram',
+                                    username: user.username || '',
+                                    last_name: user.last_name || '',
+                                    language_code: user.language_code || 'ru',
+                                    from_init_data: true
+                                };
+                                
+                                // Сохраняем в обоих хранилищах
+                                localStorage.setItem('telegram_last_user', JSON.stringify(userData));
+                                sessionStorage.setItem('telegram_last_user', JSON.stringify(userData));
+                                
+                                return userData;
+                            }
+                        } catch (e) {
+                            console.warn('Ошибка при парсинге поля user из initData:', e);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Ошибка при разборе initData:', e);
+                }
+                
+                // Получаем user_id из параметров (запасной вариант)
+                const userId = urlParams.get('tgWebAppUser') || urlParams.get('user') || initDataObj.user_id;
                 if (userId) {
                     console.log('Получен ID пользователя из URL параметров:', userId);
-                    const telegramId = userId.replace('tg', '');
+                    const telegramId = userId.toString().replace('tg', '');
                     const userData = {
                         id: telegramId,
-                        first_name: urlParams.get('first_name') || 'Пользователь Telegram',
-                        username: urlParams.get('username'),
-                        language_code: urlParams.get('language') || 'ru'
+                        first_name: urlParams.get('first_name') || initDataObj.first_name || 'Пользователь Telegram',
+                        username: urlParams.get('username') || initDataObj.username || '',
+                        language_code: urlParams.get('language') || initDataObj.language_code || 'ru',
+                        from_url_params: true
                     };
                     
-                    // Сохраняем данные для последующего восстановления
-                    try {
-                        localStorage.setItem('telegram_last_user', JSON.stringify(userData));
-                    } catch (e) {
-                        console.warn('Не удалось сохранить данные Telegram в localStorage:', e);
-                    }
+                    // Сохраняем данные в обоих хранилищах
+                    localStorage.setItem('telegram_last_user', JSON.stringify(userData));
+                    sessionStorage.setItem('telegram_last_user', JSON.stringify(userData));
                     
                     return userData;
                 }
@@ -89,12 +128,12 @@ export const getTelegramUser = () => {
             }
         }
         
-        // Проверяем сохраненные данные из предыдущей сессии
+        // Проверяем сохраненные данные из предыдущей сессии (проверяем оба хранилища)
         try {
-            const cachedData = localStorage.getItem('telegram_last_user');
+            const cachedData = localStorage.getItem('telegram_last_user') || sessionStorage.getItem('telegram_last_user');
             if (cachedData) {
                 const userData = JSON.parse(cachedData);
-                console.log('Используем кешированные данные пользователя Telegram из прошлой сессии:', userData);
+                console.log('Используем кешированные данные пользователя Telegram из хранилища:', userData);
                 return userData;
             }
         } catch (e) {
@@ -285,10 +324,55 @@ export const initTelegramApp = () => {
         adaptToTelegramTheme();
 
         // Расширяем область для отображения веб-приложения на весь экран
-        webApp.expand();
+        try {
+            webApp.expand();
+        } catch (e) {
+            console.warn('Ошибка при расширении области WebApp:', e);
+        }
 
         // Готовность приложения к работе
-        webApp.ready();
+        try {
+            webApp.ready();
+        } catch (e) {
+            console.warn('Ошибка при вызове WebApp.ready():', e);
+        }
+        
+        // Отключаем оверлей с индикатором загрузки, если он есть
+        try {
+            if (webApp.disableClosingConfirmation) {
+                webApp.disableClosingConfirmation();
+            }
+        } catch (e) {
+            console.warn('Ошибка при отключении запроса подтверждения закрытия:', e);
+        }
+        
+        // Добавляем маркер запуска внутри Telegram
+        try {
+            document.body.classList.add('in-telegram');
+            localStorage.setItem('is_telegram_webapp', 'true');
+            sessionStorage.setItem('is_telegram_webapp', 'true');
+        } catch (e) {
+            console.warn('Ошибка при установке маркера Telegram WebApp:', e);
+        }
+        
+        // Обработка хэша и URL-параметров при запуске в Telegram Mini App
+        try {
+            // Передаем параметры из URL в WebApp, если они есть
+            const urlParams = new URLSearchParams(window.location.search);
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            
+            // Ищем параметры Telegram в URL
+            const tgWebAppData = urlParams.get('tgWebAppData') || hashParams.get('tgWebAppData');
+            const tgWebAppUser = urlParams.get('tgWebAppUser') || hashParams.get('tgWebAppUser');
+            
+            if (tgWebAppData || tgWebAppUser) {
+                console.log('Обнаружены параметры Telegram в URL, сохраняем для последующего использования');
+                sessionStorage.setItem('tgWebAppData', tgWebAppData || '');
+                sessionStorage.setItem('tgWebAppUser', tgWebAppUser || '');
+            }
+        } catch (e) {
+            console.warn('Ошибка при обработке URL-параметров:', e);
+        }
     }
 };
 
