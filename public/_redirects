@@ -1,2 +1,5 @@
 # Редирект всех запросов на index.html для SPA роутинга
-/* /index.html 200
+/* /index.html 200!
+
+# Fallback для 404 страниц
+/* /index.html 404

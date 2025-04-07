@@ -74,30 +74,38 @@
         }
     </style>
     <script>
-        // Сохраняем путь и редиректим на главную страницу
-        window.onload = function () {
-            // Сохраняем оригинальный URL для SPA-роутера
-            var path = window.location.pathname;
-            sessionStorage.setItem('redirectPath', path);
-
-            // Перенаправление через 3 секунды
-            setTimeout(function () {
-                window.location.href = '/';
-            }, 3000);
-
-            // Обновляем счетчик
-            var countdown = 3;
+        // Обработка Single Page Application (SPA) маршрутизации
+        (function() {
+            // Получаем текущий путь и сохраняем его
+            var segments = window.location.pathname.split('/');
+            var path = segments.slice(1).join('/');
+            
+            // Создаем хеш для SPA маршрутизации
+            var hashRoute = window.location.pathname;
+            
+            // Редирект на главную страницу, передавая путь в sessionStorage
+            // Это позволит React Router перенаправить пользователя на правильную страницу
+            sessionStorage.setItem('redirectPath', hashRoute);
+            
+            // Используем тайм-аут для отображения страницы 404 на короткое время
+            var redirectTimer = 1; // 1 секунда
+            
+            // Обновляем счетчик и перенаправляем
             var counter = document.getElementById('counter');
-
-            setInterval(function () {
-                countdown--;
-                if (counter && countdown >= 0) counter.textContent = countdown;
+            var countdownInterval = setInterval(function() {
+                redirectTimer--;
+                if (counter) counter.textContent = redirectTimer;
+                
+                if (redirectTimer <= 0) {
+                    clearInterval(countdownInterval);
+                    window.location.href = "/";
+                }
             }, 1000);
-
+            
             // Показываем текущий путь
             var pathElement = document.getElementById('current-path');
-            if (pathElement) pathElement.textContent = path;
-        };
+            if (pathElement) pathElement.textContent = window.location.pathname;
+        })();
     </script>
 </head>
 
@@ -108,7 +116,7 @@
         <p>Извините, страница <code id="current-path">/</code> не существует или была перемещена.</p>
         <a href="/" class="button">Вернуться на главную</a>
         <div class="redirect-info">
-            Автоматическое перенаправление через <span id="counter">3</span> секунды...
+            Автоматическое перенаправление через <span id="counter">1</span> секунды...
         </div>
     </div>
 </body>

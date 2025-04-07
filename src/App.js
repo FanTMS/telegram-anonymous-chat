@@ -158,7 +158,7 @@ function App() {
     }, []);
 
     return (
-        <Router basename={process.env.PUBLIC_URL || ''}>
+        <Router>
             <UserProvider>
                 <ToastProvider>
                     <div className="app">
@@ -186,43 +186,43 @@ function App() {
 
                             {/* Основные маршруты внутри AppLayout */}
                             <Route path="/" element={<AppLayout />}>
-                                <Route path="/" element={<Navigate to="/home" replace />} />
-                                <Route path="/index.html" element={<Navigate to="/home" replace />} />
-                                <Route path="/home" element={
+                                <Route index element={<Navigate to="/home" replace />} />
+                                <Route path="index.html" element={<Navigate to="/home" replace />} />
+                                <Route path="home" element={
                                     <PageTransition>
                                         <Home />
                                     </PageTransition>
                                 } />
-                                <Route path="/chats" element={
+                                <Route path="chats" element={
                                     <PageTransition>
                                         <ChatsList />
                                     </PageTransition>
                                 } />
-                                <Route path="/chat/:chatId" element={
+                                <Route path="chat/:chatId" element={
                                     <PageTransition>
                                         <Chat />
                                     </PageTransition>
                                 } />
-                                <Route path="/random-chat" element={
+                                <Route path="random-chat" element={
                                     <PageTransition>
                                         <RandomChat />
                                     </PageTransition>
                                 } />
-                                <Route path="/profile" element={
+                                <Route path="profile" element={
                                     <PageTransition>
                                         <Profile />
                                     </PageTransition>
                                 } />
-                                <Route path="/guide" element={
+                                <Route path="guide" element={
                                     <PageTransition>
                                         <BeginnerGuide />
                                     </PageTransition>
                                 } />
-                                <Route path="/admin/support" element={<AdminSupport />} />
-                                <Route path="/groups" element={<Groups />} />
-                                <Route path="/groups/:groupId" element={<GroupDetail />} />
-                                <Route path="/groups/create" element={<GroupCreate />} />
-                                <Route path="/groups/:groupId/edit" element={<GroupEdit />} />
+                                <Route path="admin/support" element={<AdminSupport />} />
+                                <Route path="groups" element={<Groups />} />
+                                <Route path="groups/:groupId" element={<GroupDetail />} />
+                                <Route path="groups/create" element={<GroupCreate />} />
+                                <Route path="groups/:groupId/edit" element={<GroupEdit />} />
                                 <Route path="*" element={<NotFoundPage />} />
                             </Route>
                             <Route path="/diagnostics" element={<SupportDiagnostics />} />

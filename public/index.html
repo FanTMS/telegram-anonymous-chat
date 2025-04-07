@@ -30,6 +30,27 @@
         window.addEventListener('focusin', setViewportHeight);
         window.addEventListener('focusout', setViewportHeight);
         setViewportHeight();
+
+        // Обработка маршрутизации для SPA
+        (function() {
+            // Проверяем, есть ли сохраненный маршрут от страницы 404
+            var redirectPath = sessionStorage.getItem('redirectPath');
+            if (redirectPath) {
+                // Очищаем сохраненный маршрут
+                sessionStorage.removeItem('redirectPath');
+                // Добавляем обработчик события загрузки для перенаправления после инициализации React
+                window.addEventListener('load', function() {
+                    // Устанавливаем таймаут, чтобы дать React время инициализироваться
+                    setTimeout(function() {
+                        // Используем history API для мягкого перенаправления в SPA
+                        window.history.replaceState(null, '', redirectPath);
+                        // Генерируем событие popstate для обновления React Router
+                        var popStateEvent = new PopStateEvent('popstate', { state: null });
+                        window.dispatchEvent(popStateEvent);
+                    }, 300);
+                });
+            }
+        })();
     </script>
 </head>
 
