@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { UserProvider, UserContext } from './contexts/UserContext';
 import { ToastProvider } from './components/Toast';
 import './styles/global.css';
@@ -264,18 +264,37 @@ function App() {
 // Обновленный компонент Root для обработки корневого маршрута
 const Root = () => {
     const { isAuthenticated, loading } = useContext(UserContext);
+    const navigate = useNavigate();
     
-    // Show loading while checking authentication
+    useEffect(() => {
+        // Проверяем наличие сохраненного пути в sessionStorage (от страницы 404)
+        const redirectPath = sessionStorage.getItem('redirectPath');
+        if (redirectPath) {
+            sessionStorage.removeItem('redirectPath');
+            console.log(`Перенаправление на сохраненный маршрут: ${redirectPath}`);
+            
+            // Используем таймаут, чтобы дать React время инициализироваться
+            setTimeout(() => navigate(redirectPath, { replace: true }), 100);
+            return;
+        }
+        
+        // Стандартное перенаправление, если нет сохраненного пути
+        if (!loading) {
+            if (isAuthenticated) {
+                navigate("/home", { replace: true });
+            } else {
+                navigate("/register", { replace: true });
+            }
+        }
+    }, [isAuthenticated, loading, navigate]);
+    
+    // Показываем загрузку во время проверки аутентификации
     if (loading) {
         return <div className="loading-screen">Loading...</div>;
     }
     
-    // Redirect based on authentication status
-    if (isAuthenticated) {
-        return <Navigate to="/home" replace />;
-    } else {
-        return <Navigate to="/register" replace />;
-    }
+    // Этот возврат будет использоваться только до завершения эффекта
+    return <div className="loading-screen">Перенаправление...</div>;
 };
 
 export default App;
