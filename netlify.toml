@@ -1,11 +1,11 @@
 [build]
-  command = "npm run build && cp public/netlify-index.html build/index.html"
+  command = "CI=false npm run build"
   publish = "build"
 
 [build.environment]
   NODE_VERSION = "18.17.1"
   NPM_FLAGS = "--no-audit --legacy-peer-deps --force"
-  CI = "true"
+  CI = "false"
   PUBLIC_URL = "/"
 
 # Single redirect rule for SPA
