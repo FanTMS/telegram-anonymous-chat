@@ -2,7 +2,9 @@
     display: flex;
     align-items: center;
     font-size: 12px;
-    color: var(--tg-theme-hint-color, #999);
+    line-height: 1;
+    color: var(--tg-theme-hint-color, rgba(0, 0, 0, 0.5));
+    margin-top: 4px;
 }
 
 .support-status {
@@ -13,24 +15,81 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    margin-right: 5px;
+    margin-right: 6px;
+    position: relative;
+    flex-shrink: 0;
 }
 
 .status-indicator.online {
     background-color: #4CAF50;
-    box-shadow: 0 0 5px rgba(76, 175, 80, 0.6);
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
 }
 
-.support-status .status-indicator.online {
-    background-color: var(--tg-theme-button-color, #3390EC);
-    box-shadow: 0 0 5px rgba(51, 144, 236, 0.6);
+.status-indicator.online::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background-color: #4CAF50;
+    opacity: 0.4;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.4;
+    }
+    50% {
+        transform: scale(1.5);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 0;
+    }
 }
 
 .status-indicator.offline {
-    background-color: #bdbdbd;
+    background-color: #9e9e9e;
 }
 
 .status-text {
-    font-size: 12px;
-    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.support-status .status-indicator.online {
+    background-color: var(--tg-theme-button-color, #3390ec);
+    box-shadow: 0 0 0 2px rgba(51, 144, 236, 0.2);
+}
+
+.support-status .status-indicator.online::after {
+    background-color: var(--tg-theme-button-color, #3390ec);
+}
+
+/* Для темной темы */
+@media (prefers-color-scheme: dark) {
+    .user-status {
+        color: var(--tg-theme-hint-color, rgba(255, 255, 255, 0.6));
+    }
+    
+    .status-indicator.offline {
+        background-color: #757575;
+    }
+}
+
+/* Адаптивность */
+@media (max-width: 480px) {
+    .user-status {
+        font-size: 11px;
+    }
+    
+    .status-indicator {
+        width: 7px;
+        height: 7px;
+        margin-right: 5px;
+    }
 }
