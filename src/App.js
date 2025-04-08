@@ -40,7 +40,7 @@ import './App.css';
 import { testFirebaseConnection, ensureRequiredCollectionsExist } from './utils/firebaseUtils';
 import { isBrowser } from './utils/browserUtils';
 import WebApp from '@twa-dev/sdk';
-import { getFirestore, collection, doc, setDoc, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, query, where, getDocs, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { saveUserSession, getUserSession, getUserById } from './utils/authService';
 import { initializeApp } from './utils/databaseInitializer';
@@ -113,9 +113,63 @@ const navigationItems = [
 
 // Компонент для защиты маршрутов, требующих авторизации
 const ProtectedRoute = ({ children, adminOnly = false }) => {
-    const { isAuthenticated, loading, user } = useContext(UserContext);
+    const { isAuthenticated, loading, user, setUser } = useContext(UserContext);
     const navigate = useNavigate();
     const [isAdmin, setIsAdmin] = useState(false);
+    const [checkedStorage, setCheckedStorage] = useState(false);
+    
+    // Дополнительная проверка авторизации из хранилища
+    useEffect(() => {
+        // Проверяем, есть ли ID пользователя в localStorage или sessionStorage
+        const checkStorageAuth = async () => {
+            if (!isAuthenticated && !checkedStorage) {
+                console.log('ProtectedRoute: Дополнительная проверка авторизации из хранилища');
+                
+                try {
+                    const savedUserId = localStorage.getItem('current_user_id') || sessionStorage.getItem('current_user_id');
+                    const savedUserData = localStorage.getItem('current_user') || sessionStorage.getItem('current_user');
+                    
+                    console.log('ProtectedRoute: userId из хранилища =', savedUserId, ', userData =', savedUserData ? 'найдено' : 'не найдено');
+                    
+                    if (savedUserId) {
+                        // Если есть только ID пользователя, загружаем данные из Firestore
+                        const userRef = doc(db, "users", savedUserId);
+                        const userDoc = await getDoc(userRef);
+                        
+                        if (userDoc.exists()) {
+                            const userData = userDoc.data();
+                            console.log('ProtectedRoute: Получены данные пользователя из Firestore:', userData);
+                            
+                            if (!userData.id) {
+                                userData.id = savedUserId;
+                            }
+                            
+                            // Сохраняем данные в контекст
+                            setUser(userData);
+                            console.log('ProtectedRoute: Данные пользователя установлены в контекст');
+                        }
+                    } else if (savedUserData) {
+                        // Если есть полные данные пользователя в хранилище
+                        try {
+                            const userData = JSON.parse(savedUserData);
+                            setUser(userData);
+                            console.log('ProtectedRoute: Данные пользователя из хранилища установлены в контекст');
+                        } catch (error) {
+                            console.error('ProtectedRoute: Ошибка при парсинге данных пользователя:', error);
+                        }
+                    }
+                } catch (error) {
+                    console.error('ProtectedRoute: Ошибка при дополнительной проверке авторизации:', error);
+                } finally {
+                    setCheckedStorage(true);
+                }
+            }
+        };
+        
+        if (!isAuthenticated && !loading && !checkedStorage) {
+            checkStorageAuth();
+        }
+    }, [isAuthenticated, loading, setUser, checkedStorage]);
     
     useEffect(() => {
         const checkAdminAccess = async () => {
@@ -177,8 +231,9 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
     }, [isAuthenticated, adminOnly, user]);
     
     useEffect(() => {
-        if (!loading && !isAuthenticated) {
-            // Перенаправление на регистрацию, если пользователь не авторизован
+        if (!loading && !isAuthenticated && checkedStorage) {
+            // Перенаправление на регистрацию только если проверили все возможные источники авторизации
+            console.log('ProtectedRoute: Редирект на /register, isAuthenticated =', isAuthenticated, ', loading =', loading, ', checkedStorage =', checkedStorage);
             navigate('/register', { replace: true });
         }
         
@@ -186,9 +241,9 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
             // Если проверка админ-прав завершена и пользователь не админ - редирект
             navigate('/home', { replace: true });
         }
-    }, [isAuthenticated, loading, navigate, adminOnly, isAdmin]);
+    }, [isAuthenticated, loading, navigate, adminOnly, isAdmin, checkedStorage]);
     
-    if (loading) {
+    if (loading || (!isAuthenticated && !checkedStorage)) {
         return <div className="loading-screen">Загрузка...</div>;
     }
     

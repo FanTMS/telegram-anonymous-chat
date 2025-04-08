@@ -19,7 +19,7 @@ import ReportDialog from '../components/ReportDialog';
 
 const Chat = () => {
     const { chatId } = useParams();
-    const { user } = useAuth();
+    const { user, loading } = useAuth();
     const { showToast } = useToast();
 
     const [chat, setChat] = useState(null);
@@ -497,6 +497,16 @@ const Chat = () => {
         }
     }, [chatId, user?.uid]);
 
+    // Редирект неавторизованного пользователя на страницу регистрации
+    useEffect(() => {
+        if (!loading && !user) {
+            console.error("Пользователь не аутентифицирован - редирект на страницу регистрации");
+            navigate('/register');
+        } else {
+            console.log("Аутентификация: user =", user ? JSON.stringify({uid: user.uid, id: user.id}) : 'null', "loading =", loading);
+        }
+    }, [user, loading, navigate]);
+
     const scrollToBottom = (smooth = false) => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({
@@ -923,7 +933,9 @@ const Chat = () => {
                                                         )}
                                                         <p>{message.text}</p>
                                                         <span className="message-time">
-                                                            {formatMessageTime(message.timestamp)}
+                                                            {typeof message.timestamp === 'object' || typeof message.timestamp === 'number' || typeof message.timestamp === 'string' 
+                                                              ? formatMessageTime(message.timestamp) 
+                                                              : ''}
                                                             {isOutgoing && (
                                                                 <span className={`message-status ${message.read ? 'read' : ''}`}>
                                                                     {message.pending ? 
