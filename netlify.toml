@@ -11,6 +11,8 @@
   TSC_COMPILE_ON_ERROR = "true"
   ESLINT_NO_DEV_ERRORS = "true"
   NODE_VERSION = "16.20.2"
+  GENERATE_SOURCEMAP = "false"
+  BROWSER = "none"
 
 # Редирект для имитации поведения React Router
 [[redirects]]
@@ -27,6 +29,7 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "no-referrer"
+    Access-Control-Allow-Origin = "*"
 
 [[headers]]
   for = "/*.js"
