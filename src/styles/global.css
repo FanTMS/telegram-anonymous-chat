@@ -14,6 +14,12 @@
     --app-border-radius: 12px;
     --app-spacing: 16px;
     --app-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+    /* Telegram WebApp переменные */
+    --tg-viewport-stable-height: 100%;
+    --tg-viewport-height: 100%;
+    --tg-theme-bg-color: #fff;
+    --tg-theme-text-color: #000;
 }
 
 * {
@@ -21,6 +27,8 @@
     -webkit-tap-highlight-color: transparent;
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
+    margin: 0;
+    padding: 0;
 }
 
 html,
@@ -37,6 +45,8 @@ body {
     width: 100%;
     overflow-x: hidden;
     scroll-behavior: smooth;
+    height: 100%;
+    height: -webkit-fill-available;
 }
 
 body {
@@ -245,30 +255,36 @@ screen and (min-resolution: 192dpi) {
     }
 }
 
-/* Loading Screen */
+/* Стили для компактного режима */
+.in-telegram {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Стили для загрузки */
 .loading-screen {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    right: 0;
+    bottom: 0;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
-    background-color: var(--bg-color);
-    z-index: 1000;
-    font-size: 1.2rem;
-    color: var(--text-color);
+    justify-content: center;
+    background: var(--tg-theme-bg-color);
+    color: var(--tg-theme-text-color);
+    z-index: 9999;
 }
 
-.loading-screen::after {
-    content: "";
-    width: 30px;
-    height: 30px;
-    border: 3px solid var(--accent-color-light);
-    border-top-color: var(--accent-color);
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(0, 0, 0, 0.1);
     border-radius: 50%;
-    margin-left: 10px;
+    border-top-color: var(--tg-theme-text-color);
     animation: spin 1s ease-in-out infinite;
 }
 

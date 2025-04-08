@@ -1,9 +1,16 @@
 /* Safe Area Container */
 .safe-area-container {
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100%;
-  height: 100vh;
+  height: 100dvh; /* используем dynamic viewport height */
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--tg-theme-bg-color, #fff);
 }
 
 /* iOS Safe Area */
@@ -27,12 +34,14 @@
 /* Safe Area Content */
 .safe-area-content {
   position: relative;
+  flex: 1;
   width: 100%;
   height: 100%;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-  box-sizing: border-box;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: calc(env(safe-area-inset-bottom) + var(--tg-viewport-height, 0px));
 }
 
 /* Prevent content from being hidden behind notches */
@@ -43,4 +52,47 @@
     padding-left: max(env(safe-area-inset-left), 20px);
     padding-right: max(env(safe-area-inset-right), 20px);
   }
+}
+
+/* Стили для компактного режима */
+.in-telegram {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.in-telegram .safe-area-container {
+  height: var(--tg-viewport-stable-height, 100%);
+  min-height: var(--tg-viewport-stable-height, 100%);
+}
+
+.in-telegram .safe-area-content {
+  height: 100%;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 50px); /* 50px для нижней навигации */
+}
+
+/* Предотвращение скролла основного body */
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  height: -webkit-fill-available;
+  background: var(--tg-theme-bg-color, #fff);
+}
+
+/* Стили для AppLayout */
+.app-layout {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  z-index: 1;
 } 

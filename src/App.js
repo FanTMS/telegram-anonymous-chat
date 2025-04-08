@@ -294,6 +294,36 @@ function App() {
                 if (window.Telegram && window.Telegram.WebApp) {
                     console.log('Telegram WebApp обнаружен, инициализация...');
                     
+                    // Устанавливаем компактный режим
+                    try {
+                        // Получаем и устанавливаем стабильную высоту viewport
+                        const viewportHeight = window.Telegram.WebApp.viewportStableHeight;
+                        document.documentElement.style.setProperty('--tg-viewport-stable-height', `${viewportHeight}px`);
+                        document.documentElement.style.setProperty('--tg-viewport-height', `${window.Telegram.WebApp.viewportHeight}px`);
+                        
+                        // Устанавливаем цвета темы
+                        document.documentElement.style.setProperty('--tg-theme-bg-color', window.Telegram.WebApp.backgroundColor);
+                        document.documentElement.style.setProperty('--tg-theme-text-color', window.Telegram.WebApp.textColor);
+                        
+                        // Расширяем WebApp
+                        window.Telegram.WebApp.expand();
+                        
+                        // Включаем компактный режим
+                        window.Telegram.WebApp.setViewportHeight();
+                        
+                        // Добавляем обработчик изменения высоты viewport
+                        window.Telegram.WebApp.onEvent('viewportChanged', function(event) {
+                            const newViewportHeight = window.Telegram.WebApp.viewportStableHeight;
+                            document.documentElement.style.setProperty('--tg-viewport-stable-height', `${newViewportHeight}px`);
+                            document.documentElement.style.setProperty('--tg-viewport-height', `${window.Telegram.WebApp.viewportHeight}px`);
+                        });
+
+                        // Добавляем класс для Telegram WebApp
+                        document.body.classList.add('in-telegram');
+                    } catch (err) {
+                        console.warn('Ошибка при настройке viewport:', err);
+                    }
+                    
                     // Устанавливаем обработчик ошибок WebApp
                     const originalPostEvent = window.Telegram.WebApp.postEvent;
                     if (originalPostEvent) {
