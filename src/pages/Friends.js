@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, onSnapshot, doc, updateDoc, arrayRemove, getDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, doc, updateDoc, arrayRemove, getDoc, orderBy, arrayUnion, addDoc } from 'firebase/firestore';
 import { useToast } from '../components/Toast';
 import '../styles/Friends.css';
 
