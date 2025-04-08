@@ -352,7 +352,7 @@ const Chat = () => {
                                 className={`message ${isOutgoing ? 'outgoing' : 'incoming'}`}
                             >
                                 <div className="message-content">
-                                    <p>{msg.text}</p>
+                                    <p>{typeof msg.text === 'string' ? msg.text : JSON.stringify(msg.text)}</p>
                                     <span className="message-time">
                                         {new Date(msg.timestamp || msg.clientTimestamp || new Date()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </span>

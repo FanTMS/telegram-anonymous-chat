@@ -921,7 +921,7 @@ const Chat = () => {
                                             
                                             {isSystemMessage ? (
                                                 <div className="system-message">
-                                                    <span>{message.text}</span>
+                                                    <span>{typeof message.text === 'string' ? message.text : JSON.stringify(message.text)}</span>
                                                 </div>
                                             ) : (
                                                 <div
@@ -931,7 +931,7 @@ const Chat = () => {
                                                         {showSenderInfo && (
                                                             <div className="message-sender">{message.senderName || 'Собеседник'}</div>
                                                         )}
-                                                        <p>{message.text}</p>
+                                                        <p>{typeof message.text === 'string' ? message.text : JSON.stringify(message.text)}</p>
                                                         <span className="message-time">
                                                             {typeof message.timestamp === 'object' || typeof message.timestamp === 'number' || typeof message.timestamp === 'string' 
                                                               ? formatMessageTime(message.timestamp) 

@@ -506,7 +506,7 @@ const GroupMessages = ({ groupId, user, isMember }) => {
                                     <MessageHeader $isMine={isMyMessage}>
                                         {isMyMessage ? 'Вы' : item.senderName}
                                     </MessageHeader>
-                                    <MessageText>{item.text}</MessageText>
+                                    <MessageText>{typeof item.text === 'string' ? item.text : JSON.stringify(item.text)}</MessageText>
                                     <MessageTime>
                                         {formatMessageTime(item.createdAt)}
                                     </MessageTime>
