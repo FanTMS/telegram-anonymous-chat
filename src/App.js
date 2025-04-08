@@ -290,7 +290,7 @@ function App() {
                     
                     // Enable closing confirmation
                     WebApp.enableClosingConfirmation();
-                    
+                        
                     // Set header color
                     WebApp.setHeaderColor('#3390ec');
                     
@@ -489,9 +489,9 @@ function App() {
                                 <ProtectedRoute>
                                     <AppLayout>
                                         <Friends />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
                                 
                                 <Route path="/guide" element={
                                     <ProtectedRoute>

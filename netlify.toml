@@ -1,5 +1,5 @@
 [build]
-  command = "CI=false npm run build"
+  command = "CI=false PUBLIC_URL=./ npm run build"
   publish = "build"
 
 [build.environment]
@@ -18,6 +18,11 @@
   force = true
 
 # Оптимизация кеширования для статических ресурсов
+[[headers]]
+  for = "/*"
+    [headers.values]
+    Access-Control-Allow-Origin = "*"
+
 [[headers]]
   for = "/*.js"
   [headers.values]
