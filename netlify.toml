@@ -8,12 +8,14 @@
   NODE_VERSION = "16.20.2"
   NPM_VERSION = "8.19.4"
   NODE_OPTIONS = ""
+  PUBLIC_URL = "./"
 
 # Редирект для имитации поведения React Router на локальной разработке
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+  force = true
 
 # Оптимизация кеширования для статических ресурсов
 [[headers]]
