@@ -199,6 +199,8 @@ export const UserProvider = ({ children }) => {
 
                 console.log('UserContext: savedUserId =', savedUserId, ', savedUserData =', savedUserData ? 'найдено' : 'не найдено');
 
+                let userDataLoaded = false;
+
                 // В Telegram Mini App могут быть проблемы с хранилищем
                 if (!savedUserData && !savedUserId && isMobileTelegram) {
                     console.log('UserContext: В Telegram Mini App нет сохраненных данных, пробуем получить данные');
@@ -210,32 +212,32 @@ export const UserProvider = ({ children }) => {
                         const userId = `tg_${telegramId}`;
                         
                         // Создаем пользователя с данными Telegram
-                        createOrUpdateUser(userId, tgUser);
-                        setLoading(false);
-                        return;
+                        await createOrUpdateUser(userId, tgUser);
+                        userDataLoaded = true;
                     }
                     
-                    // Ещё одна попытка - проверяем сохраненные данные Telegram
-                    const telegramCached = sessionStorage.getItem('telegram_last_user') || 
-                                          sessionStorage.getItem('telegramUser');
-                    
-                    if (telegramCached) {
-                        try {
-                            const parsedTgData = JSON.parse(telegramCached);
-                            const telegramId = parsedTgData.id ? parsedTgData.id.toString() : '';
-                            const userId = `tg_${telegramId}`;
-                            
-                            // Создаем пользователя с кешированными данными Telegram
-                            createOrUpdateUser(userId, parsedTgData);
-                            setLoading(false);
-                            return;
-                        } catch (e) {
-                            console.error('Ошибка при работе с кешированными данными Telegram:', e);
+                    if (!userDataLoaded) {
+                        // Ещё одна попытка - проверяем сохраненные данные Telegram
+                        const telegramCached = sessionStorage.getItem('telegram_last_user') || 
+                                              sessionStorage.getItem('telegramUser');
+                        
+                        if (telegramCached) {
+                            try {
+                                const parsedTgData = JSON.parse(telegramCached);
+                                const telegramId = parsedTgData.id ? parsedTgData.id.toString() : '';
+                                const userId = `tg_${telegramId}`;
+                                
+                                // Создаем пользователя с кешированными данными Telegram
+                                await createOrUpdateUser(userId, parsedTgData);
+                                userDataLoaded = true;
+                            } catch (e) {
+                                console.error('Ошибка при работе с кешированными данными Telegram:', e);
+                            }
                         }
                     }
                 }
                 
-                if (savedUserData) {
+                if (!userDataLoaded && savedUserData) {
                     // Если есть полные данные пользователя
                     const userData = JSON.parse(savedUserData);
                     console.log('UserContext: Найдены данные пользователя в sessionStorage', userData);
@@ -253,6 +255,7 @@ export const UserProvider = ({ children }) => {
                     
                     // Устанавливаем пользователя
                     setUser(userData);
+                    userDataLoaded = true;
                     
                     // Обновляем данные о последней активности
                     try {
@@ -265,7 +268,7 @@ export const UserProvider = ({ children }) => {
                     } catch (e) {
                         console.error('Ошибка при обновлении последней активности:', e);
                     }
-                } else if (savedUserId) {
+                } else if (!userDataLoaded && savedUserId) {
                     // Если есть только ID пользователя, загружаем данные из Firestore
                     try {
                         console.log('UserContext: Найден только ID пользователя. Загружаем из Firestore:', savedUserId);
@@ -290,39 +293,45 @@ export const UserProvider = ({ children }) => {
                                     userData.id = savedUserId;
                                 }
                                 
-                                if (userData.id) {
-                                    // Сохраняем полученные данные в кэш
-                                    saveUserToStorage(userData);
-                                    
-                                    // Устанавливаем пользователя
-                                    setUser(userData);
-                                    
-                                    // Обновляем данные о последней активности
-                                    await setDoc(userRef, {
-                                        lastActive: serverTimestamp()
-                                    }, { merge: true });
-                                }
+                                // Сохраняем полученные данные в кэш
+                                saveUserToStorage(userData);
+                                
+                                // Устанавливаем пользователя
+                                setUser(userData);
+                                userDataLoaded = true;
+                                
+                                // Обновляем данные о последней активности
+                                await setDoc(userRef, {
+                                    lastActive: serverTimestamp()
+                                }, { merge: true });
                             }
                         } else {
                             console.log('UserContext: Пользователь не найден в Firestore');
                             // Очищаем устаревшие данные
                             sessionStorage.removeItem('current_user_id');
                             sessionStorage.removeItem('current_user');
+                            setUser(null);
                         }
                     } catch (e) {
                         console.error('Ошибка при загрузке данных пользователя из Firestore:', e);
+                        // В случае ошибки, оставляем предыдущее состояние
                     }
-                } else {
-                    console.log('UserContext: Данные пользователя не найдены');
+                } else if (!userDataLoaded) {
+                    // Если не нашли пользователя никаким способом, устанавливаем состояние в null
+                    console.log('UserContext: Данные пользователя не найдены, устанавливаем user = null');
+                    setUser(null);
                 }
             } catch (error) {
                 console.error('Ошибка при загрузке пользователя:', error);
+                // В случае ошибки, оставляем предыдущее состояние
             } finally {
                 console.log('UserContext: Завершение проверки авторизации, isAuthenticated =', !!user);
                 setLoading(false);
             }
         };
 
+        // Установка начального состояния загрузки и запуск проверки
+        setLoading(true);
         loadUser();
     }, [telegramData]);
 

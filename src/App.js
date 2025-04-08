@@ -117,6 +117,7 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
     const navigate = useNavigate();
     const [isAdmin, setIsAdmin] = useState(false);
     const [checkedStorage, setCheckedStorage] = useState(false);
+    const location = useLocation(); // Get current location
     
     // Дополнительная проверка авторизации из хранилища
     useEffect(() => {
@@ -147,6 +148,10 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
                             // Сохраняем данные в контекст
                             setUser(userData);
                             console.log('ProtectedRoute: Данные пользователя установлены в контекст');
+                            
+                            // Обновляем сессионное хранилище
+                            sessionStorage.setItem('current_user', JSON.stringify(userData));
+                            sessionStorage.setItem('current_user_id', userData.id);
                         }
                     } else if (savedUserData) {
                         // Если есть полные данные пользователя в хранилище
@@ -231,9 +236,13 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
     }, [isAuthenticated, adminOnly, user]);
     
     useEffect(() => {
-        if (!loading && !isAuthenticated && checkedStorage) {
-            // Перенаправление на регистрацию только если проверили все возможные источники авторизации
-            console.log('ProtectedRoute: Редирект на /register, isAuthenticated =', isAuthenticated, ', loading =', loading, ', checkedStorage =', checkedStorage);
+        // Только перенаправляем на /register, если не находимся уже на странице регистрации
+        // и проверили все возможные источники авторизации
+        if (!loading && !isAuthenticated && checkedStorage && 
+            location.pathname !== '/register' && location.pathname !== '/onboarding') {
+            console.log('ProtectedRoute: Редирект на /register, isAuthenticated =', isAuthenticated, 
+                      ', loading =', loading, ', checkedStorage =', checkedStorage, 
+                      ', currentPath =', location.pathname);
             navigate('/register', { replace: true });
         }
         
@@ -241,7 +250,7 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
             // Если проверка админ-прав завершена и пользователь не админ - редирект
             navigate('/home', { replace: true });
         }
-    }, [isAuthenticated, loading, navigate, adminOnly, isAdmin, checkedStorage]);
+    }, [isAuthenticated, loading, navigate, adminOnly, isAdmin, checkedStorage, location.pathname]);
     
     if (loading || (!isAuthenticated && !checkedStorage)) {
         return <div className="loading-screen">Загрузка...</div>;
@@ -761,14 +770,24 @@ const Root = () => {
         // Увеличиваем счетчик попыток
         setRedirectAttempts(prev => prev + 1);
 
+        // Проверяем, находимся ли мы на странице регистрации или onboarding
+        const isRegisterPath = location.pathname === '/register' || location.pathname === '/onboarding';
+        
         // Используем setTimeout, чтобы дать приложению время на обработку состояния
         const redirectTimer = setTimeout(() => {
             // Перенаправление на соответствующую страницу
             try {
-                if (isAuthenticated) {
+                if (isAuthenticated && isRegisterPath) {
+                    // Если пользователь авторизован, но находится на странице регистрации,
+                    // перенаправляем его на домашнюю страницу
+                    console.log('Пользователь аутентифицирован, но находится на странице регистрации. Перенаправление на /home');
+                    navigate('/home', { replace: true });
+                } else if (isAuthenticated && location.pathname === '/') {
+                    // Если пользователь авторизован и находится на корневой странице
                     console.log('Пользователь аутентифицирован, перенаправление на /home');
                     navigate('/home', { replace: true });
-                } else {
+                } else if (!isAuthenticated && !isRegisterPath && location.pathname !== '/') {
+                    // Если пользователь не авторизован и не находится на странице регистрации
                     console.log('Пользователь не аутентифицирован, перенаправление на /register');
                     navigate('/register', { replace: true });
                 }
@@ -780,7 +799,7 @@ const Root = () => {
         return () => {
             clearTimeout(redirectTimer);
         };
-    }, [isAuthenticated, loading, navigate, redirectAttempts]);
+    }, [isAuthenticated, loading, navigate, redirectAttempts, location.pathname]);
     
     // Показываем загрузку во время проверки аутентификации
     return (
