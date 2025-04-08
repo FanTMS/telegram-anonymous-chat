@@ -32,8 +32,8 @@
         "fix-paths": "node scripts/fix-static-paths.js",
         "ensure-index": "node scripts/ensure-index.js",
         "prestart": "npm run fix-paths",
-        "build": "GENERATE_SOURCEMAP=false PUBLIC_URL=./ react-scripts build && npm run copy-redirects",
-        "copy-redirects": "cp public/_redirects public/404.html build/"
+        "build": "set PUBLIC_URL=./ && set GENERATE_SOURCEMAP=false && react-scripts build && npm run copy-redirects",
+        "copy-redirects": "node scripts/copy-redirects.js"
     },
     "eslintConfig": {
         "extends": [
