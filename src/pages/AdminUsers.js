@@ -345,6 +345,27 @@ const AdminUsers = () => {
         }
     };
 
+    const handleAction = async (userId, action) => {
+        try {
+            let newStatus;
+            switch (action) {
+                case 'ban':
+                    newStatus = 'banned';
+                    break;
+                case 'unban':
+                    newStatus = 'active';
+                    break;
+                default:
+                    console.error('Unknown action:', action);
+                    return;
+            }
+            await updateUserStatus(userId, newStatus);
+        } catch (error) {
+            console.error('Error handling action:', error);
+            showToast('Произошла ошибка при выполнении действия', 'error');
+        }
+    };
+
     return (
         <div className="admin-users-container">
             <div className="admin-users-header">

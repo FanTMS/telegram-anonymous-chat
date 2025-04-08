@@ -32,7 +32,7 @@
         "fix-paths": "node scripts/fix-static-paths.js",
         "ensure-index": "node scripts/ensure-index.js",
         "prestart": "npm run fix-paths",
-        "build": "set \"GENERATE_SOURCEMAP=false\" && react-scripts build && copy public\\_redirects build\\ && copy public\\404.html build\\"
+        "build": "GENERATE_SOURCEMAP=false react-scripts build && cp -r public/_redirects public/404.html build/"
     },
     "eslintConfig": {
         "extends": [
