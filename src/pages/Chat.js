@@ -385,8 +385,11 @@ const Chat = () => {
                     
                     // Безопасно удаляем telegramData для предотвращения ошибки React #31
                     if (messageData.telegramData) {
-                        // Получаем необходимые данные и затем удаляем telegramData
-                        // const tgName = messageData.telegramData.firstName || '';
+                        // Сохраняем нужные данные из telegramData, если они требуются
+                        if (messageData.telegramData.firstName) {
+                            messageData.tgFirstName = messageData.telegramData.firstName;
+                        }
+                        // Полностью удаляем объект telegramData
                         delete messageData.telegramData;
                     }
                     
@@ -579,7 +582,10 @@ const Chat = () => {
                 isTemp: true
             };
             
-            // Не добавляем telegramData в tempMessage, чтобы избежать ошибки React #31
+            // Явно проверяем, что объект tempMessage не содержит telegramData
+            if ('telegramData' in tempMessage) {
+                delete tempMessage.telegramData;
+            }
 
             // Добавляем временное сообщение в список
             setMessages(prevMessages => [...prevMessages, tempMessage]);
@@ -952,7 +958,7 @@ const Chat = () => {
                                                         {showSenderInfo && (
                                                             <div className="message-sender">{message.senderName || 'Собеседник'}</div>
                                                         )}
-                                                        <p>{typeof message.text === 'string' ? message.text : JSON.stringify(message.text)}</p>
+                                                        <p>{typeof message.text === 'object' ? JSON.stringify(message.text) : message.text}</p>
                                                         <span className="message-time">
                                                             {typeof message.timestamp === 'object' || typeof message.timestamp === 'number' || typeof message.timestamp === 'string' 
                                                               ? formatMessageTime(message.timestamp) 

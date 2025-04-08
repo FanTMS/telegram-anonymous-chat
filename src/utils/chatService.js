@@ -513,6 +513,40 @@ export const cancelSearch = async (userId) => {
 };
 
 /**
+ * Регистрация функции очистки при закрытии страницы
+ * @param {string} userId ID пользователя
+ */
+export const registerSearchCleanup = (userId) => {
+    if (!userId) return;
+    
+    // Сохраняем ID пользователя для использования в событии beforeunload
+    sessionStorage.setItem('current_search_user', userId);
+    
+    // Убедимся, что функция будет добавлена только один раз
+    if (!window.__searchCleanupRegistered) {
+        window.addEventListener('beforeunload', async () => {
+            try {
+                const currentSearchUser = sessionStorage.getItem('current_search_user');
+                if (currentSearchUser) {
+                    // Используем синхронный запрос для гарантированного выполнения
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/api/cancel-search', false); // Синхронный запрос
+                    xhr.setRequestHeader('Content-Type', 'application/json');
+                    xhr.send(JSON.stringify({ userId: currentSearchUser }));
+                    
+                    // В случае отсутствия API используем также и обычный метод
+                    cancelSearch(currentSearchUser).catch(console.error);
+                }
+            } catch (error) {
+                console.error('Ошибка при очистке поиска:', error);
+            }
+        });
+        
+        window.__searchCleanupRegistered = true;
+    }
+};
+
+/**
  * Отправка сообщения в чат
  * @param {string} chatId ID чата
  * @param {string} senderId ID отправителя
@@ -556,13 +590,11 @@ export const sendChatMessage = async (chatId, senderId, text) => {
                     // Обновляем документ пользователя с данными Telegram, если они не сохранены
                     if (userDoc.exists()) {
                         await updateDoc(doc(db, "users", senderId), {
-                            telegramData: {
-                                telegramId: telegramData.id?.toString(),
-                                username: telegramData.username || '',
-                                firstName: telegramData.first_name || '',
-                                lastName: telegramData.last_name || '',
-                                languageCode: telegramData.language_code || 'ru'
-                            },
+                            telegramId: telegramData.id?.toString(),
+                            telegramUsername: telegramData.username || '',
+                            telegramFirstName: telegramData.first_name || '',
+                            telegramLastName: telegramData.last_name || '',
+                            telegramLanguageCode: telegramData.language_code || 'ru',
                             updatedAt: serverTimestamp()
                         });
                     }
@@ -579,7 +611,7 @@ export const sendChatMessage = async (chatId, senderId, text) => {
         const messageData = {
             chatId,
             senderId,
-            senderName: userData.name || (telegramData?.firstName || "Неизвестный пользователь"),
+            senderName: userData.name || (telegramData?.firstName || telegramData?.first_name || "Неизвестный пользователь"),
             text,
             timestamp: serverTimestamp(), // Серверное время
             clientTimestamp: currentTime, // Время клиента
@@ -587,14 +619,13 @@ export const sendChatMessage = async (chatId, senderId, text) => {
             type: 'text'
         };
         
-        // Добавляем данные Telegram, если они доступны
+        // Сохраняем только нужные поля из Telegram данных как обычные поля сообщения
         if (telegramData) {
-            messageData.telegramData = {
-                telegramId: telegramData.id?.toString() || telegramData.telegramId,
-                username: telegramData.username || '',
-                firstName: telegramData.firstName || telegramData.first_name || '',
-                lastName: telegramData.lastName || telegramData.last_name || ''
-            };
+            messageData.telegramId = telegramData.id?.toString() || telegramData.telegramId;
+            messageData.telegramUsername = telegramData.username || '';
+            messageData.telegramFirstName = telegramData.firstName || telegramData.first_name || '';
+            messageData.telegramLastName = telegramData.lastName || telegramData.last_name || '';
+            // Не добавляем поле telegramData, чтобы избежать ошибки React #31
         }
 
         // Добавляем сообщение в коллекцию
@@ -607,18 +638,17 @@ export const sendChatMessage = async (chatId, senderId, text) => {
         const lastMessageData = {
             text,
             senderId,
-            senderName: userData.name || (telegramData?.firstName || "Неизвестный пользователь"),
+            senderName: userData.name || (telegramData?.firstName || telegramData?.first_name || "Неизвестный пользователь"),
             timestamp: currentTime // Используем время клиента вместо serverTimestamp()
         };
         
-        // Добавляем данные Telegram в последнее сообщение, если они доступны
+        // Сохраняем только нужные поля из Telegram данных как обычные поля
         if (telegramData) {
-            lastMessageData.telegramData = {
-                telegramId: telegramData.id?.toString() || telegramData.telegramId,
-                username: telegramData.username || '',
-                firstName: telegramData.firstName || telegramData.first_name || '',
-                lastName: telegramData.lastName || telegramData.last_name || ''
-            };
+            lastMessageData.telegramId = telegramData.id?.toString() || telegramData.telegramId;
+            lastMessageData.telegramUsername = telegramData.username || '';
+            lastMessageData.telegramFirstName = telegramData.firstName || telegramData.first_name || '';
+            lastMessageData.telegramLastName = telegramData.lastName || telegramData.last_name || '';
+            // Не добавляем поле telegramData, чтобы избежать ошибки React #31
         }
         
         // Обновляем данные чата в зависимости от его типа

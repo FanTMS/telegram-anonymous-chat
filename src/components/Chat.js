@@ -334,7 +334,7 @@ const Chat = () => {
                 </div>
                 <div className="chat-actions">
                     <button className="end-chat-btn" onClick={handleEndChat}>
-                        Завершить диалог
+                        Завершить чат
                     </button>
                 </div>
             </div>

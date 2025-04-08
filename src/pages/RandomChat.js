@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { findRandomChat, cancelSearch, checkChatMatchStatus } from '../utils/chatService';
+import { findRandomChat, cancelSearch, checkChatMatchStatus, registerSearchCleanup, checkSearchStatus } from '../utils/chatService';
 import { useTelegram } from '../hooks/useTelegram';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../firebase';
@@ -76,6 +76,9 @@ const RandomChat = () => {
 
             // Обновляем статус пользователя в базе данных как "ищет собеседника"
             await updateUserSearchStatus(user.id, true);
+            
+            // Регистрируем функцию очистки поиска при закрытии страницы
+            registerSearchCleanup(user.id);
 
             const chatId = await findRandomChat(user.id);
 
@@ -321,6 +324,71 @@ const RandomChat = () => {
         const seconds = searchTime % 60;
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
+
+    // Получение ID пользователя
+    const getUserId = () => {
+        if (!user) return null;
+        
+        // Приоритетно используем ID из объекта пользователя
+        if (user.id) {
+            return user.id;
+        }
+        
+        // Если есть данные телеграма, используем их
+        if (user.telegramData && user.telegramData.telegramId) {
+            return user.telegramData.telegramId;
+        }
+        
+        // В крайнем случае ищем в localStorage или sessionStorage
+        const savedUserId = localStorage.getItem('current_user_id') || 
+                            sessionStorage.getItem('current_user_id');
+        if (savedUserId) {
+            return savedUserId;
+        }
+        
+        return null;
+    };
+
+    // Эффект для проверки наличия собеседника
+    useEffect(() => {
+        // Если пользователь уже ищет собеседника, регистрируем функцию очистки
+        if (isAuthenticated && user && isSearching) {
+            registerSearchCleanup(user.id);
+        }
+        
+        // Проверяем статус поиска при загрузке компонента
+        const checkForActiveSearch = async () => {
+            try {
+                if (!isAuthenticated || !user) return;
+                
+                // Получаем ID текущего пользователя
+                const userId = getUserId();
+                if (!userId) return;
+                
+                // Проверяем, есть ли активный поиск при загрузке страницы
+                const searchActive = await checkSearchStatus(userId);
+                
+                if (searchActive) {
+                    console.log('Обнаружен активный поиск, устанавливаем статус поиска...');
+                    setIsSearching(true);
+                    
+                    // Регистрируем функцию очистки поиска
+                    registerSearchCleanup(userId);
+                    
+                    // Запускаем таймер для обновления времени поиска
+                    if (timeIntervalRef.current === null) {
+                        startSearchTimer();
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка при проверке активного поиска:', error);
+            }
+        };
+        
+        if (!dbLoading) {
+            checkForActiveSearch();
+        }
+    }, [isAuthenticated, user, isSearching, dbLoading]);
 
     // Отображаем индикатор загрузки базы данных
     if (dbLoading) {
