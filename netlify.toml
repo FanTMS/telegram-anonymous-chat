@@ -5,8 +5,9 @@
 [build.environment]
   GENERATE_SOURCEMAP = "false"
   CI = "false"
-  NODE_VERSION = "16"
-  NPM_VERSION = "8"
+  NODE_VERSION = "16.20.2"
+  NPM_VERSION = "8.19.4"
+  NODE_OPTIONS = ""
 
 # Редирект для имитации поведения React Router на локальной разработке
 [[redirects]]
