@@ -13,24 +13,6 @@
   background: var(--tg-theme-bg-color, #fff);
 }
 
-/* iOS Safe Area */
-@media screen and (max-width: 375px) {
-  .safe-area-container {
-    max-width: 375px;
-    max-height: 460px;
-    margin: 0 auto;
-  }
-}
-
-/* Android Safe Area */
-@media screen and (max-width: 360px) {
-  .safe-area-container {
-    max-width: 360px;
-    max-height: 450px;
-    margin: 0 auto;
-  }
-}
-
 /* Safe Area Content */
 .safe-area-content {
   position: relative;
