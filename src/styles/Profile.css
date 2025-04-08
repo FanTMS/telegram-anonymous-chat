@@ -314,29 +314,41 @@
 }
 
 .edit-profile-button {
-    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--tg-theme-button-color, #3390ec);
+    color: var(--tg-theme-button-text-color, #ffffff);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
     margin-top: 16px;
-    padding: 14px;
-    position: relative;
-    overflow: hidden;
-}
-
-.edit-profile-button::before {
-    content: '✏️';
-    position: absolute;
-    left: 20px;
-    opacity: 0;
-    transform: translateX(10px);
-    transition: all 0.3s ease;
-}
-
-.edit-profile-button:hover::before {
-    opacity: 1;
-    transform: translateX(0);
+    width: 100%;
+    max-width: 200px;
+    outline: none;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .edit-profile-button:hover {
-    padding-left: 40px;
+    background-color: var(--tg-theme-button-text-color, #2a7fd4);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.edit-profile-button:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.edit-profile-button svg {
+    margin-right: 8px;
+    width: 16px;
+    height: 16px;
 }
 
 .profile-section {

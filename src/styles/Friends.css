@@ -1,80 +1,141 @@
 .friends-container {
-    padding: 16px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    height: calc(100vh - 60px);
+    overflow-y: auto;
+}
+
+.friends-title {
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+    color: var(--primary-color);
+    text-align: center;
+}
+
+.friends-error {
+    background-color: var(--error-bg);
+    color: var(--error-color);
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    font-size: 0.9rem;
 }
 
 .friends-tabs {
     display: flex;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-    margin-bottom: 16px;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
 }
 
-.tab {
-    padding: 12px 16px;
-    font-weight: 500;
+.tab-button {
+    flex: 1;
+    padding: 10px 5px;
+    text-align: center;
+    background: transparent;
+    border: none;
+    font-size: 0.9rem;
+    color: var(--text-color);
     cursor: pointer;
     position: relative;
-    color: var(--tg-theme-hint-color, #999);
-    transition: color 0.2s ease;
+    transition: all 0.2s ease;
 }
 
-.tab.active {
-    color: var(--tg-theme-text-color, #000);
-}
-
-.tab.active::after {
-    content: '';
-    position: absolute;
-    bottom: -1px;
-    left: 16px;
-    right: 16px;
-    height: 2px;
-    background-color: var(--tg-theme-button-color, #2481cc);
-    border-radius: 1px;
-}
-
-.request-badge {
-    display: inline-block;
-    color: var(--tg-theme-button-color, #2481cc);
+.tab-button.active {
+    color: var(--primary-color);
     font-weight: 600;
 }
 
-.friends-list {
-    flex: 1;
-    overflow-y: auto;
-    padding-bottom: 70px; /* для навигационной панели */
+.tab-button.active:after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: var(--primary-color);
 }
 
-.friend-item, 
-.friend-request-item {
+.tab-count {
+    display: inline-block;
+    background: var(--primary-color);
+    color: white;
+    font-size: 0.7rem;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    text-align: center;
+    margin-left: 5px;
+}
+
+.friends-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.friends-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 0;
+}
+
+.loading-spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid rgba(var(--primary-rgb), 0.3);
+    border-radius: 50%;
+    border-top-color: var(--primary-color);
+    animation: spin 1s infinite linear;
+    margin-bottom: 10px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.friends-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.friend-card {
     display: flex;
     align-items: center;
-    padding: 12px;
-    border-radius: 12px;
-    margin-bottom: 10px;
-    background-color: var(--tg-theme-bg-color, #fff);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    justify-content: space-between;
+    padding: 12px 15px;
+    background-color: var(--card-bg);
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
 }
 
-.friend-item:active, 
-.friend-request-item:active {
-    transform: scale(0.98);
+.friend-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+}
+
+.friend-info {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    cursor: pointer;
 }
 
 .friend-avatar {
-    width: 50px;
-    height: 50px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
-    margin-right: 14px;
-    background-color: var(--tg-theme-secondary-bg-color, #f5f5f5);
+    overflow: hidden;
+    margin-right: 15px;
+    background-color: var(--disabled-bg);
     display: flex;
     align-items: center;
     justify-content: center;
-    overflow: hidden;
-    position: relative;
 }
 
 .friend-avatar img {
@@ -83,89 +144,68 @@
     object-fit: cover;
 }
 
-.avatar-initials {
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--tg-theme-button-color, #2481cc);
+.avatar-placeholder {
+    color: var(--card-bg);
+    font-size: 1rem;
+    font-weight: bold;
+    background-color: var(--primary-color);
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.status-indicator {
-    position: absolute;
-    bottom: 2px;
-    right: 2px;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    border: 2px solid var(--tg-theme-bg-color, #fff);
-}
-
-.status-indicator.online {
-    background-color: #4CAF50;
-}
-
-.status-indicator.offline {
-    background-color: #9E9E9E;
-}
-
-.friend-info {
+.friend-details {
     flex: 1;
 }
 
-.friend-info h3 {
-    margin: 0 0 4px 0;
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--tg-theme-text-color, #000);
+.friend-details h3 {
+    font-size: 0.95rem;
+    margin: 0 0 5px 0;
+    color: var(--text-color);
 }
 
-.friend-info p {
+.friend-details p {
+    font-size: 0.8rem;
     margin: 0;
-    font-size: 14px;
-    color: var(--tg-theme-hint-color, #999);
+    color: var(--secondary-text);
 }
 
-.friend-actions,
-.request-actions {
+.friend-actions {
     display: flex;
     gap: 8px;
 }
 
-.action-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.friend-action-btn {
+    padding: 6px 12px;
     border: none;
-    background-color: var(--tg-theme-secondary-bg-color, #f5f5f5);
-    color: var(--tg-theme-hint-color, #999);
+    border-radius: 6px;
+    font-size: 0.8rem;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
-.action-btn:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+.friend-action-btn.accept {
+    background-color: var(--success-color);
+    color: white;
 }
 
-.action-btn:active {
-    transform: scale(0.95);
+.friend-action-btn.reject, 
+.friend-action-btn.cancel {
+    background-color: var(--gray-bg);
+    color: var(--text-color);
 }
 
-.chat-btn {
-    color: var(--tg-theme-button-color, #2481cc);
+.friend-action-btn.remove {
+    background-color: var(--error-color);
+    color: white;
+    opacity: 0.8;
 }
 
-.remove-btn {
-    color: #F44336;
-}
-
-.accept-btn {
-    color: #4CAF50;
-}
-
-.reject-btn {
-    color: #F44336;
+.friend-action-btn:hover {
+    opacity: 1;
+    transform: scale(1.05);
 }
 
 .empty-state {
@@ -173,48 +213,60 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 32px 16px;
+    padding: 40px 20px;
+    color: var(--secondary-text);
     text-align: center;
-    color: var(--tg-theme-hint-color, #999);
 }
 
-.empty-state i {
-    font-size: 48px;
-    margin-bottom: 16px;
-    opacity: 0.5;
+.empty-icon {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
 }
 
 .empty-state p {
-    font-size: 16px;
-    margin: 0 0 8px 0;
-    font-weight: 500;
+    margin: 0;
+    font-size: 0.9rem;
 }
 
-.empty-state small {
-    font-size: 14px;
-    max-width: 240px;
-    line-height: 1.4;
+/* Telegram Web App Style Adjustments */
+.telegram-app .friends-container {
+    max-width: 100%;
+    padding: 15px;
+    height: calc(100vh - 50px);
 }
 
-.loading-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
+.telegram-app .friend-card {
+    border-radius: 8px;
 }
 
-.loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid rgba(0, 0, 0, 0.1);
-    border-top: 3px solid var(--tg-theme-button-color, #2481cc);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 16px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+    .friends-container {
+        padding: 15px 10px;
+        height: calc(100vh - 100px);
+    }
+    
+    .friends-title {
+        font-size: 1.3rem;
+        margin-bottom: 15px;
+    }
+    
+    .friend-card {
+        padding: 10px;
+    }
+    
+    .friend-avatar {
+        width: 40px;
+        height: 40px;
+        margin-right: 10px;
+    }
+    
+    .friend-details h3 {
+        font-size: 0.9rem;
+    }
+    
+    .friend-action-btn {
+        padding: 5px 10px;
+        font-size: 0.75rem;
+    }
 } 

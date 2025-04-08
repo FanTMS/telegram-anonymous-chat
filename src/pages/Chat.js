@@ -172,11 +172,12 @@ const Chat = () => {
             }, 100);
         };
 
-        window.addEventListener('resize', handleResize);
-        
-        // Для более точного определения события изменения размера области просмотра в iOS/Android
+        // Используем visualViewport API для точного определения размера области просмотра
         if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', handleResize);
+            window.visualViewport.addEventListener('scroll', handleResize);
+        } else {
+            window.addEventListener('resize', handleResize);
         }
         
         // Добавляем обработчики к полю ввода
@@ -189,16 +190,18 @@ const Chat = () => {
         handleResize();
 
         return () => {
-            window.removeEventListener('resize', handleResize);
             if (window.visualViewport) {
                 window.visualViewport.removeEventListener('resize', handleResize);
+                window.visualViewport.removeEventListener('scroll', handleResize);
+            } else {
+                window.removeEventListener('resize', handleResize);
             }
             if (inputRef.current) {
                 inputRef.current.removeEventListener('focus', handleFocus);
                 inputRef.current.removeEventListener('blur', handleBlur);
             }
         };
-    }, [inputRef.current]);
+    }, []);
 
     useEffect(() => {
         const loadChatDetails = async () => {

@@ -2,341 +2,441 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, onSnapshot, doc, updateDoc, arrayRemove, getDoc, orderBy, arrayUnion, addDoc } from 'firebase/firestore';
-import { useToast } from '../components/Toast';
+import { 
+    collection, 
+    doc, 
+    getDoc, 
+    getDocs, 
+    query, 
+    where, 
+    updateDoc, 
+    arrayUnion, 
+    arrayRemove,
+    onSnapshot
+} from 'firebase/firestore';
+import { useTelegram } from '../hooks/useTelegram';
 import '../styles/Friends.css';
 
 const Friends = () => {
-    const { user } = useAuth();
+    const { user, isAuthenticated } = useAuth();
+    const { hapticFeedback } = useTelegram();
     const navigate = useNavigate();
-    const { showToast } = useToast();
     
+    const [activeTab, setActiveTab] = useState('friends');
     const [friends, setFriends] = useState([]);
     const [friendRequests, setFriendRequests] = useState([]);
+    const [sentRequests, setSentRequests] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('friends');
+    const [error, setError] = useState(null);
     
+    // Загрузка данных друзей и запросов
     useEffect(() => {
-        if (!user?.uid) return;
+        if (!isAuthenticated || !user || !user.id) {
+            setLoading(false);
+            return;
+        }
         
-        // Subscribe to friends list and their status
-        const userRef = doc(db, 'users', user.uid);
-        const unsubscribe = onSnapshot(userRef, async (userDoc) => {
-            if (userDoc.exists()) {
+        const loadFriendsData = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+                
+                // Получаем документ пользователя
+                const userRef = doc(db, 'users', user.id);
+                const userDoc = await getDoc(userRef);
+                
+                if (!userDoc.exists()) {
+                    throw new Error('Пользователь не найден');
+                }
+                
                 const userData = userDoc.data();
+                
+                // Получаем списки из данных пользователя
                 const friendsList = userData.friends || [];
-                const friendRequestsList = userData.friendRequests || [];
+                const requestsList = userData.friendRequests || [];
+                const sentList = userData.sentFriendRequests || [];
                 
-                // Fetch friend details
-                if (friendsList.length > 0) {
-                    const friendsQuery = query(
-                        collection(db, 'users'),
-                        where('uid', 'in', friendsList)
-                    );
-                    const friendsSnapshot = await getDocs(friendsQuery);
-                    const friendsData = friendsSnapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data(),
-                        lastActive: doc.data().lastActive?.toDate?.() || null
-                    }));
-                    setFriends(friendsData);
-                } else {
-                    setFriends([]);
-                }
+                // Загружаем данные друзей
+                const friendsData = await Promise.all(
+                    friendsList.map(async (friendId) => {
+                        try {
+                            const friendDoc = await getDoc(doc(db, 'users', friendId));
+                            if (friendDoc.exists()) {
+                                return {
+                                    id: friendDoc.id,
+                                    ...friendDoc.data()
+                                };
+                            }
+                            return null;
+                        } catch (e) {
+                            console.error(`Ошибка при загрузке друга ${friendId}:`, e);
+                            return null;
+                        }
+                    })
+                );
                 
-                // Fetch friend request details
-                if (friendRequestsList.length > 0) {
-                    const requestsQuery = query(
-                        collection(db, 'users'),
-                        where('uid', 'in', friendRequestsList)
-                    );
-                    const requestsSnapshot = await getDocs(requestsQuery);
-                    const requestsData = requestsSnapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data(),
-                        lastActive: doc.data().lastActive?.toDate?.() || null
-                    }));
-                    setFriendRequests(requestsData);
-                } else {
-                    setFriendRequests([]);
-                }
+                // Загружаем данные входящих запросов
+                const requestsData = await Promise.all(
+                    requestsList.map(async (requesterId) => {
+                        try {
+                            const requesterDoc = await getDoc(doc(db, 'users', requesterId));
+                            if (requesterDoc.exists()) {
+                                return {
+                                    id: requesterDoc.id,
+                                    ...requesterDoc.data()
+                                };
+                            }
+                            return null;
+                        } catch (e) {
+                            console.error(`Ошибка при загрузке запроса ${requesterId}:`, e);
+                            return null;
+                        }
+                    })
+                );
                 
+                // Загружаем данные исходящих запросов
+                const sentData = await Promise.all(
+                    sentList.map(async (targetId) => {
+                        try {
+                            const targetDoc = await getDoc(doc(db, 'users', targetId));
+                            if (targetDoc.exists()) {
+                                return {
+                                    id: targetDoc.id,
+                                    ...targetDoc.data()
+                                };
+                            }
+                            return null;
+                        } catch (e) {
+                            console.error(`Ошибка при загрузке исходящего запроса ${targetId}:`, e);
+                            return null;
+                        }
+                    })
+                );
+                
+                // Фильтруем null-значения и устанавливаем состояния
+                setFriends(friendsData.filter(Boolean));
+                setFriendRequests(requestsData.filter(Boolean));
+                setSentRequests(sentData.filter(Boolean));
+            } catch (err) {
+                console.error('Ошибка при загрузке данных друзей:', err);
+                setError('Не удалось загрузить список друзей. Пожалуйста, попробуйте позже.');
+            } finally {
                 setLoading(false);
             }
+        };
+        
+        loadFriendsData();
+        
+        // Создаем подписку на обновления
+        const unsubscribe = onSnapshot(doc(db, 'users', user.id), (doc) => {
+            if (doc.exists()) {
+                loadFriendsData();
+            }
+        }, (err) => {
+            console.error('Ошибка при подписке на обновления:', err);
         });
         
         return () => unsubscribe();
-    }, [user?.uid]);
+    }, [user, isAuthenticated]);
     
-    const handleAcceptRequest = async (friendId) => {
+    // Обработчики действий с друзьями
+    const handleAcceptRequest = async (requesterId) => {
         try {
-            if (!user?.uid) return;
+            // Тактильная обратная связь
+            if (hapticFeedback) hapticFeedback('impact', 'light');
             
-            // Add to current user's friends list
-            const userRef = doc(db, 'users', user.uid);
+            const userRef = doc(db, 'users', user.id);
+            const requesterRef = doc(db, 'users', requesterId);
+            
+            // Обновляем документ текущего пользователя
             await updateDoc(userRef, {
-                friends: arrayUnion(friendId),
-                friendRequests: arrayRemove(friendId)
+                friends: arrayUnion(requesterId),
+                friendRequests: arrayRemove(requesterId)
             });
             
-            // Add current user to friend's friends list
-            const friendRef = doc(db, 'users', friendId);
-            await updateDoc(friendRef, {
-                friends: arrayUnion(user.uid)
+            // Обновляем документ отправителя запроса
+            await updateDoc(requesterRef, {
+                friends: arrayUnion(user.id),
+                sentFriendRequests: arrayRemove(user.id)
             });
             
-            showToast('Запрос принят!', 'success');
-        } catch (error) {
-            console.error('Error accepting friend request:', error);
-            showToast('Ошибка при принятии запроса', 'error');
+            // Обновляем локальный список друзей
+            setFriends(prev => [...prev, friendRequests.find(r => r.id === requesterId)]);
+            setFriendRequests(prev => prev.filter(r => r.id !== requesterId));
+        } catch (err) {
+            console.error('Ошибка при принятии запроса в друзья:', err);
+            setError('Не удалось принять запрос. Пожалуйста, попробуйте позже.');
         }
     };
     
-    const handleRejectRequest = async (friendId) => {
+    const handleRejectRequest = async (requesterId) => {
         try {
-            if (!user?.uid) return;
+            // Тактильная обратная связь
+            if (hapticFeedback) hapticFeedback('impact', 'medium');
             
-            // Remove from current user's friend requests
-            const userRef = doc(db, 'users', user.uid);
+            const userRef = doc(db, 'users', user.id);
+            const requesterRef = doc(db, 'users', requesterId);
+            
+            // Обновляем документ текущего пользователя
             await updateDoc(userRef, {
-                friendRequests: arrayRemove(friendId)
+                friendRequests: arrayRemove(requesterId)
             });
             
-            showToast('Запрос отклонен', 'info');
-        } catch (error) {
-            console.error('Error rejecting friend request:', error);
-            showToast('Ошибка при отклонении запроса', 'error');
+            // Обновляем документ отправителя запроса
+            await updateDoc(requesterRef, {
+                sentFriendRequests: arrayRemove(user.id)
+            });
+            
+            // Обновляем локальный список запросов
+            setFriendRequests(prev => prev.filter(r => r.id !== requesterId));
+        } catch (err) {
+            console.error('Ошибка при отклонении запроса в друзья:', err);
+            setError('Не удалось отклонить запрос. Пожалуйста, попробуйте позже.');
+        }
+    };
+    
+    const handleCancelRequest = async (targetId) => {
+        try {
+            // Тактильная обратная связь
+            if (hapticFeedback) hapticFeedback('impact', 'medium');
+            
+            const userRef = doc(db, 'users', user.id);
+            const targetRef = doc(db, 'users', targetId);
+            
+            // Обновляем документ текущего пользователя
+            await updateDoc(userRef, {
+                sentFriendRequests: arrayRemove(targetId)
+            });
+            
+            // Обновляем документ получателя запроса
+            await updateDoc(targetRef, {
+                friendRequests: arrayRemove(user.id)
+            });
+            
+            // Обновляем локальный список исходящих запросов
+            setSentRequests(prev => prev.filter(r => r.id !== targetId));
+        } catch (err) {
+            console.error('Ошибка при отмене запроса в друзья:', err);
+            setError('Не удалось отменить запрос. Пожалуйста, попробуйте позже.');
         }
     };
     
     const handleRemoveFriend = async (friendId) => {
         try {
-            if (!user?.uid) return;
+            // Тактильная обратная связь
+            if (hapticFeedback) hapticFeedback('impact', 'heavy');
             
-            // Remove from current user's friends list
-            const userRef = doc(db, 'users', user.uid);
+            const userRef = doc(db, 'users', user.id);
+            const friendRef = doc(db, 'users', friendId);
+            
+            // Обновляем документ текущего пользователя
             await updateDoc(userRef, {
                 friends: arrayRemove(friendId)
             });
             
-            // Remove current user from friend's friends list
-            const friendRef = doc(db, 'users', friendId);
+            // Обновляем документ друга
             await updateDoc(friendRef, {
-                friends: arrayRemove(user.uid)
+                friends: arrayRemove(user.id)
             });
             
-            showToast('Друг удален', 'info');
-        } catch (error) {
-            console.error('Error removing friend:', error);
-            showToast('Ошибка при удалении друга', 'error');
+            // Обновляем локальный список друзей
+            setFriends(prev => prev.filter(f => f.id !== friendId));
+        } catch (err) {
+            console.error('Ошибка при удалении друга:', err);
+            setError('Не удалось удалить друга. Пожалуйста, попробуйте позже.');
         }
     };
     
-    const handleStartChat = async (friendId) => {
-        try {
-            // Check if chat already exists
-            const chatsQuery = query(
-                collection(db, 'chats'),
-                where('participants', 'array-contains', user.uid)
-            );
-            
-            const chatsSnapshot = await getDocs(chatsQuery);
-            let existingChat = null;
-            
-            chatsSnapshot.forEach(doc => {
-                const chatData = doc.data();
-                if (chatData.participants.includes(friendId)) {
-                    existingChat = {
-                        id: doc.id,
-                        ...chatData
-                    };
-                }
-            });
-            
-            if (existingChat) {
-                // Navigate to existing chat
-                navigate(`/chat/${existingChat.id}`);
-            } else {
-                // Create new chat
-                const chatData = {
-                    participants: [user.uid, friendId],
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                    isActive: true,
-                    lastMessage: null,
-                    messagesCount: 0,
-                    isFriendChat: true,
-                    participantsNotified: {
-                        [user.uid]: true,
-                        [friendId]: true
-                    }
-                };
-                
-                // Add participant data
-                const userData = await getDoc(doc(db, 'users', user.uid));
-                const friendData = await getDoc(doc(db, 'users', friendId));
-                
-                if (userData.exists() && friendData.exists()) {
-                    chatData.participantsData = {
-                        [user.uid]: {
-                            name: userData.data().name || 'Пользователь',
-                            userColor: userData.data().userColor || '#' + Math.floor(Math.random()*16777215).toString(16)
-                        },
-                        [friendId]: {
-                            name: friendData.data().name || 'Друг',
-                            userColor: friendData.data().userColor || '#' + Math.floor(Math.random()*16777215).toString(16)
-                        }
-                    };
-                }
-                
-                const newChatRef = await addDoc(collection(db, 'chats'), chatData);
-                
-                // Navigate to new chat
-                navigate(`/chat/${newChatRef.id}`);
+    // Функция форматирования имени пользователя
+    const formatUserName = (user) => {
+        if (!user) return 'Неизвестный пользователь';
+        
+        if (user.name) {
+            return user.name;
+        }
+        
+        if (user.telegramData) {
+            const tgData = user.telegramData;
+            if (tgData.firstName || tgData.lastName) {
+                return [tgData.firstName, tgData.lastName].filter(Boolean).join(' ');
             }
-        } catch (error) {
-            console.error('Error starting chat with friend:', error);
-            showToast('Не удалось начать чат', 'error');
+            if (tgData.username) {
+                return `@${tgData.username}`;
+            }
         }
+        
+        return 'Пользователь';
     };
     
-    // Helper function to format last active time
-    const formatLastActive = (lastActive) => {
-        if (!lastActive) return 'Не в сети';
-        
-        const now = new Date();
-        const diff = now - lastActive;
-        
-        // If online in the last 5 minutes
-        if (diff < 5 * 60 * 1000) {
-            return 'В сети';
-        }
-        
-        // If today
-        if (lastActive.toDateString() === now.toDateString()) {
-            return `Был(а) в ${lastActive.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-        }
-        
-        // If yesterday
-        const yesterday = new Date(now);
-        yesterday.setDate(yesterday.getDate() - 1);
-        if (lastActive.toDateString() === yesterday.toDateString()) {
-            return `Вчера в ${lastActive.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-        }
-        
-        // Otherwise show date
-        return `${lastActive.toLocaleDateString()}`;
+    // Обработчик нажатия на карточку пользователя
+    const handleUserClick = (userId) => {
+        if (hapticFeedback) hapticFeedback('selection');
+        navigate(`/user/${userId}`);
     };
-    
-    if (loading) {
-        return (
-            <div className="loading-container">
-                <div className="loading-spinner"></div>
-                <p>Загрузка...</p>
-            </div>
-        );
-    }
     
     return (
         <div className="friends-container">
+            <h1 className="friends-title">Друзья</h1>
+            
+            {error && <div className="friends-error">{error}</div>}
+            
             <div className="friends-tabs">
-                <div 
-                    className={`tab ${activeTab === 'friends' ? 'active' : ''}`}
+                <button 
+                    className={`tab-button ${activeTab === 'friends' ? 'active' : ''}`}
                     onClick={() => setActiveTab('friends')}
                 >
-                    Друзья {friends.length > 0 && <span>({friends.length})</span>}
-                </div>
-                <div 
-                    className={`tab ${activeTab === 'requests' ? 'active' : ''}`}
+                    Друзья 
+                    {friends.length > 0 && <span className="tab-count">{friends.length}</span>}
+                </button>
+                <button 
+                    className={`tab-button ${activeTab === 'requests' ? 'active' : ''}`}
                     onClick={() => setActiveTab('requests')}
                 >
-                    Запросы {friendRequests.length > 0 && <span className="request-badge">({friendRequests.length})</span>}
-                </div>
+                    Входящие 
+                    {friendRequests.length > 0 && <span className="tab-count">{friendRequests.length}</span>}
+                </button>
+                <button 
+                    className={`tab-button ${activeTab === 'sent' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('sent')}
+                >
+                    Отправленные 
+                    {sentRequests.length > 0 && <span className="tab-count">{sentRequests.length}</span>}
+                </button>
             </div>
             
-            <div className="friends-list">
-                {activeTab === 'friends' ? (
-                    <>
-                        {friends.length > 0 ? (
-                            friends.map((friend) => (
-                                <div key={friend.id} className="friend-item">
-                                    <div className="friend-avatar">
-                                        {friend.photoURL ? (
-                                            <img src={friend.photoURL} alt={friend.name} />
-                                        ) : (
-                                            <div className="avatar-initials">
-                                                {friend.name ? friend.name.substring(0, 2).toUpperCase() : 'UN'}
-                                            </div>
-                                        )}
-                                        <div className={`status-indicator ${formatLastActive(friend.lastActive) === 'В сети' ? 'online' : 'offline'}`}></div>
-                                    </div>
-                                    <div className="friend-info">
-                                        <h3>{friend.name || 'Пользователь'}</h3>
-                                        <p>{formatLastActive(friend.lastActive)}</p>
-                                    </div>
-                                    <div className="friend-actions">
-                                        <button 
-                                            className="action-btn chat-btn"
-                                            onClick={() => handleStartChat(friend.id)}
-                                        >
-                                            <i className="fas fa-comment"></i>
-                                        </button>
-                                        <button 
-                                            className="action-btn remove-btn"
-                                            onClick={() => handleRemoveFriend(friend.id)}
-                                        >
-                                            <i className="fas fa-user-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="empty-state">
-                                <i className="fas fa-user-friends"></i>
-                                <p>У вас пока нет друзей</p>
-                                <small>Здесь будут отображаться пользователи, которых вы добавили в друзья</small>
-                            </div>
-                        )}
-                    </>
+            <div className="friends-content">
+                {loading ? (
+                    <div className="friends-loading">
+                        <div className="loading-spinner"></div>
+                        <p>Загрузка...</p>
+                    </div>
                 ) : (
                     <>
-                        {friendRequests.length > 0 ? (
-                            friendRequests.map((request) => (
-                                <div key={request.id} className="friend-request-item">
-                                    <div className="friend-avatar">
-                                        {request.photoURL ? (
-                                            <img src={request.photoURL} alt={request.name} />
-                                        ) : (
-                                            <div className="avatar-initials">
-                                                {request.name ? request.name.substring(0, 2).toUpperCase() : 'UN'}
+                        {activeTab === 'friends' && (
+                            <div className="friends-list">
+                                {friends.length === 0 ? (
+                                    <div className="empty-state">
+                                        <div className="empty-icon">👋</div>
+                                        <p>У вас пока нет друзей</p>
+                                    </div>
+                                ) : (
+                                    friends.map(friend => (
+                                        <div key={friend.id} className="friend-card">
+                                            <div 
+                                                className="friend-info" 
+                                                onClick={() => handleUserClick(friend.id)}
+                                            >
+                                                <div className="friend-avatar">
+                                                    {friend.photoURL ? (
+                                                        <img src={friend.photoURL} alt={formatUserName(friend)} />
+                                                    ) : (
+                                                        <div className="avatar-placeholder">
+                                                            {formatUserName(friend).substring(0, 2).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="friend-details">
+                                                    <h3>{formatUserName(friend)}</h3>
+                                                    <p>{friend.status || (friend.isOnline ? 'В сети' : 'Не в сети')}</p>
+                                                </div>
                                             </div>
-                                        )}
+                                            <button 
+                                                className="friend-action-btn remove" 
+                                                onClick={() => handleRemoveFriend(friend.id)}
+                                            >
+                                                Удалить
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                        
+                        {activeTab === 'requests' && (
+                            <div className="friends-list">
+                                {friendRequests.length === 0 ? (
+                                    <div className="empty-state">
+                                        <div className="empty-icon">📩</div>
+                                        <p>У вас нет входящих запросов в друзья</p>
                                     </div>
-                                    <div className="friend-info">
-                                        <h3>{request.name || 'Пользователь'}</h3>
-                                        <p>Хочет добавить вас в друзья</p>
+                                ) : (
+                                    friendRequests.map(request => (
+                                        <div key={request.id} className="friend-card">
+                                            <div 
+                                                className="friend-info" 
+                                                onClick={() => handleUserClick(request.id)}
+                                            >
+                                                <div className="friend-avatar">
+                                                    {request.photoURL ? (
+                                                        <img src={request.photoURL} alt={formatUserName(request)} />
+                                                    ) : (
+                                                        <div className="avatar-placeholder">
+                                                            {formatUserName(request).substring(0, 2).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="friend-details">
+                                                    <h3>{formatUserName(request)}</h3>
+                                                    <p>Хочет добавить вас в друзья</p>
+                                                </div>
+                                            </div>
+                                            <div className="friend-actions">
+                                                <button 
+                                                    className="friend-action-btn accept" 
+                                                    onClick={() => handleAcceptRequest(request.id)}
+                                                >
+                                                    Принять
+                                                </button>
+                                                <button 
+                                                    className="friend-action-btn reject" 
+                                                    onClick={() => handleRejectRequest(request.id)}
+                                                >
+                                                    Отклонить
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                        
+                        {activeTab === 'sent' && (
+                            <div className="friends-list">
+                                {sentRequests.length === 0 ? (
+                                    <div className="empty-state">
+                                        <div className="empty-icon">🔎</div>
+                                        <p>Вы не отправили запросов в друзья</p>
                                     </div>
-                                    <div className="request-actions">
-                                        <button 
-                                            className="action-btn accept-btn"
-                                            onClick={() => handleAcceptRequest(request.id)}
-                                        >
-                                            <i className="fas fa-check"></i>
-                                        </button>
-                                        <button 
-                                            className="action-btn reject-btn"
-                                            onClick={() => handleRejectRequest(request.id)}
-                                        >
-                                            <i className="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="empty-state">
-                                <i className="fas fa-inbox"></i>
-                                <p>Нет запросов в друзья</p>
-                                <small>Здесь будут отображаться запросы в друзья от других пользователей</small>
+                                ) : (
+                                    sentRequests.map(sent => (
+                                        <div key={sent.id} className="friend-card">
+                                            <div 
+                                                className="friend-info" 
+                                                onClick={() => handleUserClick(sent.id)}
+                                            >
+                                                <div className="friend-avatar">
+                                                    {sent.photoURL ? (
+                                                        <img src={sent.photoURL} alt={formatUserName(sent)} />
+                                                    ) : (
+                                                        <div className="avatar-placeholder">
+                                                            {formatUserName(sent).substring(0, 2).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="friend-details">
+                                                    <h3>{formatUserName(sent)}</h3>
+                                                    <p>Ожидает подтверждения</p>
+                                                </div>
+                                            </div>
+                                            <button 
+                                                className="friend-action-btn cancel" 
+                                                onClick={() => handleCancelRequest(sent.id)}
+                                            >
+                                                Отменить
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         )}
                     </>

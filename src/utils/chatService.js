@@ -1334,3 +1334,53 @@ export const formatLastSeen = (lastSeen) => {
     const options = { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
     return `был(а) ${lastSeen.toLocaleDateString('ru-RU', options)}`;
 };
+
+/**
+ * Получение количества непрочитанных чатов пользователя
+ * @param {string} userId - ID пользователя
+ * @returns {Promise<number>} - Количество непрочитанных чатов
+ */
+export const getUnreadChatsCount = async (userId) => {
+    try {
+        if (!userId) {
+            console.warn('getUnreadChatsCount: ID пользователя не указан');
+            return 0;
+        }
+        
+        // Получаем все чаты пользователя
+        const chatsQuery = query(
+            collection(db, "chats"),
+            where("participants", "array-contains", userId),
+            where("isActive", "==", true)
+        );
+        
+        const chatsSnapshot = await getDocs(chatsQuery);
+        
+        if (chatsSnapshot.empty) {
+            return 0;
+        }
+        
+        // Подсчитываем количество непрочитанных чатов
+        let unreadCount = 0;
+        
+        chatsSnapshot.forEach(doc => {
+            const chatData = doc.data();
+            
+            // Чат считается непрочитанным, если:
+            // 1. Последнее сообщение не от текущего пользователя
+            // 2. Есть поле unreadBy, содержащее ID текущего пользователя
+            if (
+                (chatData.lastMessageSenderId && chatData.lastMessageSenderId !== userId) ||
+                (chatData.unreadBy && chatData.unreadBy.includes(userId)) ||
+                (chatData.type === 'support' && chatData.unreadByUser === true)
+            ) {
+                unreadCount++;
+            }
+        });
+        
+        return unreadCount;
+    } catch (error) {
+        console.error('Ошибка при получении количества непрочитанных чатов:', error);
+        return 0;
+    }
+};

@@ -8,6 +8,7 @@
     overflow: hidden;
     transition: height 0.3s ease;
     box-shadow: 0 0 10px rgba(43, 141, 233, 0.1);
+    padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 .telegram-chat {
@@ -139,6 +140,7 @@
     display: flex;
     align-items: center;
     white-space: nowrap;
+    z-index: 10;
 }
 
 .end-chat-btn:hover {
@@ -247,14 +249,14 @@
 .chat-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 12px;
+    padding: 15px;
+    background-color: var(--tg-theme-bg-color, #ffffff);
     display: flex;
     flex-direction: column;
-    background-color: #eef5fd;
-    background-image: linear-gradient(180deg, #e5f0fd, #eef5fd);
+    gap: 8px;
     position: relative;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+    height: calc(100vh - 130px);
+    overflow-x: hidden;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -295,14 +297,17 @@
 
 .message {
     max-width: 80%;
-    margin-bottom: 6px;
-    display: flex;
-    flex-direction: column;
-    animation: messageAppear 0.2s ease;
+    padding: 12px 16px;
+    border-radius: 18px;
+    margin-bottom: 8px;
+    word-wrap: break-word;
     position: relative;
+    animation: fadeIn 0.3s ease;
+    line-height: 1.4;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-@keyframes messageAppear {
+@keyframes fadeIn {
     from {
         opacity: 0;
         transform: translateY(10px);
@@ -313,12 +318,18 @@
     }
 }
 
-.message.outgoing {
-    align-self: flex-end;
-}
-
 .message.incoming {
     align-self: flex-start;
+    background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+    color: var(--tg-theme-text-color, #000000);
+    border-bottom-left-radius: 4px;
+}
+
+.message.outgoing {
+    align-self: flex-end;
+    background-color: var(--tg-theme-button-color, #3390ec);
+    color: var(--tg-theme-button-text-color, #ffffff);
+    border-bottom-right-radius: 4px;
 }
 
 .message-content {
@@ -392,26 +403,36 @@
 
 .message-input {
     display: flex;
-    padding: 10px 12px;
-    background-color: #dae8f9;
-    border-top: 1px solid rgba(43, 141, 233, 0.1);
+    align-items: center;
+    padding: 10px 15px;
+    background-color: var(--tg-theme-bg-color, #ffffff);
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
     position: sticky;
     bottom: 0;
-    z-index: 2;
+    width: 100%;
+    z-index: 5;
     transition: transform 0.3s ease;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0));
+}
+
+.message-input.keyboard-visible {
+    position: fixed;
+    bottom: 0;
+    transform: translateY(0);
+    z-index: 1000;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
 }
 
 .message-input input {
     flex: 1;
     border: none;
-    padding: 10px 14px;
     border-radius: 20px;
-    font-size: 14px;
-    background-color: #ffffff;
-    color: var(--tg-theme-text-color, #222222);
+    padding: 12px 15px;
+    background-color: var(--tg-theme-secondary-bg-color, #f1f1f1);
+    color: var(--tg-theme-text-color, #000000);
+    font-size: 15px;
     outline: none;
-    box-shadow: 0 1px 3px rgba(43, 141, 233, 0.15);
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease;
 }
 
 .message-input input:focus {
@@ -732,53 +753,33 @@
 }
 
 /* Адаптивность для разных устройств */
-@media (max-width: 480px) {
-    .chat-messages {
-        padding: 12px;
+@media (max-width: 767px) {
+    .chat-container {
+        height: 100vh;
+        width: 100vw;
+        padding-bottom: env(safe-area-inset-bottom, 0);
     }
-    
-    .message {
-        max-width: 90%;
-    }
-    
-    .message-content {
-        padding: 8px 12px;
-    }
-    
+
     .chat-header {
-        padding: 8px 12px;
+        padding: 10px;
+        height: 60px;
     }
-    
-    .partner-avatar {
-        width: 36px;
-        height: 36px;
-    }
-    
-    .partner-details h2 {
-        font-size: 15px;
-    }
-    
+
     .message-input {
-        padding: 8px 12px;
+        padding: 8px 10px;
+        padding-bottom: calc(8px + env(safe-area-inset-bottom, 0)); 
     }
-    
-    .message-input input {
-        padding: 10px 14px;
+
+    .message-input.keyboard-visible {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
     }
-    
-    .message-input button {
-        width: 40px;
-        height: 40px;
-    }
-    
-    .end-chat-btn {
-        padding: 6px 10px;
-        font-size: 13px;
-    }
-    
-    .end-chat-btn svg {
-        width: 16px;
-        height: 16px;
+
+    .chat-messages {
+        height: calc(100vh - 120px); /* Корректируем под мобильные размеры */
     }
 }
 
@@ -1122,4 +1123,14 @@
     background-color: #3390ec;
     border-radius: 50%;
     margin-right: 4px;
+}
+
+/* Убираем зеленый кружок и фиксим проблемы с цветом фона */
+.partner-avatar.online::after {
+    display: none;
+}
+
+/* Добавляем стили для состояния открытой клавиатуры */
+.keyboard-open {
+    padding-bottom: var(--keyboard-height, 0px);
 }
