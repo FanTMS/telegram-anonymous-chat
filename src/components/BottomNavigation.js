@@ -8,32 +8,12 @@ const NavigationContainer = styled.div`
   display: flex;
   justify-content: space-around;
   align-items: center;
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
   width: 100%;
-  height: 60px;
+  height: var(--app-footer-height);
   background-color: var(--tg-theme-bg-color, #fff);
-  box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.06);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  border-top: 1px solid var(--tg-theme-secondary-bg-color);
   z-index: 1000;
   padding-bottom: env(safe-area-inset-bottom, 0);
-  transition: transform 0.3s ease;
-  
-  @media (min-width: 481px) {
-    width: 480px;
-    left: 50%;
-    transform: ${props => props.$hidden ? 'translate(-50%, 100%)' : 'translate(-50%, 0)'};
-    border-left: 1px solid rgba(0, 0, 0, 0.05);
-    border-right: 1px solid rgba(0, 0, 0, 0.05);
-  }
-  
-  @media (max-width: 480px) {
-    transform: ${props => props.$hidden ? 'translateY(100%)' : 'translateY(0)'};
-  }
 `;
 
 const NavItem = styled.div`
@@ -47,17 +27,18 @@ const NavItem = styled.div`
   transition: all 0.2s ease;
   color: ${props => props.$active ? 'var(--tg-theme-button-color, #2481cc)' : 'var(--tg-theme-hint-color, #999)'};
   position: relative;
+  padding: var(--app-spacing-xs) 0;
   
-  &:hover {
-    color: var(--tg-theme-button-color, #2481cc);
+  &:active {
+    opacity: 0.7;
   }
   
   &::after {
     content: '';
     position: absolute;
-    bottom: 5px;
-    width: 4px;
-    height: 4px;
+    bottom: 2px;
+    width: 3px;
+    height: 3px;
     border-radius: 2px;
     background-color: var(--tg-theme-button-color, #2481cc);
     opacity: ${props => props.$active ? 1 : 0};
@@ -67,15 +48,15 @@ const NavItem = styled.div`
 `;
 
 const IconContainer = styled.div`
-  font-size: 20px;
-  margin-bottom: 4px;
+  font-size: 18px;
+  margin-bottom: 2px;
   display: flex;
   align-items: center;
   justify-content: center;
 `;
 
 const Label = styled.div`
-  font-size: 12px;
+  font-size: var(--app-font-size-sm);
   font-weight: ${props => props.$active ? '600' : '400'};
 `;
 
@@ -101,29 +82,21 @@ const Ripple = styled.span`
 // Добавляем компонент BadgeIndicator для уведомлений
 const BadgeIndicator = styled.div`
   position: absolute;
-  top: -5px;
-  right: calc(50% - 12px);
-  width: 18px;
-  height: 18px;
+  top: -2px;
+  right: calc(50% - 10px);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
   background-color: var(--tg-theme-destructive-text-color, #ff3b30);
-  border-radius: 50%;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: bold;
   color: white;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   z-index: 5;
-  transform: scale(1);
-  transition: transform 0.2s ease-out;
-  animation: badgePulse 1.5s infinite;
-  
-  @keyframes badgePulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
-  }
 `;
 
 // Компонент для рендеринга иконок
@@ -140,6 +113,7 @@ const IconRenderer = ({ icon }) => {
       'chat': <i className="fas fa-comment-alt"></i>,
       'group': <i className="fas fa-users"></i>,
       'person': <i className="fas fa-user"></i>,
+      'user-friends': <i className="fas fa-user-friends"></i>,
       // Добавляем другие иконки по необходимости
     };
     
@@ -155,11 +129,8 @@ const BottomNavigation = ({ items = [] }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const [ripple, setRipple] = useState({ visible: false, x: 0, y: 0, itemId: null });
-    const [isVisible, setIsVisible] = useState(true);
-    const [lastScrollY, setLastScrollY] = useState(0);
     const notifications = useNotifications();
     
-    // Safely access notification values with fallbacks
     const unreadChatsCount = notifications?.unreadChatsCount || 0;
     const unreadChats = notifications?.unreadChats || [];
 
@@ -176,57 +147,17 @@ const BottomNavigation = ({ items = [] }) => {
     };
 
     // Обработчик нажатия на пункт меню с эффектом волны
-    const handleNavClick = (path, e, itemId) => {
-        // Создаем ripple эффект
-        const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        setRipple({ visible: true, x, y, itemId });
-
-        // Добавляем тактильный отклик, если доступен
+    const handleNavClick = (path) => {
         try {
-            if (window.TelegramWebApp &&
-                window.TelegramWebApp.HapticFeedback &&
-                typeof window.TelegramWebApp.HapticFeedback.impactOccurred === 'function') {
+            if (window.TelegramWebApp?.HapticFeedback?.impactOccurred) {
                 window.TelegramWebApp.HapticFeedback.impactOccurred('light');
             }
         } catch (e) {
             console.warn('Haptic feedback not available');
         }
 
-        // Переходим на страницу после небольшой задержки для анимации
-        setTimeout(() => {
-            navigate(path);
-
-            // Очищаем эффект через некоторое время
-            setTimeout(() => {
-                setRipple({ visible: false, x: 0, y: 0, itemId: null });
-            }, 600);
-        }, 150);
+        navigate(path);
     };
-
-    // Скрываем/показываем меню при скролле
-    useEffect(() => {
-        const handleScroll = () => {
-            const scrollY = window.scrollY;
-            const threshold = 20; // Минимальная разница для срабатывания
-
-            // Показываем меню при скролле вверх или если мы в верхней части страницы
-            if (scrollY < lastScrollY - threshold || scrollY < 100) {
-                setIsVisible(true);
-            }
-            // Скрываем меню при скролле вниз
-            else if (scrollY > lastScrollY + threshold) {
-                setIsVisible(false);
-            }
-
-            setLastScrollY(scrollY);
-        };
-
-        window.addEventListener('scroll', handleScroll, { passive: true });
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, [lastScrollY]);
 
     // Если нет элементов, не рендерим меню
     if (!items || items.length === 0) {
@@ -234,7 +165,7 @@ const BottomNavigation = ({ items = [] }) => {
     }
 
     return (
-        <NavigationContainer $hidden={!isVisible}>
+        <NavigationContainer>
             {items.map((item) => {
                 const active = isItemActive(item);
                 
@@ -247,29 +178,17 @@ const BottomNavigation = ({ items = [] }) => {
                     <NavItem
                         key={item.path}
                         $active={active}
-                        onClick={(e) => handleNavClick(item.path, e, item.path)}
+                        onClick={() => handleNavClick(item.path)}
                     >
-                        {/* Индикатор непрочитанных сообщений */}
-                        {showBadge && (
-                            <BadgeIndicator>
-                                {unreadChatsCount > 9 ? '9+' : unreadChatsCount}
-                            </BadgeIndicator>
-                        )}
-                        
                         <IconContainer>
                             <IconRenderer icon={item.icon} />
+                            {showBadge && (
+                                <BadgeIndicator>
+                                    {unreadChatsCount > 99 ? '99+' : unreadChatsCount}
+                                </BadgeIndicator>
+                            )}
                         </IconContainer>
                         <Label $active={active}>{item.label}</Label>
-
-                        {/* Эффект волны при нажатии */}
-                        {ripple.visible && ripple.itemId === item.path && (
-                            <Ripple
-                                style={{
-                                    left: ripple.x,
-                                    top: ripple.y
-                                }}
-                            />
-                        )}
                     </NavItem>
                 );
             })}

@@ -264,177 +264,49 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
 };
 
 function App() {
-    const [isConnected, setIsConnected] = useState(true);
-    const [connectionError, setConnectionError] = useState(null);
-    const [telegramInitialized, setTelegramInitialized] = useState(false);
+    const [isInitialized, setIsInitialized] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [initializeAttempts, setInitializeAttempts] = useState(0);
+    const { isAuthenticated, setIsAuthenticated, user, setUser } = useContext(UserContext);
+    const location = useLocation();
+    const navigate = useNavigate();
 
-    console.log('App компонент инициализирован');
-
-    // Инициализация и настройка Telegram WebApp
+    // Initialize Telegram WebApp
     useEffect(() => {
         const initTelegram = async () => {
             try {
-                console.log('Попытка инициализации Telegram WebApp:', initializeAttempts);
-                
-                // Проверяем существование WebApp в глобальном объекте Telegram
-                if (window.Telegram && window.Telegram.WebApp) {
-                    console.log('Telegram WebApp обнаружен, инициализация...');
+                if (isBrowser()) {
+                    WebApp.ready();
+                    WebApp.expand();
                     
-                    // Устанавливаем обработчик ошибок WebApp
-                    const originalPostEvent = window.Telegram.WebApp.postEvent;
-                    if (originalPostEvent) {
-                        window.Telegram.WebApp.postEvent = function() {
-                            try {
-                                return originalPostEvent.apply(this, arguments);
-                            } catch (err) {
-                                console.error('Ошибка в Telegram.WebApp.postEvent:', err);
-                                return null;
-                            }
-                        };
-                    }
+                    // Set viewport height for mobile browsers
+                    const setVH = () => {
+                        const vh = window.innerHeight * 0.01;
+                        document.documentElement.style.setProperty('--vh', `${vh}px`);
+                    };
                     
-                    // Расширяем WebApp для лучшего пользовательского опыта
-                    if (window.Telegram.WebApp.expand) {
-                        try {
-                            window.Telegram.WebApp.expand();
-                        } catch (err) {
-                            console.warn('Ошибка при расширении WebApp:', err);
-                        }
-                    }
+                    setVH();
+                    window.addEventListener('resize', setVH);
                     
-                    // Сообщаем Telegram, что приложение готово к работе
-                    if (window.Telegram.WebApp.ready) {
-                        try {
-                            window.Telegram.WebApp.ready();
-                        } catch (err) {
-                            console.warn('Ошибка при вызове WebApp.ready():', err);
-                        }
-                    }
+                    // Enable closing confirmation
+                    WebApp.enableClosingConfirmation();
                     
-                    // Отключаем запрос подтверждения при закрытии
-                    if (window.Telegram.WebApp.disableClosingConfirmation) {
-                        try {
-                            window.Telegram.WebApp.disableClosingConfirmation();
-                        } catch (err) {
-                            console.warn('Ошибка при отключении запроса подтверждения закрытия:', err);
-                        }
-                    }
+                    // Set header color
+                    WebApp.setHeaderColor('#3390ec');
                     
-                    // Получаем данные пользователя, если доступны
-                    const userData = window.Telegram.WebApp.initDataUnsafe?.user;
-                    if (userData) {
-                        console.log('Получены данные пользователя Telegram:', userData);
-                        
-                        // Сохраняем в хранилища для надежности восстановления
-                        try {
-                            sessionStorage.setItem('telegram_last_user', JSON.stringify(userData));
-                            sessionStorage.setItem('telegramUser', JSON.stringify(userData));
-                        } catch (e) {
-                            console.warn('Не удалось сохранить данные Telegram пользователя:', e);
-                        }
-                    }
+                    // Set background color
+                    WebApp.setBackgroundColor('#ffffff');
                     
-                    // Сохраняем информацию о том, что мы в Telegram мини-приложении
-                    try {
-                        sessionStorage.setItem('is_telegram_webapp', 'true');
-                        document.body.classList.add('in-telegram');
-                    } catch (e) {
-                        console.warn('Не удалось сохранить маркер Telegram WebApp:', e);
-                    }
-                    
-                    setTelegramInitialized(true);
-                } else if (typeof WebApp !== 'undefined') {
-                    console.log('Найден объект WebApp, но не в Telegram.WebApp');
-                    
-                    // Попытка использовать внешний WebApp если доступен
-                    try {
-                        if (WebApp.expand) WebApp.expand();
-                        if (WebApp.ready) WebApp.ready();
-                        if (WebApp.disableClosingConfirmation) WebApp.disableClosingConfirmation();
-                        
-                        // Получаем данные пользователя
-                        const userData = WebApp.initDataUnsafe?.user;
-                        if (userData) {
-                            console.log('Получены данные Telegram из @twa-dev/sdk:', userData);
-                            sessionStorage.setItem('telegram_last_user', JSON.stringify(userData));
-                            sessionStorage.setItem('telegramUser', JSON.stringify(userData));
-                        }
-                        
-                        sessionStorage.setItem('is_telegram_webapp', 'true');
-                        document.body.classList.add('in-telegram');
-                    } catch (err) {
-                        console.warn('Ошибка при инициализации внешнего WebApp:', err);
-                    }
-                    
-                    setTelegramInitialized(true);
-                } else {
-                    console.log('Telegram WebApp не обнаружен, работаем как обычное веб-приложение');
-                    sessionStorage.removeItem('is_telegram_webapp');
-                    
-                    // Проверяем, возможно мы на мобильном устройстве с Telegram
-                    const isMobileTelegram = /Telegram/i.test(navigator.userAgent) || 
-                                           document.referrer.includes('t.me') || 
-                                           window.location.href.includes('tg://');
-                    
-                    if (isMobileTelegram) {
-                        console.log('Обнаружен мобильный Telegram, но WebApp не доступен');
-                        document.body.classList.add('in-telegram-mobile');
-                        
-                        // Если это первая попытка, пробуем еще раз через небольшую задержку
-                        if (initializeAttempts < 2) {
-                            console.log(`Повторная попытка инициализации (#${initializeAttempts + 1})...`);
-                            setTimeout(() => {
-                                setInitializeAttempts(prev => prev + 1);
-                            }, 800);
-                            return;
-                        }
-                    }
-                }
-                
-                // Восстановление сессии из предыдущего визита
-                const isTelegramApp = sessionStorage.getItem('is_telegram_webapp') === 'true';
-                                    
-                if (isTelegramApp) {
-                    // Проверяем, если мы в Telegram, но потеряли состояние аутентификации
-                    const hasUserData = sessionStorage.getItem('current_user') || 
-                                      sessionStorage.getItem('current_user_id');
-                                      
-                    if (!hasUserData) {
-                        console.log('Обнаружена потеря состояния авторизации в Telegram WebApp, пытаемся восстановить');
-                        // Попытка восстановить данные из сохраненных
-                        const cachedTelegramUser = sessionStorage.getItem('telegram_last_user') || 
-                                                 sessionStorage.getItem('telegramUser');
-                                                 
-                        if (cachedTelegramUser) {
-                            try {
-                                const parsedData = JSON.parse(cachedTelegramUser);
-                                console.log('Восстанавливаем данные пользователя из кеша:', parsedData);
-                                
-                                // Сохраняем в sessionStorage
-                                sessionStorage.setItem('telegram_last_user', cachedTelegramUser);
-                                sessionStorage.setItem('telegramUser', cachedTelegramUser);
-                                
-                                // Создаем временный ID для быстрой авторизации
-                                const telegramId = parsedData.id ? parsedData.id.toString() : '';
-                                if (telegramId) {
-                                    const userId = `tg_${telegramId}`;
-                                    sessionStorage.setItem('current_user_id', userId);
-                                }
-                            } catch (err) {
-                                console.error('Ошибка при восстановлении кешированных данных:', err);
-                            }
-                        }
-                    }
+                    // Set viewport settings for compact mode
+                    document.documentElement.style.setProperty('--tg-viewport-height', `${window.innerHeight}px`);
                 }
             } catch (error) {
-                console.error('Ошибка при инициализации Telegram WebApp:', error);
+                console.error('Error initializing Telegram WebApp:', error);
             }
         };
-        
+
         initTelegram();
-    }, [initializeAttempts]);
+    }, []);
 
     // Инициализация Firebase и проверка соединения
     useEffect(() => {
@@ -455,8 +327,8 @@ function App() {
 
         // Добавляем слушатель изменения состояния соединения
         connectionService.addConnectionListener((status) => {
-            setIsConnected(status.connected);
-            setConnectionError(status.error);
+            setIsLoading(status.connected);
+            setError(status.error);
 
             if (status.connected) {
                 console.log("Соединение с Firebase восстановлено!");
@@ -533,211 +405,180 @@ function App() {
     }, []);
 
     return (
-        <ToastProvider>
-            <NotificationProvider>
-                <div className={`app-container ${!isConnected ? 'offline-mode' : ''}`}>
-                    {/* Connection status indicator */}
-                    {!isConnected && (
-                        <div className="connection-status offline">
-                            <span className="status-icon">⚠️</span>
-                            <span className="status-text">Оффлайн режим. {connectionError && `Ошибка: ${connectionError}`}</span>
-                        </div>
-                    )}
-
-                    {error ? (
-                        <div className="error-fallback">
-                            <h2>Произошла ошибка</h2>
-                            <p>{error.toString()}</p>
-                            <button onClick={() => window.location.reload()}>
-                                Перезагрузить приложение
-                            </button>
-                            {process.env.NODE_ENV === 'development' && (
-                                <pre className="error-stack">
-                                    {error.stack}
-                                </pre>
-                            )}
-                        </div>
-                    ) : (
-                        <>
-                            <Routes>
-                                <Route path="/register" element={<RegistrationForm />} />
-                                <Route path="/onboarding" element={<OnboardingTutorial />} />
-                                <Route path="/" element={<Navigate to="/home" replace />} />
-                                <Route path="/index.html" element={<Navigate to="/home" replace />} />
-                                
-                                {/* Routes requiring authentication */}
-                                <Route path="/home" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <Home />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/chats" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <ChatsList />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/chat/:chatId" element={
-                                    <ProtectedRoute>
-                                        <AppLayout hideNavigation>
-                                            <Chat />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/random-chat" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <RandomChat />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/profile" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <Profile />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/groups" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <Groups />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/groups/:groupId" element={
-                                    <ProtectedRoute>
-                                        <AppLayout hideNavigation>
-                                            <GroupDetail />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/groups/create" element={
-                                    <ProtectedRoute>
-                                        <AppLayout hideNavigation>
-                                            <GroupCreate />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/groups/:groupId/edit" element={
-                                    <ProtectedRoute>
-                                        <AppLayout hideNavigation>
-                                            <GroupEdit />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/guide" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <BeginnerGuide />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout>
-                                            <Admin />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin/dashboard" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout>
-                                            <AdminDashboard />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin/support" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout hideNavigation>
-                                            <AdminSupport />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin/support/:chatId" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout hideNavigation>
-                                            <AdminSupport />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/support/diagnostics" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <SupportDiagnostics />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/friends" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <Friends />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin/config" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout>
-                                            <AdminConfig />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin-utility" element={<AdminUtility />} />
-                                
-                                <Route path="/admin/reports" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout>
-                                            <AdminReports />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin/stats" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout>
-                                            <AdminStats />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin/users" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout>
-                                            <AdminUsers />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="*" element={<NotFoundPage />} />
-                            </Routes>
+        <div className="app-container">
+            <ToastProvider>
+                <NotificationProvider>
+                    <PageTransition>
+                        <Routes>
+                            <Route path="/register" element={<RegistrationForm />} />
+                            <Route path="/onboarding" element={<OnboardingTutorial />} />
                             
-                            {/* Компонент для автоматической загрузки индексов */}
-                            <IndexLoader />
-                        </>
-                    )}
-                </div>
-            </NotificationProvider>
-        </ToastProvider>
+                            <Route path="/" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <Home />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/chats" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <ChatsList />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/chat/:chatId" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <Chat />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/random" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <RandomChat />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/profile" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <Profile />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/groups" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <Groups />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/groups/create" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <GroupCreate />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/groups/:groupId" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <GroupDetail />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/groups/:groupId/edit" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <GroupEdit />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/friends" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <Friends />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/guide" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <BeginnerGuide />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/support" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <AdminSupport />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/support/diagnostics" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <SupportDiagnostics />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/admin" element={
+                                <ProtectedRoute adminOnly>
+                                    <AppLayout>
+                                        <Admin />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/admin/dashboard" element={
+                                <ProtectedRoute adminOnly>
+                                    <AppLayout>
+                                        <AdminDashboard />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/admin/config" element={
+                                <ProtectedRoute adminOnly>
+                                    <AppLayout>
+                                        <AdminConfig />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/admin/utility" element={
+                                <ProtectedRoute adminOnly>
+                                    <AppLayout>
+                                        <AdminUtility />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/admin/reports" element={
+                                <ProtectedRoute adminOnly>
+                                    <AppLayout>
+                                        <AdminReports />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/admin/stats" element={
+                                <ProtectedRoute adminOnly>
+                                    <AppLayout>
+                                        <AdminStats />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/admin/users" element={
+                                <ProtectedRoute adminOnly>
+                                    <AppLayout>
+                                        <AdminUsers />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="*" element={<NotFoundPage />} />
+                        </Routes>
+                    </PageTransition>
+                </NotificationProvider>
+            </ToastProvider>
+        </div>
     );
 }
 
