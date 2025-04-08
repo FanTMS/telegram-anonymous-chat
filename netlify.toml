@@ -10,14 +10,24 @@
   SKIP_PREFLIGHT_CHECK = "true"
   TSC_COMPILE_ON_ERROR = "true"
   ESLINT_NO_DEV_ERRORS = "true"
+  NODE_VERSION = "16.20.2"
 
-# Редирект для имитации поведения React Router на локальной разработке
+# Редирект для имитации поведения React Router
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+  force = true
 
 # Оптимизация кеширования для статических ресурсов
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+
 [[headers]]
   for = "/*.js"
   [headers.values]

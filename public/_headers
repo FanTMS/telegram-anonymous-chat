@@ -3,6 +3,7 @@
   X-XSS-Protection: 1; mode=block
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff
+  Access-Control-Allow-Origin: *
 
 # Cache fonts and images for 1 year
 /*.woff2
@@ -29,7 +30,7 @@
 /*.gif
   Cache-Control: public, max-age=31536000, immutable
 
-# Cache JS and CSS for 1 week (in case of rapid updates)
+# Cache JS and CSS for 1 week
 /*.js
   Cache-Control: public, max-age=604800
 
