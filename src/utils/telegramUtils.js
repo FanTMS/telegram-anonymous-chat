@@ -32,12 +32,12 @@ export const getTelegramUser = () => {
             const userData = window.Telegram.WebApp.initDataUnsafe.user;
             console.log('Получены данные пользователя из Telegram WebApp (window.Telegram):', userData);
             
-            // Сохраняем данные для последующего восстановления - используем оба хранилища
+            // Сохраняем данные в sessionStorage
             try {
-                localStorage.setItem('telegram_last_user', JSON.stringify(userData));
                 sessionStorage.setItem('telegram_last_user', JSON.stringify(userData));
+                sessionStorage.setItem('telegramUser', JSON.stringify(userData));
             } catch (e) {
-                console.warn('Не удалось сохранить данные Telegram в localStorage:', e);
+                console.warn('Не удалось сохранить данные Telegram в sessionStorage:', e);
             }
             
             return userData;
@@ -50,9 +50,10 @@ export const getTelegramUser = () => {
             
             // Сохраняем данные для последующего восстановления
             try {
-                localStorage.setItem('telegram_last_user', JSON.stringify(userData));
+                sessionStorage.setItem('telegram_last_user', JSON.stringify(userData));
+                sessionStorage.setItem('telegramUser', JSON.stringify(userData));
             } catch (e) {
-                console.warn('Не удалось сохранить данные Telegram в localStorage:', e);
+                console.warn('Не удалось сохранить данные Telegram в sessionStorage:', e);
             }
             
             return userData;
@@ -90,9 +91,9 @@ export const getTelegramUser = () => {
                                     from_init_data: true
                                 };
                                 
-                                // Сохраняем в обоих хранилищах
-                                localStorage.setItem('telegram_last_user', JSON.stringify(userData));
+                                // Сохраняем только в sessionStorage
                                 sessionStorage.setItem('telegram_last_user', JSON.stringify(userData));
+                                sessionStorage.setItem('telegramUser', JSON.stringify(userData));
                                 
                                 return userData;
                             }
@@ -117,9 +118,9 @@ export const getTelegramUser = () => {
                         from_url_params: true
                     };
                     
-                    // Сохраняем данные в обоих хранилищах
-                    localStorage.setItem('telegram_last_user', JSON.stringify(userData));
+                    // Сохраняем данные только в sessionStorage
                     sessionStorage.setItem('telegram_last_user', JSON.stringify(userData));
+                    sessionStorage.setItem('telegramUser', JSON.stringify(userData));
                     
                     return userData;
                 }
@@ -128,12 +129,12 @@ export const getTelegramUser = () => {
             }
         }
         
-        // Проверяем сохраненные данные из предыдущей сессии (проверяем оба хранилища)
+        // Проверяем сохраненные данные из предыдущей сессии
         try {
-            const cachedData = localStorage.getItem('telegram_last_user') || sessionStorage.getItem('telegram_last_user');
+            const cachedData = sessionStorage.getItem('telegram_last_user') || sessionStorage.getItem('telegramUser');
             if (cachedData) {
                 const userData = JSON.parse(cachedData);
-                console.log('Используем кешированные данные пользователя Telegram из хранилища:', userData);
+                console.log('Используем кешированные данные пользователя Telegram из sessionStorage:', userData);
                 return userData;
             }
         } catch (e) {
@@ -157,9 +158,9 @@ export const getTelegramUser = () => {
                 is_mobile_telegram: true
             };
             
-            // Сохраняем временные данные
+            // Сохраняем временные данные в sessionStorage
             try {
-                localStorage.setItem('telegram_mobile_user', JSON.stringify(tempUserData));
+                sessionStorage.setItem('telegram_mobile_user', JSON.stringify(tempUserData));
             } catch (e) {
                 console.warn('Не удалось сохранить временные данные мобильного Telegram:', e);
             }
@@ -352,7 +353,6 @@ export const initTelegramApp = () => {
         // Добавляем маркер запуска внутри Telegram
         try {
             document.body.classList.add('in-telegram');
-            localStorage.setItem('is_telegram_webapp', 'true');
             sessionStorage.setItem('is_telegram_webapp', 'true');
         } catch (e) {
             console.warn('Ошибка при установке маркера Telegram WebApp:', e);
@@ -377,6 +377,7 @@ export const initTelegramApp = () => {
             console.warn('Ошибка при обработке URL-параметров:', e);
         }
     }
+    return null;
 };
 
 /**

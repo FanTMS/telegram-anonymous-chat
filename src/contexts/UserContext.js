@@ -22,7 +22,6 @@ export const UserProvider = ({ children }) => {
     const isMobileTelegram = /Telegram/i.test(navigator.userAgent) || 
                            document.referrer.includes('t.me') || 
                            window.location.href.includes('tg://') ||
-                           localStorage.getItem('is_telegram_webapp') === 'true' ||
                            sessionStorage.getItem('is_telegram_webapp') === 'true';
 
     // Вспомогательная функция для сохранения данных пользователя
@@ -30,17 +29,15 @@ export const UserProvider = ({ children }) => {
         if (!userData) return;
         
         try {
-            // Сохраняем в оба хранилища для лучшей надежности
-            localStorage.setItem('current_user', JSON.stringify(userData));
+            // Сохраняем только в sessionStorage для предотвращения проблем с localStorage
             sessionStorage.setItem('current_user', JSON.stringify(userData));
             
             // Сохраняем ID отдельно для быстрого доступа
             if (userData.id) {
-                localStorage.setItem('current_user_id', userData.id);
                 sessionStorage.setItem('current_user_id', userData.id);
             }
             
-            console.log('UserContext: Данные пользователя сохранены в хранилища', userData.id);
+            console.log('UserContext: Данные пользователя сохранены в sessionStorage', userData.id);
         } catch (e) {
             console.error('Ошибка при сохранении данных пользователя:', e);
         }
@@ -66,7 +63,6 @@ export const UserProvider = ({ children }) => {
                     const userId = `tg_${telegramId}`;
                     
                     // Сохраняем ID пользователя для автоматического входа
-                    localStorage.setItem('current_user_id', userId);
                     sessionStorage.setItem('current_user_id', userId);
                     
                     // Создаем или обновляем пользователя с использованием Telegram данных
@@ -96,7 +92,6 @@ export const UserProvider = ({ children }) => {
                     if (isMobileTelegram) {
                         const telegramId = parsedData.id ? parsedData.id.toString() : '';
                         const userId = `tg_${telegramId}`;
-                        localStorage.setItem('current_user_id', userId);
                         sessionStorage.setItem('current_user_id', userId);
                         
                         // Используем кэшированные данные для создания/обновления пользователя
@@ -148,7 +143,7 @@ export const UserProvider = ({ children }) => {
                     }
                 };
                 
-                // Сохраняем в localStorage и sessionStorage для восстановления сессии
+                // Сохраняем в sessionStorage для восстановления сессии
                 saveUserToStorage(newUser);
                 setUser(newUser);
             } else {
@@ -182,7 +177,7 @@ export const UserProvider = ({ children }) => {
                     }
                 };
                 
-                // Сохраняем в localStorage и sessionStorage для восстановления сессии
+                // Сохраняем в sessionStorage для восстановления сессии
                 saveUserToStorage(contextUser);
                 setUser(contextUser);
             }
@@ -193,14 +188,14 @@ export const UserProvider = ({ children }) => {
 
     // Проверка авторизации при загрузке
     useEffect(() => {
-        // Пытаемся получить данные пользователя из localStorage и sessionStorage
+        // Пытаемся получить данные пользователя из sessionStorage
         const loadUser = async () => {
             try {
-                console.log('UserContext: Проверка авторизации в хранилищах');
+                console.log('UserContext: Проверка авторизации в sessionStorage');
                 
-                // Проверяем и current_user_id, и current_user в обоих хранилищах
-                const savedUserId = localStorage.getItem('current_user_id') || sessionStorage.getItem('current_user_id');
-                const savedUserData = localStorage.getItem('current_user') || sessionStorage.getItem('current_user');
+                // Проверяем и current_user_id, и current_user
+                const savedUserId = sessionStorage.getItem('current_user_id');
+                const savedUserData = sessionStorage.getItem('current_user');
 
                 console.log('UserContext: savedUserId =', savedUserId, ', savedUserData =', savedUserData ? 'найдено' : 'не найдено');
 
@@ -221,9 +216,8 @@ export const UserProvider = ({ children }) => {
                     }
                     
                     // Ещё одна попытка - проверяем сохраненные данные Telegram
-                    const telegramCached = localStorage.getItem('telegram_last_user') || 
-                                         sessionStorage.getItem('telegram_last_user') || 
-                                         sessionStorage.getItem('telegramUser');
+                    const telegramCached = sessionStorage.getItem('telegram_last_user') || 
+                                          sessionStorage.getItem('telegramUser');
                     
                     if (telegramCached) {
                         try {
@@ -244,7 +238,7 @@ export const UserProvider = ({ children }) => {
                 if (savedUserData) {
                     // Если есть полные данные пользователя
                     const userData = JSON.parse(savedUserData);
-                    console.log('UserContext: Найдены данные пользователя в хранилище', userData);
+                    console.log('UserContext: Найдены данные пользователя в sessionStorage', userData);
                     
                     // Обновляем данные Telegram, если они доступны
                     if (telegramData && (!userData.telegramData || !userData.telegramData.telegramId)) {
@@ -286,9 +280,7 @@ export const UserProvider = ({ children }) => {
                             if (userData.deleted || userData.status === 'deleted' || userData.status === 'banned') {
                                 console.log('UserContext: Пользователь удален или заблокирован');
                                 // Очищаем данные пользователя из хранилища
-                                localStorage.removeItem('current_user_id');
                                 sessionStorage.removeItem('current_user_id');
-                                localStorage.removeItem('current_user');
                                 sessionStorage.removeItem('current_user');
                                 // Не устанавливаем пользователя в состояние
                                 setUser(null);
@@ -314,9 +306,7 @@ export const UserProvider = ({ children }) => {
                         } else {
                             console.log('UserContext: Пользователь не найден в Firestore');
                             // Очищаем устаревшие данные
-                            localStorage.removeItem('current_user_id');
                             sessionStorage.removeItem('current_user_id');
-                            localStorage.removeItem('current_user');
                             sessionStorage.removeItem('current_user');
                         }
                     } catch (e) {

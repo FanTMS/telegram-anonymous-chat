@@ -120,14 +120,14 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
     
     // Дополнительная проверка авторизации из хранилища
     useEffect(() => {
-        // Проверяем, есть ли ID пользователя в localStorage или sessionStorage
+        // Проверяем, есть ли ID пользователя в sessionStorage
         const checkStorageAuth = async () => {
             if (!isAuthenticated && !checkedStorage) {
                 console.log('ProtectedRoute: Дополнительная проверка авторизации из хранилища');
                 
                 try {
-                    const savedUserId = localStorage.getItem('current_user_id') || sessionStorage.getItem('current_user_id');
-                    const savedUserData = localStorage.getItem('current_user') || sessionStorage.getItem('current_user');
+                    const savedUserId = sessionStorage.getItem('current_user_id');
+                    const savedUserData = sessionStorage.getItem('current_user');
                     
                     console.log('ProtectedRoute: userId из хранилища =', savedUserId, ', userData =', savedUserData ? 'найдено' : 'не найдено');
                     
@@ -320,7 +320,6 @@ function App() {
                         
                         // Сохраняем в хранилища для надежности восстановления
                         try {
-                            localStorage.setItem('telegram_last_user', JSON.stringify(userData));
                             sessionStorage.setItem('telegram_last_user', JSON.stringify(userData));
                             sessionStorage.setItem('telegramUser', JSON.stringify(userData));
                         } catch (e) {
@@ -330,7 +329,6 @@ function App() {
                     
                     // Сохраняем информацию о том, что мы в Telegram мини-приложении
                     try {
-                        localStorage.setItem('is_telegram_webapp', 'true');
                         sessionStorage.setItem('is_telegram_webapp', 'true');
                         document.body.classList.add('in-telegram');
                     } catch (e) {
@@ -351,12 +349,10 @@ function App() {
                         const userData = WebApp.initDataUnsafe?.user;
                         if (userData) {
                             console.log('Получены данные Telegram из @twa-dev/sdk:', userData);
-                            localStorage.setItem('telegram_last_user', JSON.stringify(userData));
                             sessionStorage.setItem('telegram_last_user', JSON.stringify(userData));
                             sessionStorage.setItem('telegramUser', JSON.stringify(userData));
                         }
                         
-                        localStorage.setItem('is_telegram_webapp', 'true');
                         sessionStorage.setItem('is_telegram_webapp', 'true');
                         document.body.classList.add('in-telegram');
                     } catch (err) {
@@ -366,7 +362,6 @@ function App() {
                     setTelegramInitialized(true);
                 } else {
                     console.log('Telegram WebApp не обнаружен, работаем как обычное веб-приложение');
-                    localStorage.removeItem('is_telegram_webapp');
                     sessionStorage.removeItem('is_telegram_webapp');
                     
                     // Проверяем, возможно мы на мобильном устройстве с Telegram
@@ -390,21 +385,17 @@ function App() {
                 }
                 
                 // Восстановление сессии из предыдущего визита
-                const isTelegramApp = localStorage.getItem('is_telegram_webapp') === 'true' || 
-                                    sessionStorage.getItem('is_telegram_webapp') === 'true';
+                const isTelegramApp = sessionStorage.getItem('is_telegram_webapp') === 'true';
                                     
                 if (isTelegramApp) {
                     // Проверяем, если мы в Telegram, но потеряли состояние аутентификации
-                    const hasUserData = localStorage.getItem('current_user') || 
-                                      localStorage.getItem('current_user_id') || 
-                                      sessionStorage.getItem('current_user') || 
+                    const hasUserData = sessionStorage.getItem('current_user') || 
                                       sessionStorage.getItem('current_user_id');
                                       
                     if (!hasUserData) {
                         console.log('Обнаружена потеря состояния авторизации в Telegram WebApp, пытаемся восстановить');
                         // Попытка восстановить данные из сохраненных
-                        const cachedTelegramUser = localStorage.getItem('telegram_last_user') || 
-                                                 sessionStorage.getItem('telegram_last_user') || 
+                        const cachedTelegramUser = sessionStorage.getItem('telegram_last_user') || 
                                                  sessionStorage.getItem('telegramUser');
                                                  
                         if (cachedTelegramUser) {
@@ -412,8 +403,7 @@ function App() {
                                 const parsedData = JSON.parse(cachedTelegramUser);
                                 console.log('Восстанавливаем данные пользователя из кеша:', parsedData);
                                 
-                                // Сохраняем во все хранилища для надежности
-                                localStorage.setItem('telegram_last_user', cachedTelegramUser);
+                                // Сохраняем в sessionStorage
                                 sessionStorage.setItem('telegram_last_user', cachedTelegramUser);
                                 sessionStorage.setItem('telegramUser', cachedTelegramUser);
                                 
@@ -421,7 +411,6 @@ function App() {
                                 const telegramId = parsedData.id ? parsedData.id.toString() : '';
                                 if (telegramId) {
                                     const userId = `tg_${telegramId}`;
-                                    localStorage.setItem('current_user_id', userId);
                                     sessionStorage.setItem('current_user_id', userId);
                                 }
                             } catch (err) {
