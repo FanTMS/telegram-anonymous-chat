@@ -19,20 +19,23 @@
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-router-dom": "^6.20.0",
-        "react-scripts": "5.0.1",
+        "react-scripts": "4.0.3",
         "react-transition-group": "^4.4.5",
         "styled-components": "^6.1.17"
     },
+    "devDependencies": {
+        "@babel/plugin-proposal-private-property-in-object": "^7.21.11"
+    },
     "scripts": {
         "init": "node scripts/init-project.js",
-        "start": "cross-env GENERATE_SOURCEMAP=false react-scripts start",
+        "start": "react-scripts start",
         "prepare": "node scripts/prepare-project.js",
         "create-logos": "node scripts/create-logos.js",
         "create-indexes": "node scripts/create-firestore-indexes.js",
         "fix-paths": "node scripts/fix-static-paths.js",
         "ensure-index": "node scripts/ensure-index.js",
         "prestart": "npm run fix-paths",
-        "build": "PUBLIC_URL=. GENERATE_SOURCEMAP=false react-scripts build && npm run copy-redirects",
+        "build": "react-scripts build && npm run copy-redirects",
         "copy-redirects": "node scripts/copy-redirects.js"
     },
     "eslintConfig": {
@@ -53,9 +56,12 @@
             "last 1 safari version"
         ]
     },
-    "resolutions": {},
-    "overrides": {},
-    "devDependencies": {},
+    "resolutions": {
+        "react-error-overlay": "6.0.9"
+    },
+    "overrides": {
+        "react-error-overlay": "6.0.9"
+    },
     "description": "1. Клонируйте репозиторий\r 2. Установите зависимости: `npm install`\r 3. Запустите приложение: `npm start`",
     "main": ".eslintrc.js",
     "repository": {
