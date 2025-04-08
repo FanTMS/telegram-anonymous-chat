@@ -156,7 +156,6 @@ const BottomNavigation = ({ items = [] }) => {
     const location = useLocation();
     const [ripple, setRipple] = useState({ visible: false, x: 0, y: 0, itemId: null });
     const [isVisible, setIsVisible] = useState(true);
-    const [lastScrollY, setLastScrollY] = useState(0);
     const notifications = useNotifications();
     
     // Safely access notification values with fallbacks
@@ -177,6 +176,11 @@ const BottomNavigation = ({ items = [] }) => {
 
     // Обработчик нажатия на пункт меню с эффектом волны
     const handleNavClick = (path, e, itemId) => {
+        // Если мы уже на этой странице, не делаем ничего
+        if (location.pathname === path) {
+            return;
+        }
+
         // Создаем ripple эффект
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -186,47 +190,44 @@ const BottomNavigation = ({ items = [] }) => {
 
         // Добавляем тактильный отклик, если доступен
         try {
-            if (window.TelegramWebApp &&
-                window.TelegramWebApp.HapticFeedback &&
-                typeof window.TelegramWebApp.HapticFeedback.impactOccurred === 'function') {
+            if (window.TelegramWebApp?.HapticFeedback?.impactOccurred) {
                 window.TelegramWebApp.HapticFeedback.impactOccurred('light');
             }
         } catch (e) {
             console.warn('Haptic feedback not available');
         }
 
-        // Переходим на страницу после небольшой задержки для анимации
-        setTimeout(() => {
-            navigate(path);
+        // Переходим на страницу немедленно
+        navigate(path, { replace: true });
 
-            // Очищаем эффект через некоторое время
-            setTimeout(() => {
-                setRipple({ visible: false, x: 0, y: 0, itemId: null });
-            }, 600);
-        }, 150);
+        // Сбрасываем ripple эффект
+        setTimeout(() => {
+            setRipple({ visible: false, x: 0, y: 0, itemId: null });
+        }, 300);
     };
 
-    // Скрываем/показываем меню при скролле
     useEffect(() => {
+        let lastScrollY = window.scrollY;
+        
         const handleScroll = () => {
-            const scrollY = window.scrollY;
-            const threshold = 20; // Минимальная разница для срабатывания
-
-            // Показываем меню при скролле вверх или если мы в верхней части страницы
-            if (scrollY < lastScrollY - threshold || scrollY < 100) {
+            const currentScrollY = window.scrollY;
+            const scrollDiff = currentScrollY - lastScrollY;
+            
+            // Показываем навигацию при скролле вверх или когда мы в самом верху страницы
+            if (scrollDiff < -10 || currentScrollY < 50) {
                 setIsVisible(true);
-            }
-            // Скрываем меню при скролле вниз
-            else if (scrollY > lastScrollY + threshold) {
+            } 
+            // Скрываем навигацию при скролле вниз больше чем на 10px
+            else if (scrollDiff > 10) {
                 setIsVisible(false);
             }
-
-            setLastScrollY(scrollY);
+            
+            lastScrollY = currentScrollY;
         };
 
         window.addEventListener('scroll', handleScroll, { passive: true });
         return () => window.removeEventListener('scroll', handleScroll);
-    }, [lastScrollY]);
+    }, []);
 
     // Если нет элементов, не рендерим меню
     if (!items || items.length === 0) {
@@ -237,39 +238,24 @@ const BottomNavigation = ({ items = [] }) => {
         <NavigationContainer $hidden={!isVisible}>
             {items.map((item) => {
                 const active = isItemActive(item);
-                
-                // Show badge for Chats tab when there are unread messages
-                const showBadge = item.path === '/chats' && unreadChatsCount > 0;
-                
-                console.log(`Menu item ${item.path}: showBadge=${showBadge}, unreadCount=${unreadChatsCount}`);
+                const hasNotifications = item.path === '/chats' && unreadChatsCount > 0;
                 
                 return (
                     <NavItem
-                        key={item.path}
+                        key={item.id}
                         $active={active}
-                        onClick={(e) => handleNavClick(item.path, e, item.path)}
+                        onClick={(e) => handleNavClick(item.path, e, item.id)}
                     >
-                        {/* Индикатор непрочитанных сообщений */}
-                        {showBadge && (
-                            <BadgeIndicator>
-                                {unreadChatsCount > 9 ? '9+' : unreadChatsCount}
-                            </BadgeIndicator>
+                        {ripple.visible && ripple.itemId === item.id && (
+                            <Ripple style={{ left: ripple.x, top: ripple.y }} />
                         )}
-                        
+                        {hasNotifications && (
+                            <BadgeIndicator>{unreadChatsCount}</BadgeIndicator>
+                        )}
                         <IconContainer>
                             <IconRenderer icon={item.icon} />
                         </IconContainer>
                         <Label $active={active}>{item.label}</Label>
-
-                        {/* Эффект волны при нажатии */}
-                        {ripple.visible && ripple.itemId === item.path && (
-                            <Ripple
-                                style={{
-                                    left: ripple.x,
-                                    top: ripple.y
-                                }}
-                            />
-                        )}
                     </NavItem>
                 );
             })}
