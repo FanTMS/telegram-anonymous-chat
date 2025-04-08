@@ -5,7 +5,7 @@
 [build.environment]
   NODE_ENV = "production"
   CI = "false"
-  PUBLIC_URL = "./"
+  PUBLIC_URL = "/"
   NETLIFY_NEXT_PLUGIN_SKIP = "true"
   SKIP_PREFLIGHT_CHECK = "true"
   TSC_COMPILE_ON_ERROR = "true"
