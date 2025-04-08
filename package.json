@@ -32,7 +32,7 @@
         "fix-paths": "node scripts/fix-static-paths.js",
         "ensure-index": "node scripts/ensure-index.js",
         "prestart": "npm run fix-paths",
-        "build": "cross-env PUBLIC_URL=. GENERATE_SOURCEMAP=false react-scripts build && npm run copy-redirects",
+        "build": "PUBLIC_URL=. GENERATE_SOURCEMAP=false react-scripts build && npm run copy-redirects",
         "copy-redirects": "node scripts/copy-redirects.js"
     },
     "eslintConfig": {
@@ -55,8 +55,7 @@
     },
     "resolutions": {},
     "overrides": {},
-    "devDependencies": {
-    },
+    "devDependencies": {},
     "description": "1. Клонируйте репозиторий\r 2. Установите зависимости: `npm install`\r 3. Запустите приложение: `npm start`",
     "main": ".eslintrc.js",
     "repository": {

@@ -1,5 +1,5 @@
 [build]
-  command = "npm install && CI=false PUBLIC_URL=. npm run build"
+  command = "npm ci && npm run build"
   publish = "build"
 
 [build.environment]
@@ -14,6 +14,7 @@
   GENERATE_SOURCEMAP = "false"
   BROWSER = "none"
   BASE_URL = "."
+  NPM_FLAGS = "--no-audit --no-fund"
 
 # Редирект для имитации поведения React Router
 [[redirects]]
