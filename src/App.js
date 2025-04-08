@@ -33,6 +33,7 @@ import Friends from './pages/Friends';
 import AdminReports from './pages/AdminReports';
 import AdminStats from './pages/AdminStats';
 import AdminUsers from './pages/AdminUsers';
+import NotFoundRedirect from './components/NotFoundRedirect';
 
 import './styles/BeginnerGuide.css';
 import './App.css';
@@ -117,7 +118,7 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
     const navigate = useNavigate();
     const [isAdmin, setIsAdmin] = useState(false);
     const [checkedStorage, setCheckedStorage] = useState(false);
-    const location = useLocation(); // Get current location
+    const location = useLocation();
     
     // Дополнительная проверка авторизации из хранилища
     useEffect(() => {
@@ -248,7 +249,7 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
         
         if (adminOnly && !loading && isAuthenticated && !isAdmin) {
             // Если проверка админ-прав завершена и пользователь не админ - редирект
-            navigate('/home', { replace: true });
+            navigate('/', { replace: true });
         }
     }, [isAuthenticated, loading, navigate, adminOnly, isAdmin, checkedStorage, location.pathname]);
     
@@ -406,89 +407,88 @@ function App() {
 
     return (
         <div className="app-container">
-        <ToastProvider>
-            <NotificationProvider>
+            <ToastProvider>
+                <NotificationProvider>
                     <PageTransition>
-                            <Routes>
-                                <Route path="/register" element={<RegistrationForm />} />
-                                <Route path="/onboarding" element={<OnboardingTutorial />} />
-                                
-                            <Route path="/" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <Home />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/home" element={
-                                    <Navigate to="/" replace />
-                                } />
-                                
-                                <Route path="/chats" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <ChatsList />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/chat/:chatId" element={
-                                    <ProtectedRoute>
-                                    <AppLayout>
-                                            <Chat />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                            <Route path="/random" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <RandomChat />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/profile" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <Profile />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/groups" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <Groups />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                            <Route path="/groups/create" element={
-                                    <ProtectedRoute>
-                                    <AppLayout>
-                                        <GroupCreate />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                            <Route path="/groups/:groupId" element={
-                                    <ProtectedRoute>
-                                    <AppLayout>
-                                        <GroupDetail />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/groups/:groupId/edit" element={
-                                    <ProtectedRoute>
-                                    <AppLayout>
-                                            <GroupEdit />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
+                        <Routes>
+                            <Route path="/register" element={<RegistrationForm />} />
+                            <Route path="/onboarding" element={<OnboardingTutorial />} />
                             
+                            <Route path="/" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <Home />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+
+                            {/* Redirect /home to / */}
+                            <Route path="/home/*" element={<NotFoundRedirect />} />
+                            
+                            <Route path="/chats" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <ChatsList />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/chat/:chatId" element={
+                                <ProtectedRoute>
+                                <AppLayout>
+                                        <Chat />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/random" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <RandomChat />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/profile" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <Profile />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/groups" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <Groups />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/groups/create" element={
+                                <ProtectedRoute>
+                                <AppLayout>
+                                    <GroupCreate />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/groups/:groupId" element={
+                                <ProtectedRoute>
+                                <AppLayout>
+                                    <GroupDetail />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/groups/:groupId/edit" element={
+                                <ProtectedRoute>
+                                <AppLayout>
+                                        <GroupEdit />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
+                        
                             <Route path="/friends" element={
                                 <ProtectedRoute>
                                     <AppLayout>
@@ -497,13 +497,13 @@ function App() {
                                     </ProtectedRoute>
                                 } />
                                 
-                                <Route path="/guide" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <BeginnerGuide />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
+                            <Route path="/guide" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <BeginnerGuide />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
                                 
                             <Route path="/support" element={
                                 <ProtectedRoute>
@@ -513,13 +513,13 @@ function App() {
                                     </ProtectedRoute>
                                 } />
                                 
-                                <Route path="/support/diagnostics" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <SupportDiagnostics />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
+                            <Route path="/support/diagnostics" element={
+                                <ProtectedRoute>
+                                    <AppLayout>
+                                        <SupportDiagnostics />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
                                 
                             <Route path="/admin" element={
                                 <ProtectedRoute adminOnly>
@@ -537,13 +537,13 @@ function App() {
                                     </ProtectedRoute>
                                 } />
                                 
-                                <Route path="/admin/config" element={
+                            <Route path="/admin/config" element={
                                 <ProtectedRoute adminOnly>
-                                        <AppLayout>
-                                            <AdminConfig />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
+                                    <AppLayout>
+                                        <AdminConfig />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
                                 
                             <Route path="/admin/utility" element={
                                 <ProtectedRoute adminOnly>
@@ -553,96 +553,68 @@ function App() {
                                 </ProtectedRoute>
                             } />
                                 
-                                <Route path="/admin/reports" element={
+                            <Route path="/admin/reports" element={
                                 <ProtectedRoute adminOnly>
-                                        <AppLayout>
-                                            <AdminReports />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
+                                    <AppLayout>
+                                        <AdminReports />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
                                 
-                                <Route path="/admin/stats" element={
+                            <Route path="/admin/stats" element={
                                 <ProtectedRoute adminOnly>
-                                        <AppLayout>
-                                            <AdminStats />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
+                                    <AppLayout>
+                                        <AdminStats />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
                                 
-                                <Route path="/admin/users" element={
+                            <Route path="/admin/users" element={
                                 <ProtectedRoute adminOnly>
-                                        <AppLayout>
-                                            <AdminUsers />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
+                                    <AppLayout>
+                                        <AdminUsers />
+                                    </AppLayout>
+                                </ProtectedRoute>
+                            } />
                                 
-                                <Route path="*" element={<NotFoundPage />} />
-                            </Routes>
+                            {/* Catch all route */}
+                            <Route path="*" element={<NotFoundRedirect />} />
+                        </Routes>
                     </PageTransition>
-            </NotificationProvider>
-        </ToastProvider>
+                </NotificationProvider>
+            </ToastProvider>
         </div>
     );
 }
 
 // Обновленный компонент Root для обработки корневого маршрута
 const Root = () => {
-    const { isAuthenticated, loading, user } = useContext(UserContext);
+    const { isAuthenticated, loading } = useContext(UserContext);
     const navigate = useNavigate();
     const location = useLocation();
-    const [redirectAttempts, setRedirectAttempts] = useState(0);
-    
-    console.log('Root компонент загружен. Текущий путь:', location.pathname);
-    console.log('Root: isAuthenticated =', isAuthenticated, 'loading =', loading);
     
     useEffect(() => {
-        console.log('Root: useEffect для перенаправления запущен');
-        
-        if (loading) {
-            console.log('Root: Загрузка еще не завершена, ожидаем...');
-            return;
-        }
-
-        if (redirectAttempts > 5) {
-            console.error('Root: Слишком много попыток перенаправления. Возможно, есть проблема с маршрутизацией.');
-            return;
-        }
-
-        setRedirectAttempts(prev => prev + 1);
+        if (loading) return;
 
         const isRegisterPath = location.pathname === '/register' || location.pathname === '/onboarding';
         
-        const redirectTimer = setTimeout(() => {
-            try {
-                if (isAuthenticated && isRegisterPath) {
-                    console.log('Пользователь аутентифицирован, но находится на странице регистрации. Перенаправление на /');
-                    navigate('/', { replace: true });
-                } else if (!isAuthenticated && !isRegisterPath && location.pathname !== '/') {
-                    console.log('Пользователь не аутентифицирован, перенаправление на /register');
-                    navigate('/register', { replace: true });
-                }
-            } catch (error) {
-                console.error('Root: Ошибка при перенаправлении:', error);
-            }
-        }, 300);
-
-        return () => {
-            clearTimeout(redirectTimer);
-        };
-    }, [isAuthenticated, loading, location.pathname, navigate, redirectAttempts]);
+        if (isAuthenticated && isRegisterPath) {
+            navigate('/', { replace: true });
+        } else if (!isAuthenticated && !isRegisterPath) {
+            navigate('/register', { replace: true });
+        }
+    }, [isAuthenticated, loading, location.pathname, navigate]);
     
-    return (
-        <div className="loading-screen">
-            <div className="loading-spinner"></div>
-            <p>Загрузка приложения...</p>
-            {redirectAttempts > 3 && (
-                <p className="loading-warning">
-                    Загрузка занимает больше времени, чем обычно...
-                </p>
-            )}
-        </div>
-    );
+    if (loading) {
+        return (
+            <div className="loading-screen">
+                <div className="loading-spinner"></div>
+                <p>Загрузка приложения...</p>
+            </div>
+        );
+    }
+
+    return null;
 };
 
 export default App;
