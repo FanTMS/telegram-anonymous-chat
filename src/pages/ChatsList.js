@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getUserChats, getChatById, getSupportChatId, createSupportChat } from '../utils/chatService';
-import { safeHapticFeedback } from '../utils/telegramUtils';
+import { safeHapticFeedback, isCompactMode } from '../utils/telegramUtils';
 import { useAuth } from '../hooks/useAuth';
 import '../styles/ChatsList.css';
 
 const ChatsList = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+    const containerRef = useRef(null);
     const [chats, setChats] = useState([]);
     const [filteredChats, setFilteredChats] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -15,6 +17,22 @@ const ChatsList = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [lastRefreshed, setLastRefreshed] = useState(new Date());
     const [supportChatId, setSupportChatId] = useState(null);
+    const [isCompact, setIsCompact] = useState(isCompactMode());
+
+    // Обновляем статус компактного режима
+    useEffect(() => {
+        const handleResize = () => {
+            setIsCompact(isCompactMode());
+        };
+        
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('orientationchange', handleResize);
+        
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('orientationchange', handleResize);
+        };
+    }, []);
 
     // Загрузка чатов
     useEffect(() => {
@@ -249,8 +267,11 @@ const ChatsList = () => {
     };
 
     return (
-        <div className="chats-list-container">
-            <div className="chats-header">
+        <div 
+            ref={containerRef} 
+            className={`chats-list-container ${isCompact ? 'tg-compact-mode' : ''}`}
+        >
+            <div className={`chats-header ${isCompact ? 'tg-compact-mode' : ''}`}>
                 <h1>Чаты</h1>
                 <div className="chats-actions">
                     <button
@@ -308,19 +329,19 @@ const ChatsList = () => {
                                 Начать новый чат
                             </button>
                             
-                            <div className="support-chat-button" onClick={handleSupportChatClick}>
-                                <svg className="support-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"></path>
-                                    <path d="M12 16v2"></path>
-                                    <path d="M12 8a2.5 2.5 0 0 0-2.5 2.5v1.5a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1.5A2.5 2.5 0 0 0 12 8z"></path>
-                                </svg>
-                                <span>Техническая поддержка</span>
-                            </div>
+                            {!supportChatId && (
+                                <button
+                                    className="support-chat-button"
+                                    onClick={handleSupportChatClick}
+                                >
+                                    Связаться с поддержкой
+                                </button>
+                            )}
                         </>
                     )}
                 </div>
             ) : (
-                <div className="chats-list">
+                <div className={`chats-list ${isCompact ? 'tg-compact-mode' : ''}`}>
                     {filteredChats.map(chat => {
                         // Determine if the chat has unread messages
                         const isUnread = chat.unreadByUser === true || 
@@ -332,11 +353,11 @@ const ChatsList = () => {
                         return (
                             <div
                                 key={chat.id}
-                                className={`chat-item ${chat.pinned ? 'pinned' : ''} ${isUnread ? 'unread' : ''}`}
+                                className={`chat-item ${chat.pinned ? 'pinned' : ''} ${isUnread ? 'unread' : ''} ${isCompact ? 'tg-compact-mode' : ''}`}
                                 onClick={() => handleChatClick(chat.id)}
                             >
                                 {chat.pinned && <div className="pin-indicator"></div>}
-                                <div className={`chat-avatar ${chat.isOnline ? 'online' : ''} ${chat.isSupportChat ? 'support-avatar' : ''}`}>
+                                <div className="chat-avatar">
                                     {chat.isSupportChat ? (
                                         <svg className="support-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"></path>
@@ -350,7 +371,7 @@ const ChatsList = () => {
                                         <div className="unread-badge">{chat.unreadCount}</div>
                                     )}
                                 </div>
-                                <div className="chat-details">
+                                <div className="chat-info">
                                     <div className="chat-name-row">
                                         <h3 className="chat-name">
                                             {chat.isSupportChat ? 'Техническая поддержка' : (chat.name || 'Аноним')}

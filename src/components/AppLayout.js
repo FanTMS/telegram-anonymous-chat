@@ -1,11 +1,18 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTelegram } from '../utils/useTelegram';
 import styled from 'styled-components';
 import ConnectionStatus from './ConnectionStatus';
 import BottomNavigation from './BottomNavigation';
+import { 
+  isCompactMode, 
+  applyCompactModeStyles, 
+  shouldAllowScrolling, 
+  applyViewportConstraints,
+  getTelegramViewportDimensions
+} from '../utils/telegramUtils';
 
-// Добавляем мобильный контейнер с безопасными зонами
+// Контейнер приложения, адаптированный для компактного режима
 const MobileContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -18,11 +25,26 @@ const MobileContainer = styled.div`
   background-color: var(--tg-theme-bg-color, #fff);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 
+  &.tg-compact-mode {
+    max-width: 100%;
+    box-shadow: none;
+    height: var(--tg-viewport-stable-height, 100vh);
+    /* Явно указываем отступы для устройств с "челкой" и вырезами */
+    padding-top: var(--safe-area-top, env(safe-area-inset-top, 0px));
+    padding-bottom: 0; /* Обработка в SafeAreaView */
+    padding-left: var(--safe-area-left, env(safe-area-inset-left, 0px));  
+    padding-right: var(--safe-area-right, env(safe-area-inset-right, 0px));
+  }
+
   @media (min-width: 481px) {
     height: 100vh;
     border-radius: 0;
     border-left: 1px solid rgba(0, 0, 0, 0.1);
     border-right: 1px solid rgba(0, 0, 0, 0.1);
+    
+    &.tg-compact-mode {
+      border: none;
+    }
   }
 `;
 
@@ -31,18 +53,38 @@ const SafeAreaView = styled.div`
   flex-direction: column;
   flex: 1;
   padding-top: env(safe-area-inset-top, 0);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0) + 60px); /* Добавляем высоту меню навигации */
+  padding-bottom: calc(env(safe-area-inset-bottom, 0) + 60px); /* Высота меню навигации */
   width: 100%;
   overflow: hidden;
   position: relative;
+  
+  &.tg-compact-mode {
+    padding-top: 0; /* Верхний отступ применяется к MobileContainer */
+    padding-bottom: calc(var(--compact-nav-height, 50px) + var(--safe-area-bottom, env(safe-area-inset-bottom, 0px))); 
+    padding-left: 0; /* Боковые отступы применяются к MobileContainer */
+    padding-right: 0;
+  }
 `;
 
 const PageContent = styled.main`
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
   position: relative;
+  
+  /* По умолчанию статичное содержимое (без прокрутки) */
+  overflow: hidden;
+  touch-action: none;
+  
+  /* Стили для прокручиваемых страниц (чаты, списки) будут добавлены через JS */
+  &.scrollable {
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+  
+  &.tg-compact-mode {
+    max-height: var(--tg-viewport-stable-height, 100vh);
+  }
 `;
 
 // Мобильная эмуляция для десктопа
@@ -96,12 +138,54 @@ const navigationItems = [
 const AppLayout = ({ children, hideNavigation = false }) => {
     const { WebApp, isAvailable, supportsMethod } = useTelegram();
     const location = useLocation();
+    const contentRef = useRef(null);
+    const containerRef = useRef(null);
+    
+    // Обработка изменения размера окна или переориентации
+    useEffect(() => {
+        const handleResize = () => {
+            applyCompactModeStyles();
+            
+            // Получаем размеры вьюпорта Telegram
+            const viewportDimensions = getTelegramViewportDimensions();
+            
+            // Устанавливаем CSS переменные для размеров вьюпорта
+            document.documentElement.style.setProperty('--tg-viewport-width', `${viewportDimensions.width}px`);
+            document.documentElement.style.setProperty('--tg-viewport-height', `${viewportDimensions.height}px`);
+            document.documentElement.style.setProperty('--tg-viewport-stable-height', `${viewportDimensions.stableHeight}px`);
+            
+            // Применяем ограничения прокрутки
+            if (contentRef.current) {
+                const allowScroll = shouldAllowScrolling(location.pathname);
+                applyViewportConstraints(contentRef.current, allowScroll);
+            }
+        };
+        
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('orientationchange', handleResize);
+        
+        // Инициализация
+        handleResize();
+        
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('orientationchange', handleResize);
+        };
+    }, [location.pathname]);
+    
+    // Обработка изменения маршрута для нужной страницы
+    useEffect(() => {
+        if (contentRef.current) {
+            const allowScroll = shouldAllowScrolling(location.pathname);
+            applyViewportConstraints(contentRef.current, allowScroll);
+        }
+    }, [location.pathname]);
 
-    // Использование Telegram WebApp для установки цветов
+    // Настройка Telegram WebApp
     useEffect(() => {
         if (isAvailable && WebApp) {
             try {
-                // Устанавливаем цвет заголовка и фона если метод поддерживается
+                // Установка темы и цветов
                 if (supportsMethod('setHeaderColor')) {
                     WebApp.setHeaderColor('bg_color');
                 }
@@ -110,9 +194,22 @@ const AppLayout = ({ children, hideNavigation = false }) => {
                     WebApp.setBackgroundColor('bg_color');
                 }
 
-                // Расширяем до полного экрана
-                if (supportsMethod('expand') && !WebApp.isExpanded) {
+                // Расширяем до полного экрана в обычном режиме
+                // В компактном режиме НЕ расширяем!
+                if (!isCompactMode() && supportsMethod('expand') && !WebApp.isExpanded) {
                     WebApp.expand();
+                }
+                
+                // Настраиваем режим компактного приложения
+                applyCompactModeStyles();
+                
+                // Добавляем классы к контейнеру
+                if (containerRef.current) {
+                    if (isCompactMode()) {
+                        containerRef.current.classList.add('tg-compact-mode');
+                    } else {
+                        containerRef.current.classList.remove('tg-compact-mode');
+                    }
                 }
             } catch (error) {
                 console.warn('Ошибка при настройке Telegram WebApp:', error);
@@ -121,30 +218,58 @@ const AppLayout = ({ children, hideNavigation = false }) => {
 
         // Устанавливаем CSS переменные для безопасных зон
         document.documentElement.style.setProperty(
-            '--safe-area-inset-top', 'env(safe-area-inset-top, 0px)'
+            '--safe-area-top', 'env(safe-area-inset-top, 0px)'
         );
         document.documentElement.style.setProperty(
-            '--safe-area-inset-bottom', 'env(safe-area-inset-bottom, 0px)'
+            '--safe-area-bottom', 'env(safe-area-inset-bottom, 0px)'
         );
         document.documentElement.style.setProperty(
-            '--safe-area-inset-left', 'env(safe-area-inset-left, 0px)'
+            '--safe-area-left', 'env(safe-area-inset-left, 0px)'
         );
         document.documentElement.style.setProperty(
-            '--safe-area-inset-right', 'env(safe-area-inset-right, 0px)'
+            '--safe-area-right', 'env(safe-area-inset-right, 0px)'
         );
-    }, [isAvailable, WebApp, supportsMethod]);
+        
+        // Добавляем специальную обработку для iOS Safari
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        if (isIOS) {
+            document.documentElement.classList.add('ios-device');
+            
+            // Фикс для iOS Safari height: 100vh
+            const fixIOSSafariHeight = () => {
+                const vh = window.innerHeight * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+            };
+            
+            fixIOSSafariHeight();
+            window.addEventListener('resize', fixIOSSafariHeight);
+            return () => window.removeEventListener('resize', fixIOSSafariHeight);
+        }
+    }, [isAvailable, WebApp, supportsMethod, location.pathname]);
+
+    // Получаем информацию, нужна ли прокрутка на текущей странице
+    const allowScroll = shouldAllowScrolling(location.pathname);
+    const isCompact = isCompactMode();
 
     return (
         <>
             <DesktopContainer />
-            <MobileContainer>
+            <MobileContainer ref={containerRef} className={isCompact ? 'tg-compact-mode' : ''}>
                 <ConnectionStatus />
-                <SafeAreaView>
-                    <PageContent>
+                <SafeAreaView className={isCompact ? 'tg-compact-mode' : ''}>
+                    <PageContent 
+                        ref={contentRef} 
+                        className={`${allowScroll ? 'scrollable' : ''} ${isCompact ? 'tg-compact-mode' : ''}`}
+                    >
                         {children}
                     </PageContent>
                 </SafeAreaView>
-                {!hideNavigation && <BottomNavigation items={navigationItems} />}
+                {!hideNavigation && (
+                    <BottomNavigation 
+                        items={navigationItems} 
+                        isCompactMode={isCompact} 
+                    />
+                )}
             </MobileContainer>
         </>
     );

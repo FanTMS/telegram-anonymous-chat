@@ -5,9 +5,10 @@
 /**
  * Форматирует дату и время для отображения в сообщениях
  * @param {Date|Object|number|string} dateTime - Объект даты, Timestamp, число или строка
+ * @param {boolean} compact - Использовать компактный формат (только часы:минуты)
  * @returns {string} Отформатированное время
  */
-export const formatMessageTime = (dateTime) => {
+export const formatMessageTime = (dateTime, compact = false) => {
     try {
         let date;
 
@@ -35,6 +36,16 @@ export const formatMessageTime = (dateTime) => {
             return '';
         }
 
+        // Форматирование времени в стиле Telegram
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        const timeStr = `${hours}:${minutes}`;
+        
+        // В компактном режиме всегда возвращаем только время
+        if (compact) {
+            return timeStr;
+        }
+
         const now = new Date();
         const isToday = date.getDate() === now.getDate() &&
             date.getMonth() === now.getMonth() &&
@@ -43,11 +54,6 @@ export const formatMessageTime = (dateTime) => {
         const isYesterday = date.getDate() === now.getDate() - 1 &&
             date.getMonth() === now.getMonth() &&
             date.getFullYear() === now.getFullYear();
-
-        // Форматирование времени в стиле Telegram
-        const hours = date.getHours().toString().padStart(2, '0');
-        const minutes = date.getMinutes().toString().padStart(2, '0');
-        const timeStr = `${hours}:${minutes}`;
 
         if (isToday) {
             return timeStr;

@@ -1,0 +1,255 @@
+/* Compact Mode Styles for Telegram Mini-app */
+
+:root.tg-compact-mode {
+  --compact-nav-height: 50px;
+  --compact-header-height: 48px;
+  --compact-content-padding: 8px;
+  --compact-button-size: 36px;
+  --compact-border-radius: 8px;
+  --compact-font-size: 14px;
+  --compact-small-font-size: 12px;
+  
+  /* Безопасные зоны для компактного режима */
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  
+  /* Комбинированные размеры с учетом безопасных зон */
+  --compact-nav-height-safe: calc(var(--compact-nav-height) + var(--safe-area-bottom));
+  --compact-header-height-safe: calc(var(--compact-header-height) + var(--safe-area-top));
+  --compact-content-padding-horizontal: calc(var(--compact-content-padding) + max(var(--safe-area-left), var(--safe-area-right)));
+}
+
+/* Base styles for compact mode */
+.tg-compact-mode {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Fix viewport issues */
+html.tg-compact-mode,
+body.tg-compact-mode {
+  position: fixed;
+  width: 100%;
+  height: var(--tg-viewport-stable-height, 100vh);
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: none;
+  touch-action: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Disable zoom on double tap */
+.tg-compact-mode * {
+  touch-action: manipulation;
+}
+
+/* Make static content pages fit within compact viewport */
+.tg-compact-mode .page-content:not(.scrollable) {
+  height: var(--tg-viewport-stable-height, 100vh);
+  max-height: var(--tg-viewport-stable-height, 100vh);
+  overflow: hidden;
+  padding-top: var(--safe-area-top);
+  padding-bottom: var(--safe-area-bottom);
+  padding-left: var(--safe-area-left);
+  padding-right: var(--safe-area-right);
+}
+
+/* Make scrollable pages work correctly */
+.tg-compact-mode .page-content.scrollable {
+  height: var(--tg-viewport-stable-height, 100vh);
+  max-height: var(--tg-viewport-stable-height, 100vh);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  padding-top: var(--safe-area-top);
+  padding-left: var(--safe-area-left);
+  padding-right: var(--safe-area-right);
+  padding-bottom: 0; /* Нижний отступ учитывается в контейнере */
+}
+
+/* Typography adjustments for compact mode */
+.tg-compact-mode h1 {
+  font-size: 18px;
+  margin: 8px 0;
+}
+
+.tg-compact-mode h2 {
+  font-size: 16px;
+  margin: 6px 0;
+}
+
+.tg-compact-mode p, 
+.tg-compact-mode span, 
+.tg-compact-mode div {
+  font-size: var(--compact-font-size);
+}
+
+/* Form elements in compact mode */
+.tg-compact-mode input,
+.tg-compact-mode textarea,
+.tg-compact-mode select,
+.tg-compact-mode button {
+  font-size: var(--compact-font-size);
+  padding: 8px 12px;
+  height: 40px;
+  border-radius: var(--compact-border-radius);
+}
+
+.tg-compact-mode textarea {
+  height: auto;
+  min-height: 40px;
+}
+
+.tg-compact-mode button {
+  height: var(--compact-button-size);
+  padding: 0 12px;
+}
+
+/* Headers in compact mode */
+.tg-compact-mode .chat-header,
+.tg-compact-mode .app-header,
+.tg-compact-mode .page-header {
+  height: var(--compact-header-height);
+  min-height: var(--compact-header-height);
+  padding: 8px 10px;
+  padding-top: calc(8px + var(--safe-area-top));
+  padding-left: calc(10px + var(--safe-area-left));
+  padding-right: calc(10px + var(--safe-area-right));
+}
+
+/* Chat specific styles for compact mode */
+.tg-compact-mode .chat-messages {
+  height: calc(var(--tg-viewport-stable-height, 100vh) - var(--compact-header-height-safe) - var(--compact-nav-height-safe) - 50px); /* 50px for input area */
+  padding-left: calc(8px + var(--safe-area-left));
+  padding-right: calc(8px + var(--safe-area-right));
+}
+
+.tg-compact-mode .chat-bubble {
+  padding: 8px 12px;
+  margin: 2px 0;
+  max-width: 80%;
+  border-radius: 12px;
+}
+
+.tg-compact-mode .chat-input {
+  padding: 8px;
+  height: 50px;
+  padding-bottom: calc(8px + var(--safe-area-bottom));
+  padding-left: calc(8px + var(--safe-area-left));
+  padding-right: calc(8px + var(--safe-area-right));
+}
+
+/* Lists styles for compact mode */
+.tg-compact-mode .list-item {
+  padding: 10px;
+  margin-bottom: 4px;
+}
+
+.tg-compact-mode .chats-list-container,
+.tg-compact-mode .friends-list-container,
+.tg-compact-mode .groups-list-container {
+  height: calc(var(--tg-viewport-stable-height, 100vh) - var(--compact-header-height-safe) - var(--compact-nav-height-safe));
+  overflow-y: auto;
+}
+
+/* Страницы с чатами: контент с учетом безопасных зон */
+.tg-compact-mode .chats-list,
+.tg-compact-mode .friends-list,
+.tg-compact-mode .groups-list {
+  padding-left: calc(8px + var(--safe-area-left));
+  padding-right: calc(8px + var(--safe-area-right));
+}
+
+/* Элементы списка с учетом безопасных зон */
+.tg-compact-mode .chat-item,
+.tg-compact-mode .friend-item,
+.tg-compact-mode .group-item {
+  padding: 8px;
+  padding-left: calc(8px + var(--safe-area-left));
+  padding-right: calc(8px + var(--safe-area-right));
+}
+
+/* Profiles and static content pages */
+.tg-compact-mode .profile-container,
+.tg-compact-mode .static-container {
+  max-height: var(--tg-viewport-stable-height, 100vh);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--safe-area-top);
+  padding-left: var(--safe-area-left);
+  padding-right: var(--safe-area-right);
+}
+
+/* Scrollable areas within static pages */
+.tg-compact-mode .scrollable-section {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1;
+  padding-bottom: calc(var(--compact-nav-height) + var(--safe-area-bottom));
+}
+
+/* Bottom navigation adjustments */
+.tg-compact-mode .app-navigation,
+.tg-compact-mode .bottom-navigation {
+  height: var(--compact-nav-height);
+  padding-bottom: var(--safe-area-bottom);
+}
+
+/* Modal adjustments for compact mode */
+.tg-compact-mode .modal-content {
+  max-height: calc(var(--tg-viewport-stable-height, 100vh) - 80px);
+  overflow-y: auto;
+  padding-top: var(--safe-area-top);
+  padding-bottom: var(--safe-area-bottom);
+  padding-left: var(--safe-area-left);
+  padding-right: var(--safe-area-right);
+}
+
+/* Optimize buttons and interactive elements for touch in compact mode */
+.tg-compact-mode .action-button,
+.tg-compact-mode .icon-button,
+.tg-compact-mode .nav-item {
+  min-height: 44px;  /* Apple's recommended minimum touch target size */
+  min-width: 44px;
+}
+
+/* Specific fixes for iPhones and notch devices */
+@supports (padding-top: constant(safe-area-inset-top)) {
+  .tg-compact-mode .page-header,
+  .tg-compact-mode .chat-header,
+  .tg-compact-mode .app-header {
+    padding-top: calc(8px + constant(safe-area-inset-top));
+  }
+  
+  .tg-compact-mode .bottom-navigation,
+  .tg-compact-mode .app-navigation {
+    padding-bottom: constant(safe-area-inset-bottom);
+  }
+  
+  .tg-compact-mode .chat-input {
+    padding-bottom: calc(8px + constant(safe-area-inset-bottom));
+  }
+}
+
+/* iPhone X+ и устройства с вырезами */
+@media screen and (device-width: 375px) and (device-height: 812px),
+       screen and (device-width: 390px) and (device-height: 844px),
+       screen and (device-width: 414px) and (device-height: 896px),
+       screen and (device-width: 393px) and (device-height: 852px),
+       screen and (device-width: 428px) and (device-height: 926px) {
+  .tg-compact-mode .app-content {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: calc(var(--compact-nav-height) + env(safe-area-inset-bottom));
+  }
+  
+  .tg-compact-mode .page-header,
+  .tg-compact-mode .chat-header {
+    padding-top: calc(8px + env(safe-area-inset-top));
+  }
+} 

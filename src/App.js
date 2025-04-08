@@ -4,6 +4,7 @@ import { UserContext } from './contexts/UserContext';
 import { ToastProvider } from './components/Toast';
 import { NotificationProvider } from './contexts/NotificationContext';
 import './styles/global.css';
+import './styles/compact-mode.css';
 
 // Импорт компонентов
 import RegistrationForm from './components/RegistrationForm';
@@ -51,6 +52,11 @@ import { setupLocalAdminRights, addAdminByTelegramId, addAdminByUID } from './ut
 import { getTelegramUser } from './utils/telegramUtils';
 import { isUserAdminByTelegramId, isUserAdminByUID } from './utils/adminManager';
 import { auth } from './firebase';
+import { 
+    isCompactMode, 
+    applyCompactModeStyles, 
+    shouldAllowScrolling 
+} from './utils/telegramUtils';
 
 // Иконки для навигации
 const HomeIcon = () => (
@@ -529,6 +535,38 @@ function App() {
         
         return () => {
             window.removeEventListener('error', handleError);
+        };
+    }, []);
+
+    // Обработка компактного режима в Telegram Mini-app
+    useEffect(() => {
+        // Определяем, находимся ли мы в компактном режиме
+        const compact = isCompactMode();
+        
+        // Добавляем классы для компактного режима
+        if (compact) {
+            document.documentElement.classList.add('tg-compact-mode');
+            document.body.classList.add('tg-compact-mode');
+        } else {
+            document.documentElement.classList.remove('tg-compact-mode');
+            document.body.classList.remove('tg-compact-mode');
+        }
+        
+        // Применяем стили компактного режима
+        applyCompactModeStyles();
+        
+        // Обработчики изменения размера окна
+        const handleResize = () => {
+            applyCompactModeStyles();
+        };
+        
+        // Слушаем изменения размера окна
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('orientationchange', handleResize);
+        
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('orientationchange', handleResize);
         };
     }, []);
 

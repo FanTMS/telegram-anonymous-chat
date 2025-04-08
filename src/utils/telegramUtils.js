@@ -402,3 +402,119 @@ export const safeShowPopup = async (params) => {
         }
     });
 };
+
+/**
+ * Determine if the current Telegram WebApp is in compact mode
+ * @returns {boolean} True if in compact mode
+ */
+export const isCompactMode = () => {
+  if (typeof window === 'undefined') return false;
+  
+  try {
+    if (window.Telegram && window.Telegram.WebApp) {
+      // Telegram Web App API indicates if in compact mode
+      return window.Telegram.WebApp.isCompact === true;
+    } else if (typeof WebApp !== 'undefined') {
+      return WebApp.isCompact === true;
+    }
+  } catch (err) {
+    console.warn('Error checking compact mode:', err);
+  }
+  
+  // Fallback: check viewport width (compact is typically under 600px)
+  return window.innerWidth < 600;
+};
+
+/**
+ * Get viewport dimensions from Telegram WebApp
+ * @returns {Object} Object containing width, height, and stableHeight
+ */
+export const getTelegramViewportDimensions = () => {
+  const defaultDimensions = {
+    width: window.innerWidth,
+    height: window.innerHeight,
+    stableHeight: window.innerHeight
+  };
+  
+  try {
+    if (window.Telegram && window.Telegram.WebApp) {
+      return {
+        width: window.Telegram.WebApp.viewportWidth || defaultDimensions.width,
+        height: window.Telegram.WebApp.viewportHeight || defaultDimensions.height,
+        stableHeight: window.Telegram.WebApp.viewportStableHeight || defaultDimensions.height
+      };
+    } else if (typeof WebApp !== 'undefined') {
+      return {
+        width: WebApp.viewportWidth || defaultDimensions.width,
+        height: WebApp.viewportHeight || defaultDimensions.height,
+        stableHeight: WebApp.viewportStableHeight || defaultDimensions.height
+      };
+    }
+  } catch (err) {
+    console.warn('Error getting viewport dimensions:', err);
+  }
+  
+  return defaultDimensions;
+};
+
+/**
+ * Apply viewport constraints based on whether page should be static or scrollable
+ * @param {HTMLElement} element - The element to apply constraints to
+ * @param {boolean} allowScroll - Whether scrolling should be allowed
+ */
+export const applyViewportConstraints = (element, allowScroll = false) => {
+  if (!element) return;
+  
+  if (allowScroll) {
+    // For scrollable pages (chats, lists)
+    element.style.overflowY = 'auto';
+    element.style.overflowX = 'hidden';
+    element.style.height = '100%';
+    element.style.touchAction = 'pan-y';
+    element.classList.add('scrollable');
+  } else {
+    // For static pages
+    element.style.overflowY = 'hidden';
+    element.style.overflowX = 'hidden';
+    element.style.height = '100%';
+    element.style.touchAction = 'none';
+    element.classList.remove('scrollable');
+  }
+};
+
+/**
+ * Check if the current page should allow scrolling (chats and list pages)
+ * @param {string} pathname - Current URL pathname
+ * @returns {boolean} Whether scrolling should be allowed
+ */
+export const shouldAllowScrolling = (pathname) => {
+  // Pages that should be scrollable
+  const scrollablePages = [
+    '/chats',
+    '/chat/',
+    '/groups',
+    '/friends',
+    '/admin-support'
+  ];
+  
+  // Check if current path matches any scrollable pages
+  return scrollablePages.some(page => 
+    pathname === page || 
+    (page.endsWith('/') && pathname.startsWith(page))
+  );
+};
+
+// Apply compact mode styles to the document
+export const applyCompactModeStyles = () => {
+  if (isCompactMode()) {
+    document.documentElement.classList.add('tg-compact-mode');
+    
+    // Apply any additional compact mode specific styles
+    const viewportDimensions = getTelegramViewportDimensions();
+    document.documentElement.style.setProperty('--tg-viewport-width', `${viewportDimensions.width}px`);
+    document.documentElement.style.setProperty('--tg-viewport-height', `${viewportDimensions.height}px`);
+    document.documentElement.style.setProperty('--tg-viewport-stable-height', `${viewportDimensions.stableHeight}px`);
+  } else {
+    document.documentElement.classList.remove('tg-compact-mode');
+  }
+};

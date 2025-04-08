@@ -31,12 +31,36 @@ body {
     --tg-viewport-height: 100vh;
 }
 
+/* Переменные для компактного режима */
+html.tg-compact-mode {
+    --bottom-nav-height: 50px;
+    --compact-header-height: 48px;
+    --total-bottom-offset: calc(var(--bottom-nav-height) + var(--safe-area-inset-bottom));
+}
+
+/* Базовые стили для html и root */
 html {
     overflow: hidden;
     height: 100%;
     width: 100%;
     position: fixed;
     overscroll-behavior: none;
+}
+
+/* Особые настройки для компактного режима */
+html.tg-compact-mode,
+body.tg-compact-mode {
+    height: var(--tg-viewport-stable-height, 100vh);
+    max-height: var(--tg-viewport-stable-height, 100vh);
+    overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    touch-action: none;
+    -webkit-overflow-scrolling: none;
 }
 
 #root {
@@ -69,6 +93,22 @@ html {
     overscroll-behavior-y: contain;
 }
 
+/* Стили для чатов и списков в компактном режиме */
+.tg-compact-mode .scrollable {
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Стили для статических страниц в компактном режиме */
+.tg-compact-mode .static {
+    touch-action: none;
+    overflow: hidden;
+}
+
+/* Исходные стили для body */
 body {
     margin: 0;
     padding: 0;
@@ -95,6 +135,13 @@ body {
     flex-direction: column;
 }
 
+/* Компактный режим для root и app */
+.tg-compact-mode #root,
+.tg-compact-mode .app {
+    max-height: var(--tg-viewport-stable-height, 100vh);
+    max-width: 100%;
+}
+
 /* Стили для создания мобильного режима на десктопе */
 @media (min-width: 481px) {
     body {
@@ -115,6 +162,17 @@ body {
         overflow: hidden;
     }
 
+    body.tg-compact-mode {
+        display: block;
+        background-color: var(--tg-theme-bg-color, #fff);
+    }
+
+    .tg-compact-mode #root {
+        max-width: 100%;
+        box-shadow: none;
+        margin: 0;
+    }
+
     .app {
         width: 100%;
         height: 100%;
@@ -131,11 +189,42 @@ body {
 }
 
 /* Настройки безопасной области для iOS */
-:root {
-    --safe-area-inset-top: env(safe-area-inset-top, 0px);
-    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
-    --safe-area-inset-left: env(safe-area-inset-left, 0px);
-    --safe-area-inset-right: env(safe-area-inset-right, 0px);
+@supports (padding-top: constant(safe-area-inset-top)) {
+    .fixed-top {
+        padding-top: constant(safe-area-inset-top);
+    }
+    .fixed-bottom {
+        padding-bottom: constant(safe-area-inset-bottom);
+    }
+}
+
+@supports (padding-top: env(safe-area-inset-top)) {
+    .fixed-top {
+        padding-top: env(safe-area-inset-top);
+    }
+    .fixed-bottom {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+}
+
+/* Пользовательский текст и ввод */
+textarea, input[type="text"], .selectable {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+}
+
+/* Стили для текста в компактном режиме */
+.tg-compact-mode h1 {
+    font-size: 18px;
+}
+
+.tg-compact-mode h2 {
+    font-size: 16px;
+}
+
+.tg-compact-mode p, .tg-compact-mode span {
+    font-size: 14px;
 }
 
 /* Стили для современной многоэтапной формы */

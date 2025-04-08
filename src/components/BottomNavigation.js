@@ -20,8 +20,16 @@ const NavigationContainer = styled.div`
   -webkit-backdrop-filter: blur(10px);
   border-top: 1px solid rgba(0, 0, 0, 0.05);
   z-index: 1000;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-bottom: var(--safe-area-bottom, env(safe-area-inset-bottom, 0));
   transition: transform 0.3s ease;
+  
+  &.tg-compact-mode {
+    height: var(--compact-nav-height, 50px);
+    box-shadow: 0 -1px 5px rgba(0, 0, 0, 0.05);
+    padding-bottom: var(--safe-area-bottom, env(safe-area-inset-bottom, 0));
+    padding-left: var(--safe-area-left, env(safe-area-inset-left, 0));
+    padding-right: var(--safe-area-right, env(safe-area-inset-right, 0));
+  }
   
   @media (min-width: 481px) {
     width: 480px;
@@ -29,10 +37,38 @@ const NavigationContainer = styled.div`
     transform: ${props => props.$hidden ? 'translate(-50%, 100%)' : 'translate(-50%, 0)'};
     border-left: 1px solid rgba(0, 0, 0, 0.05);
     border-right: 1px solid rgba(0, 0, 0, 0.05);
+    
+    &.tg-compact-mode {
+      width: 100%;
+      border-left: none;
+      border-right: none;
+    }
   }
   
   @media (max-width: 480px) {
     transform: ${props => props.$hidden ? 'translateY(100%)' : 'translateY(0)'};
+  }
+  
+  /* Дополнительные стили для iPhone с вырезами */
+  @supports (padding-bottom: constant(safe-area-inset-bottom)) {
+    padding-bottom: constant(safe-area-inset-bottom);
+    
+    &.tg-compact-mode {
+      padding-bottom: constant(safe-area-inset-bottom);
+    }
+  }
+`;
+
+const NavItemContainer = styled.div`
+  display: flex;
+  justify-content: space-around;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  
+  &.tg-compact-mode {
+    padding-left: var(--safe-area-left, env(safe-area-inset-left, 0));
+    padding-right: var(--safe-area-right, env(safe-area-inset-right, 0));
   }
 `;
 
@@ -47,6 +83,10 @@ const NavItem = styled.div`
   transition: all 0.2s ease;
   color: ${props => props.$active ? 'var(--tg-theme-button-color, #2481cc)' : 'var(--tg-theme-hint-color, #999)'};
   position: relative;
+  
+  .tg-compact-mode & {
+    padding: 4px 0;
+  }
   
   &:hover {
     color: var(--tg-theme-button-color, #2481cc);
@@ -63,6 +103,10 @@ const NavItem = styled.div`
     opacity: ${props => props.$active ? 1 : 0};
     transform: scale(${props => props.$active ? 1 : 0});
     transition: all 0.2s ease;
+    
+    .tg-compact-mode & {
+      bottom: 2px;
+    }
   }
 `;
 
@@ -72,11 +116,20 @@ const IconContainer = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
+  
+  .tg-compact-mode & {
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
 `;
 
 const Label = styled.div`
   font-size: 12px;
   font-weight: ${props => props.$active ? '600' : '400'};
+  
+  .tg-compact-mode & {
+    font-size: 10px;
+  }
 `;
 
 // Эффект волны при нажатии
@@ -119,6 +172,14 @@ const BadgeIndicator = styled.div`
   transition: transform 0.2s ease-out;
   animation: badgePulse 1.5s infinite;
   
+  .tg-compact-mode & {
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+    top: -3px;
+    right: calc(50% - 10px);
+  }
+  
   @keyframes badgePulse {
     0% { transform: scale(1); }
     50% { transform: scale(1.1); }
@@ -140,6 +201,7 @@ const IconRenderer = ({ icon }) => {
       'chat': <i className="fas fa-comment-alt"></i>,
       'group': <i className="fas fa-users"></i>,
       'person': <i className="fas fa-user"></i>,
+      'user-friends': <i className="fas fa-user-friends"></i>,
       // Добавляем другие иконки по необходимости
     };
     
@@ -151,7 +213,7 @@ const IconRenderer = ({ icon }) => {
 };
 
 // Главный компонент
-const BottomNavigation = ({ items = [] }) => {
+const BottomNavigation = ({ items = [], isCompactMode = false }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const [ripple, setRipple] = useState({ visible: false, x: 0, y: 0, itemId: null });
@@ -190,6 +252,11 @@ const BottomNavigation = ({ items = [] }) => {
                 window.TelegramWebApp.HapticFeedback &&
                 typeof window.TelegramWebApp.HapticFeedback.impactOccurred === 'function') {
                 window.TelegramWebApp.HapticFeedback.impactOccurred('light');
+            } else if (window.Telegram &&
+                      window.Telegram.WebApp && 
+                      window.Telegram.WebApp.HapticFeedback &&
+                      typeof window.Telegram.WebApp.HapticFeedback.impactOccurred === 'function') {
+                window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
             }
         } catch (e) {
             console.warn('Haptic feedback not available');
@@ -206,9 +273,15 @@ const BottomNavigation = ({ items = [] }) => {
         }, 150);
     };
 
-    // Скрываем/показываем меню при скролле
+    // Скрываем/показываем меню при скролле только для прокручиваемых страниц
     useEffect(() => {
         const handleScroll = () => {
+            // В компактном режиме всегда показываем меню
+            if (isCompactMode) {
+                setIsVisible(true);
+                return;
+            }
+            
             const scrollY = window.scrollY;
             const threshold = 20; // Минимальная разница для срабатывания
 
@@ -226,53 +299,52 @@ const BottomNavigation = ({ items = [] }) => {
 
         window.addEventListener('scroll', handleScroll, { passive: true });
         return () => window.removeEventListener('scroll', handleScroll);
-    }, [lastScrollY]);
+    }, [lastScrollY, isCompactMode]);
 
     // Если нет элементов, не рендерим меню
     if (!items || items.length === 0) {
         return null;
     }
 
-    return (
-        <NavigationContainer $hidden={!isVisible}>
-            {items.map((item) => {
-                const active = isItemActive(item);
-                
-                // Show badge for Chats tab when there are unread messages
-                const showBadge = item.path === '/chats' && unreadChatsCount > 0;
-                
-                console.log(`Menu item ${item.path}: showBadge=${showBadge}, unreadCount=${unreadChatsCount}`);
-                
-                return (
-                    <NavItem
-                        key={item.path}
-                        $active={active}
-                        onClick={(e) => handleNavClick(item.path, e, item.path)}
-                    >
-                        {/* Индикатор непрочитанных сообщений */}
-                        {showBadge && (
-                            <BadgeIndicator>
-                                {unreadChatsCount > 9 ? '9+' : unreadChatsCount}
-                            </BadgeIndicator>
-                        )}
-                        
-                        <IconContainer>
-                            <IconRenderer icon={item.icon} />
-                        </IconContainer>
-                        <Label $active={active}>{item.label}</Label>
+    // Создаем дополнительный класс для компактного режима
+    const navClass = isCompactMode ? 'tg-compact-mode' : '';
 
-                        {/* Эффект волны при нажатии */}
-                        {ripple.visible && ripple.itemId === item.path && (
-                            <Ripple
-                                style={{
-                                    left: ripple.x,
-                                    top: ripple.y
-                                }}
-                            />
-                        )}
-                    </NavItem>
-                );
-            })}
+    return (
+        <NavigationContainer $hidden={!isVisible} className={navClass}>
+            <NavItemContainer className={navClass}>
+                {items.map((item) => {
+                    const active = isItemActive(item);
+                    
+                    // Show badge for Chats tab when there are unread messages
+                    const showBadge = item.path === '/chats' && unreadChatsCount > 0;
+                    
+                    return (
+                        <NavItem
+                            key={item.path}
+                            $active={active}
+                            onClick={(e) => handleNavClick(item.path, e, item.path)}
+                        >
+                            {showBadge && (
+                                <BadgeIndicator>
+                                    {unreadChatsCount > 99 ? '99+' : unreadChatsCount}
+                                </BadgeIndicator>
+                            )}
+                            
+                            <IconContainer>
+                                <IconRenderer icon={item.icon} />
+                            </IconContainer>
+                            
+                            <Label $active={active}>
+                                {item.label}
+                            </Label>
+                            
+                            {ripple.visible && ripple.itemId === item.path && (
+                                <Ripple style={{ left: ripple.x, top: ripple.y }} />
+                            )}
+                        </NavItem>
+                    );
+                })}
+            </NavItemContainer>
         </NavigationContainer>
     );
 };
