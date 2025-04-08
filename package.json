@@ -25,14 +25,14 @@
     },
     "scripts": {
         "init": "node scripts/init-project.js",
-        "start": "set \"GENERATE_SOURCEMAP=false\" && react-scripts start",
+        "start": "cross-env GENERATE_SOURCEMAP=false react-scripts start",
         "prepare": "node scripts/prepare-project.js",
         "create-logos": "node scripts/create-logos.js",
         "create-indexes": "node scripts/create-firestore-indexes.js",
         "fix-paths": "node scripts/fix-static-paths.js",
         "ensure-index": "node scripts/ensure-index.js",
         "prestart": "npm run fix-paths",
-        "build": "set PUBLIC_URL=./ && set GENERATE_SOURCEMAP=false && react-scripts build && npm run copy-redirects",
+        "build": "cross-env PUBLIC_URL=. GENERATE_SOURCEMAP=false react-scripts build && npm run copy-redirects",
         "copy-redirects": "node scripts/copy-redirects.js"
     },
     "eslintConfig": {
@@ -69,5 +69,5 @@
     "bugs": {
         "url": "https://github.com/FanTMS/telegram-anonymous-chat/issues"
     },
-    "homepage": "./"
+    "homepage": "."
 }
