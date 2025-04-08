@@ -22,6 +22,9 @@ const Chat = () => {
     const { user, loading } = useAuth();
     const { showToast } = useToast();
 
+    // Define userId at the component level for consistent access
+    const userId = user?.uid || user?.id;
+
     const [chat, setChat] = useState(null);
     const [partnerInfo, setPartnerInfo] = useState({});
     const [messages, setMessages] = useState([]);
@@ -205,9 +208,18 @@ const Chat = () => {
                     return;
                 }
                 
-                if (!user || !user.uid) {
+                if (!user) {
                     console.error("Пользователь не аутентифицирован");
                     setError('Необходимо авторизоваться');
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Обеспечиваем наличие ID пользователя, используя либо uid, либо id
+                const userId = user.uid || user.id;
+                if (!userId) {
+                    console.error("ID пользователя не определен");
+                    setError('Ошибка авторизации: отсутствует ID пользователя');
                     setIsLoading(false);
                     return;
                 }
@@ -218,10 +230,10 @@ const Chat = () => {
                 // Объявляем переменную partnerId в этой области видимости
                 let partnerIdForFriendCheck = null;
 
-                console.log("Проверка статуса чата для пользователя:", user.uid);
+                console.log("Проверка статуса чата для пользователя:", userId);
                 
                 // Сначала проверяем статус чата для получения подробной информации о партнере
-                const chatStatus = await checkChatMatchStatus(user.uid);
+                const chatStatus = await checkChatMatchStatus(userId);
                 let chatDetails;
                 
                 if (chatStatus && chatStatus.id === chatId) {
@@ -262,7 +274,7 @@ const Chat = () => {
                         console.log('Информация о партнере в чате поддержки:', supportInfo);
                     } else if (chatDetails.participants && chatDetails.participants.length > 0) {
                         // Находим ID партнера
-                        const partnerId = chatDetails.participants.find(id => id !== user.uid);
+                        const partnerId = chatDetails.participants.find(id => id !== userId);
                         partnerIdForFriendCheck = partnerId; // Сохраняем ID для проверки дружбы
                         
                         if (partnerId && chatDetails.participantsData && chatDetails.participantsData[partnerId]) {
@@ -291,7 +303,7 @@ const Chat = () => {
                         
                         // Проверяем статус печати
                         if (chatData.typingStatus) {
-                            const partnerId = chatData.participants.find(id => id !== user.uid);
+                            const partnerId = chatData.participants.find(id => id !== userId);
                             setIsPartnerTyping(chatData.typingStatus[partnerId] === true);
                         } else {
                             setIsPartnerTyping(false);
@@ -400,7 +412,7 @@ const Chat = () => {
                     }
                     
                     // Mark messages as read
-                    if (user && user.uid && newMessages.length > 0) {
+                    if (user && userId && newMessages.length > 0) {
                         markChatAsRead();
                     }
                     
@@ -437,7 +449,7 @@ const Chat = () => {
 
     // Функция для маркировки чата как прочитанного
     const markChatAsRead = async () => {
-        if (!user || !user.uid || !chatId) return;
+        if (!user || !userId || !chatId) return;
         
         try {
             // Обновляем индикатор непрочитанных сообщений в чате
@@ -446,7 +458,7 @@ const Chat = () => {
             // Mark all fields related to unread status to ensure complete clearing of notifications
             const updateData = {
                 unreadByUser: false,
-                [`unreadBy.${user.uid}`]: false,
+                [`unreadBy.${userId}`]: false,
                 unreadCount: 0
             };
             
@@ -465,10 +477,10 @@ const Chat = () => {
             const batch = writeBatch(db);
             messagesSnapshot.forEach(doc => {
                 const messageData = doc.data();
-                if (messageData.senderId !== user.uid && !messageData.readBy?.includes(user.uid)) {
+                if (messageData.senderId !== userId && !messageData.readBy?.includes(userId)) {
                     const messageRef = doc.ref;
                     batch.update(messageRef, {
-                        readBy: arrayUnion(user.uid),
+                        readBy: arrayUnion(userId),
                         read: true
                     });
                 }
@@ -485,7 +497,7 @@ const Chat = () => {
 
     // Вызываем функцию маркировки чата как прочитанный при открытии компонента
     useEffect(() => {
-        if (chatId && user && user.uid) {
+        if (chatId && user && userId) {
             console.log("Marking chat as read on component mount:", chatId);
             markChatAsRead();
             
@@ -502,8 +514,8 @@ const Chat = () => {
         if (!loading && !user) {
             console.error("Пользователь не аутентифицирован - редирект на страницу регистрации");
             navigate('/register');
-        } else {
-            console.log("Аутентификация: user =", user ? JSON.stringify({uid: user.uid, id: user.id}) : 'null', "loading =", loading);
+        } else if (!loading && user) {
+            console.log("Аутентификация: user =", user ? JSON.stringify({uid: user.uid || user.id, id: user.id}) : 'null', "loading =", loading);
         }
     }, [user, loading, navigate]);
 
@@ -539,19 +551,19 @@ const Chat = () => {
 
     const handleSendMessage = async () => {
         const messageText = inputMessage.trim();
-        if (!messageText || !chatId || !user?.uid || isSending) return;
+        if (!messageText || !chatId || !userId || isSending) return;
 
         setIsSending(true);
         setInputMessage('');
 
         try {
-            console.log('Отправка сообщения. Чат:', chat?.type, 'UserID:', user.uid, 'ChatID:', chatId);
+            console.log('Отправка сообщения. Чат:', chat?.type, 'UserID:', userId, 'ChatID:', chatId);
             
             // Добавляем сообщение локально для мгновенного отображения
             const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
             const tempMessage = {
                 id: tempId,
-                senderId: user.uid,
+                senderId: userId,
                 senderName: user.name || "Вы",
                 text: messageText,
                 timestamp: new Date(),
@@ -573,11 +585,11 @@ const Chat = () => {
                 // Если это чат поддержки, используем функцию sendChatMessage
                 // Используем обычную функцию для отправки сообщений, т.к. чат уже создан
                 console.log('Отправка сообщения в чат поддержки через sendChatMessage');
-                await sendChatMessage(chatId, user.uid, messageText);
+                await sendChatMessage(chatId, userId, messageText);
             } else {
                 // Для обычных чатов используем стандартную функцию
                 console.log('Отправка сообщения в обычный чат');
-                await sendChatMessage(chatId, user.uid, messageText);
+                await sendChatMessage(chatId, userId, messageText);
             }
             
             // Firebase автоматически обновит состояние через onSnapshot
@@ -613,7 +625,7 @@ const Chat = () => {
 
     const handleEndChatConfirm = async () => {
         try {
-            await endChat(chatId, user.uid);
+            await endChat(chatId, userId);
             showToast('Чат завершен', 'success');
             navigate('/chats');
         } catch (error) {
@@ -640,7 +652,7 @@ const Chat = () => {
                 
                 // Обновляем статус печати в Firebase
                 updateDoc(chatRef, { 
-                    [`typingStatus.${user.uid}`]: true,
+                    [`typingStatus.${userId}`]: true,
                     typingTimestamp: serverTimestamp()
                 });
                 
@@ -652,7 +664,7 @@ const Chat = () => {
                 // Устанавливаем новый таймаут для сброса статуса печати
                 const timeout = setTimeout(() => {
                     updateDoc(chatRef, { 
-                        [`typingStatus.${user.uid}`]: false
+                        [`typingStatus.${userId}`]: false
                     });
                 }, 3000);
                 
@@ -687,12 +699,12 @@ const Chat = () => {
 
     const checkFriendStatus = async (partnerId) => {
         try {
-            if (!user?.uid || !partnerId) return;
+            if (!userId || !partnerId) return;
             
             // Проверяем и обновляем структуру пользовательских полей
-            await ensureUserFields(user.uid);
+            await ensureUserFields(userId);
             
-            const userRef = doc(db, 'users', user.uid);
+            const userRef = doc(db, 'users', userId);
             const userDoc = await getDoc(userRef);
             
             if (userDoc.exists()) {
@@ -718,13 +730,13 @@ const Chat = () => {
 
     const handleSendFriendRequest = async () => {
         try {
-            if (!user?.uid || !partnerInfo?.id || partnerInfo.id === 'support') {
+            if (!userId || !partnerInfo?.id || partnerInfo.id === 'support') {
                 showToast('Невозможно добавить службу поддержки в друзья', 'error');
                 return;
             }
             
             // Update current user's sent requests
-            const userRef = doc(db, 'users', user.uid);
+            const userRef = doc(db, 'users', userId);
             await updateDoc(userRef, {
                 sentFriendRequests: arrayUnion(partnerInfo.id)
             });
@@ -732,7 +744,7 @@ const Chat = () => {
             // Add to partner's received requests
             const partnerRef = doc(db, 'users', partnerInfo.id);
             await updateDoc(partnerRef, {
-                friendRequests: arrayUnion(user.uid)
+                friendRequests: arrayUnion(userId)
             });
             
             setFriendRequestStatus('sent');
@@ -745,10 +757,10 @@ const Chat = () => {
 
     const handleAcceptFriendRequest = async () => {
         try {
-            if (!user?.uid || !partnerInfo?.id) return;
+            if (!userId || !partnerInfo?.id) return;
             
             // Add to current user's friends and remove from requests
-            const userRef = doc(db, 'users', user.uid);
+            const userRef = doc(db, 'users', userId);
             await updateDoc(userRef, {
                 friends: arrayUnion(partnerInfo.id),
                 friendRequests: arrayRemove(partnerInfo.id)
@@ -757,8 +769,8 @@ const Chat = () => {
             // Add to partner's friends and remove from sent requests
             const partnerRef = doc(db, 'users', partnerInfo.id);
             await updateDoc(partnerRef, {
-                friends: arrayUnion(user.uid),
-                sentFriendRequests: arrayRemove(user.uid)
+                friends: arrayUnion(userId),
+                sentFriendRequests: arrayRemove(userId)
             });
             
             setFriendRequestStatus('friends');
@@ -771,10 +783,10 @@ const Chat = () => {
 
     const handleCancelFriendRequest = async () => {
         try {
-            if (!user?.uid || !partnerInfo?.id) return;
+            if (!userId || !partnerInfo?.id) return;
             
             // Remove from current user's sent requests
-            const userRef = doc(db, 'users', user.uid);
+            const userRef = doc(db, 'users', userId);
             await updateDoc(userRef, {
                 sentFriendRequests: arrayRemove(partnerInfo.id)
             });
@@ -782,7 +794,7 @@ const Chat = () => {
             // Remove from partner's received requests
             const partnerRef = doc(db, 'users', partnerInfo.id);
             await updateDoc(partnerRef, {
-                friendRequests: arrayRemove(user.uid)
+                friendRequests: arrayRemove(userId)
             });
             
             setFriendRequestStatus('none');
@@ -795,10 +807,10 @@ const Chat = () => {
 
     const handleRemoveFriend = async () => {
         try {
-            if (!user?.uid || !partnerInfo?.id) return;
+            if (!userId || !partnerInfo?.id) return;
             
             // Remove from current user's friends
-            const userRef = doc(db, 'users', user.uid);
+            const userRef = doc(db, 'users', userId);
             await updateDoc(userRef, {
                 friends: arrayRemove(partnerInfo.id)
             });
@@ -806,7 +818,7 @@ const Chat = () => {
             // Remove from partner's friends
             const partnerRef = doc(db, 'users', partnerInfo.id);
             await updateDoc(partnerRef, {
-                friends: arrayRemove(user.uid)
+                friends: arrayRemove(userId)
             });
             
             setFriendRequestStatus('none');
@@ -894,7 +906,7 @@ const Chat = () => {
                         ) : (
                             <>
                                 {messages.map((message, index) => {
-                                    const isOutgoing = message.senderId === user.uid;
+                                    const isOutgoing = userId && message.senderId === userId;
                                     const showSenderInfo = !isOutgoing && 
                                                           (index === 0 || 
                                                            messages[index - 1].senderId !== message.senderId);
@@ -1136,7 +1148,7 @@ const Chat = () => {
                 onClose={() => setShowReportDialog(false)}
                 reportedUserId={partnerInfo?.id}
                 chatId={chatId}
-                currentUserId={user?.uid}
+                currentUserId={userId}
             />
         </div>
     );

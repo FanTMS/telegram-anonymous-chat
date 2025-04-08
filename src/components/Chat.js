@@ -12,6 +12,9 @@ const Chat = () => {
     const navigate = useNavigate();
     const { user, isAuthenticated } = useAuth();
     
+    // Define userId at the component level for consistent access
+    const userId = user?.uid || user?.id;
+    
     const [chat, setChat] = useState(null);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
@@ -78,7 +81,7 @@ const Chat = () => {
                 }
                 
                 // Проверка, является ли пользователь участником чата
-                if (!chatData.participants.includes(user.id)) {
+                if (!chatData.participants.includes(userId)) {
                     setError('У вас нет доступа к этому чату');
                     setLoading(false);
                     return;
@@ -87,7 +90,7 @@ const Chat = () => {
                 setChat(chatData);
                 
                 // Получение информации о собеседнике
-                const partnerId = chatData.participants.find(id => id !== user.id);
+                const partnerId = chatData.participants.find(id => id !== userId);
                 if (partnerId) {
                     try {
                         const partnerRef = doc(db, "users", partnerId);
@@ -118,7 +121,7 @@ const Chat = () => {
         if (!dbLoading) {
             loadChat();
         }
-    }, [chatId, user, isAuthenticated, dbLoading]);
+    }, [chatId, user, isAuthenticated, dbLoading, userId]);
 
     // Подписка на обновления сообщений
     useEffect(() => {
@@ -162,7 +165,7 @@ const Chat = () => {
                     const readStatus = chatData.readStatus || {};
                     
                     // Обновляем статус "прочитано" для текущего пользователя
-                    readStatus[user.id] = new Date();
+                    readStatus[userId] = new Date();
                     
                     await updateDoc(chatRef, { readStatus });
                 }
@@ -175,7 +178,7 @@ const Chat = () => {
         
         // Очистка подписки при размонтировании компонента
         return () => unsubscribe();
-    }, [chatId, user, isAuthenticated, dbLoading]);
+    }, [chatId, user, isAuthenticated, dbLoading, userId]);
 
     // Автопрокрутка при получении новых сообщений
     useEffect(() => {
@@ -195,7 +198,7 @@ const Chat = () => {
             setIsSending(true);
             
             // Используем функцию sendChatMessage из chatService
-            await sendChatMessage(chatId, user.id, messageText);
+            await sendChatMessage(chatId, userId, messageText);
             
             // После успешной отправки очищаем поле ввода
             setNewMessage('');
@@ -227,7 +230,7 @@ const Chat = () => {
             await updateDoc(doc(db, 'chats', chatId), {
                 isActive: false,
                 endedAt: serverTimestamp(),
-                endedBy: user.id
+                endedBy: userId
             });
             
             navigate('/'); // Переходим на главную страницу
@@ -246,7 +249,7 @@ const Chat = () => {
             try {
                 const chatRef = doc(db, 'chats', chatId);
                 const typingStatus = {};
-                typingStatus[user.id] = true;
+                typingStatus[userId] = true;
                 
                 updateDoc(chatRef, { 
                     typingStatus: typingStatus,
@@ -256,7 +259,7 @@ const Chat = () => {
                 // Сбрасываем статус через 2 секунды после остановки набора
                 setTimeout(() => {
                     updateDoc(chatRef, { 
-                        [`typingStatus.${user.id}`]: false
+                        [`typingStatus.${userId}`]: false
                     });
                 }, 2000);
             } catch (err) {
@@ -345,7 +348,7 @@ const Chat = () => {
                 ) : (
                     messages.map((msg, index) => {
                         // Определяем, является ли сообщение исходящим
-                        const isOutgoing = msg.senderId === user.id || msg.userId === user.id;
+                        const isOutgoing = userId && (msg.senderId === userId || msg.userId === userId);
                         return (
                             <div
                                 key={msg.id || index}
