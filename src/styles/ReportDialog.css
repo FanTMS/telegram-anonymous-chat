@@ -1,0 +1,227 @@
+.report-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.report-dialog {
+    background-color: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 450px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    animation: dialog-fade-in 0.3s ease-out;
+}
+
+@keyframes dialog-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.report-dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.report-dialog-header h2 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: #333;
+}
+
+.close-button {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #999;
+}
+
+.close-button:hover {
+    color: #333;
+}
+
+.report-dialog-content {
+    padding: 20px;
+}
+
+.report-dialog-description {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #555;
+    font-size: 14px;
+}
+
+.report-reasons-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.report-reason-button {
+    padding: 12px 15px;
+    background-color: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    text-align: left;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.report-reason-button:hover {
+    background-color: #eef5ff;
+    border-color: #2196f3;
+}
+
+.selected-reason {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: #f0f8ff;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.selected-reason p {
+    margin: 0;
+}
+
+.change-reason-button {
+    background: none;
+    border: none;
+    color: #2196f3;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 5px;
+}
+
+.change-reason-button:hover {
+    text-decoration: underline;
+}
+
+.report-description-input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    margin-bottom: 15px;
+    min-height: 100px;
+}
+
+.report-description-input:focus {
+    border-color: #2196f3;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.report-error-message {
+    color: #f44336;
+    font-size: 14px;
+    margin-bottom: 15px;
+    padding: 8px 12px;
+    background-color: #ffebee;
+    border-radius: 4px;
+}
+
+.report-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.report-cancel-button,
+.report-submit-button {
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    border: none;
+    transition: background-color 0.2s;
+}
+
+.report-cancel-button {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.report-cancel-button:hover {
+    background-color: #e0e0e0;
+}
+
+.report-submit-button {
+    background-color: #2196f3;
+    color: white;
+}
+
+.report-submit-button:hover {
+    background-color: #1976d2;
+}
+
+.report-cancel-button:disabled,
+.report-submit-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.report-success-message {
+    text-align: center;
+    padding: 20px 0;
+}
+
+.success-icon {
+    width: 60px;
+    height: 60px;
+    background-color: #4caf50;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    margin: 0 auto 15px;
+}
+
+.report-success-message p {
+    color: #4caf50;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+/* Mobile responsiveness */
+@media screen and (max-width: 480px) {
+    .report-dialog {
+        width: 95%;
+        max-height: 95vh;
+    }
+    
+    .report-dialog-header h2 {
+        font-size: 1.1rem;
+    }
+    
+    .report-reason-button {
+        padding: 10px 12px;
+    }
+} 

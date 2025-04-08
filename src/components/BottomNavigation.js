@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
+import { useNotifications } from '../contexts/NotificationContext';
 
 // Контейнер для навигации с безопасной зоной
 const NavigationContainer = styled.div`
@@ -97,6 +98,34 @@ const Ripple = styled.span`
   }
 `;
 
+// Добавляем компонент BadgeIndicator для уведомлений
+const BadgeIndicator = styled.div`
+  position: absolute;
+  top: -5px;
+  right: calc(50% - 12px);
+  width: 18px;
+  height: 18px;
+  background-color: var(--tg-theme-destructive-text-color, #ff3b30);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  color: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  z-index: 5;
+  transform: scale(1);
+  transition: transform 0.2s ease-out;
+  animation: badgePulse 1.5s infinite;
+  
+  @keyframes badgePulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+  }
+`;
+
 // Компонент для рендеринга иконок
 const IconRenderer = ({ icon }) => {
   // Если icon это React элемент, возвращаем его напрямую
@@ -128,6 +157,13 @@ const BottomNavigation = ({ items = [] }) => {
     const [ripple, setRipple] = useState({ visible: false, x: 0, y: 0, itemId: null });
     const [isVisible, setIsVisible] = useState(true);
     const [lastScrollY, setLastScrollY] = useState(0);
+    const notifications = useNotifications();
+    
+    // Safely access notification values with fallbacks
+    const unreadChatsCount = notifications?.unreadChatsCount || 0;
+    const unreadChats = notifications?.unreadChats || [];
+
+    console.log("BottomNavigation: unreadChatsCount =", unreadChatsCount, "unreadChats =", unreadChats);
 
     const currentPath = location.pathname;
 
@@ -201,13 +237,25 @@ const BottomNavigation = ({ items = [] }) => {
         <NavigationContainer $hidden={!isVisible}>
             {items.map((item) => {
                 const active = isItemActive(item);
-
+                
+                // Show badge for Chats tab when there are unread messages
+                const showBadge = item.path === '/chats' && unreadChatsCount > 0;
+                
+                console.log(`Menu item ${item.path}: showBadge=${showBadge}, unreadCount=${unreadChatsCount}`);
+                
                 return (
                     <NavItem
                         key={item.path}
                         $active={active}
                         onClick={(e) => handleNavClick(item.path, e, item.path)}
                     >
+                        {/* Индикатор непрочитанных сообщений */}
+                        {showBadge && (
+                            <BadgeIndicator>
+                                {unreadChatsCount > 9 ? '9+' : unreadChatsCount}
+                            </BadgeIndicator>
+                        )}
+                        
                         <IconContainer>
                             <IconRenderer icon={item.icon} />
                         </IconContainer>

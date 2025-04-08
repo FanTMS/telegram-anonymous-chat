@@ -66,13 +66,20 @@
     width: 100%;
     padding: 12px 16px;
     border: none;
-    border-radius: 10px;
+    border-radius: 16px;
     background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
     color: var(--tg-theme-text-color, #000000);
-    font-size: 16px;
+    font-size: 15px;
     outline: none;
-    transition: background-color 0.2s;
+    transition: all 0.2s ease;
     padding-right: 40px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.search-input:focus {
+    background-color: var(--tg-theme-bg-color, #ffffff);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .clear-search {
@@ -96,26 +103,58 @@
 .chats-list {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    padding: 0 12px;
     flex: 1;
 }
 
 .chat-item {
     display: flex;
     align-items: center;
-    padding: 12px 16px;
-    gap: 12px;
+    position: relative;
+    padding: 12px 14px;
+    border-radius: 16px;
+    margin-bottom: 8px;
+    background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    gap: 12px;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chat-item:active {
+    background-color: var(--tg-theme-secondary-bg-color-active, #e0e0e0);
 }
 
 .chat-item:hover {
-    background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+    background-color: var(--tg-theme-secondary-bg-color-hover, #e8e8e8);
+    transform: translateY(-1px);
+}
+
+.chat-item.pinned {
+    background-color: rgba(51, 144, 236, 0.1);
+    border-left: 3px solid var(--tg-theme-button-color, #3390EC);
+}
+
+.chat-item.pinned:hover {
+    background-color: rgba(51, 144, 236, 0.15);
+}
+
+.pin-indicator {
+    position: absolute;
+    top: 12px;
+    left: 3px;
+    width: 6px;
+    height: 6px;
+    background-color: var(--tg-theme-button-color, #3390EC);
+    border-radius: 50%;
 }
 
 .chat-avatar {
-    width: 50px;
-    height: 50px;
+    min-width: 46px;
+    width: 46px;
+    height: 46px;
     border-radius: 50%;
     background-color: var(--tg-theme-button-color, #3390EC);
     color: var(--tg-theme-button-text-color, #ffffff);
@@ -123,29 +162,34 @@
     align-items: center;
     justify-content: center;
     font-weight: bold;
-    font-size: 18px;
+    font-size: 16px;
     position: relative;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .chat-avatar.online::after {
     content: '';
     position: absolute;
-    bottom: 2px;
-    right: 2px;
+    bottom: 0;
+    right: 0;
     width: 12px;
     height: 12px;
     border-radius: 50%;
     background-color: #4CAF50;
     border: 2px solid var(--tg-theme-bg-color, #ffffff);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .support-avatar {
     background-color: #ff9800;
+    background-image: linear-gradient(45deg, #ff9800, #ff5722);
 }
 
 .support-icon {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     color: white;
 }
 
@@ -153,58 +197,76 @@
     flex: 1;
     min-width: 0;
     position: relative;
+    padding-right: 6px;
 }
 
 .chat-name-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
 }
 
 .chat-name {
     margin: 0;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    color: var(--tg-theme-text-color, #000000);
+    letter-spacing: -0.2px;
 }
 
 .chat-time {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--tg-theme-hint-color, #999);
     white-space: nowrap;
-    margin-left: 8px;
+    margin-left: 6px;
 }
 
 .chat-last-message {
     margin: 0;
-    font-size: 14px;
+    font-size: 13px;
     color: var(--tg-theme-hint-color, #999);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
-    padding-right: 24px;
+    line-height: 1.3;
 }
 
 .unread-badge {
     position: absolute;
-    top: 50%;
-    right: 0;
-    transform: translateY(-50%);
+    top: -5px;
+    right: -5px;
     min-width: 20px;
     height: 20px;
     border-radius: 10px;
-    background-color: var(--tg-theme-button-color, #3390EC);
+    background-color: #FF3B30;
     color: var(--tg-theme-button-text-color, #ffffff);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: bold;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 6px;
+    padding: 0 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    animation: pulse 2s infinite;
+    z-index: 2;
+    border: 2px solid var(--tg-theme-bg-color, #ffffff);
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 6px rgba(255, 59, 48, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
+    }
 }
 
 .loading-container,
@@ -273,17 +335,20 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 16px;
+    padding: 14px;
     background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
-    border-radius: 10px;
-    margin: 16px;
+    border-radius: 16px;
+    margin: 12px 16px;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .support-chat-button:hover {
     background-color: var(--tg-theme-bg-color, #ffffff);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
 }
 
 .support-chat-button span {
@@ -297,4 +362,37 @@
     color: var(--tg-theme-hint-color, #999);
     margin-top: 16px;
     padding: 0 16px;
+}
+
+/* Добавляем стили для индикатора непрочитанных сообщений */
+.chat-notification-badge {
+    position: absolute;
+    right: 14px;
+    top: 40px;
+    width: 10px;
+    height: 10px;
+    background-color: var(--tg-theme-destructive-text-color, #ff3b30);
+    border-radius: 50%;
+    display: block;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    z-index: 1;
+    animation: badgePulse 1.5s infinite;
+}
+
+/* Стили для непрочитанных чатов */
+.chat-item.unread {
+    background-color: var(--tg-theme-secondary-bg-color, rgba(66, 139, 202, 0.1));
+    font-weight: 500;
+}
+
+.chat-item.unread .chat-preview {
+    font-weight: 500;
+    color: var(--tg-theme-text-color, #333333);
+}
+
+/* Анимация пульсации для индикатора непрочитанных сообщений */
+@keyframes badgePulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
 }

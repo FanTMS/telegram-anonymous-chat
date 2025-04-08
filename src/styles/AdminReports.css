@@ -1,0 +1,372 @@
+.admin-reports-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    font-family: 'Roboto', sans-serif;
+}
+
+.admin-reports-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 15px;
+}
+
+.admin-reports-header h1 {
+    font-size: 1.8rem;
+    margin: 0;
+    color: #333;
+}
+
+.admin-back-button {
+    padding: 8px 16px;
+    background-color: #f0f0f0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.admin-back-button:hover {
+    background-color: #e0e0e0;
+}
+
+.admin-reports-filter {
+    display: flex;
+    margin-bottom: 20px;
+    gap: 10px;
+}
+
+.filter-button {
+    padding: 8px 16px;
+    background-color: #f0f0f0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.filter-button:hover {
+    background-color: #e0e0e0;
+}
+
+.filter-button.active {
+    background-color: #2196f3;
+    color: white;
+}
+
+.loading-spinner {
+    text-align: center;
+    padding: 30px;
+    font-size: 16px;
+    color: #666;
+}
+
+.error-message {
+    padding: 15px;
+    margin-bottom: 20px;
+    background-color: #ffebee;
+    color: #c62828;
+    border-radius: 4px;
+    border-left: 5px solid #c62828;
+}
+
+.no-reports-message {
+    text-align: center;
+    padding: 30px;
+    color: #666;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+    margin: 20px 0;
+}
+
+.reports-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.report-item {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 15px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.report-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.report-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+
+.report-id {
+    font-weight: bold;
+    color: #2196f3;
+}
+
+.report-date {
+    color: #757575;
+}
+
+.report-content {
+    font-size: 14px;
+}
+
+.report-users {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.reporter, .reported-user {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.report-reason {
+    margin-bottom: 10px;
+    padding: 5px 0;
+    border-top: 1px solid #f0f0f0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.report-description {
+    color: #555;
+    margin-top: 10px;
+    line-height: 1.4;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.report-resolution {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f0f0f0;
+    color: #555;
+}
+
+.report-resolution .admin-comment {
+    margin-top: 5px;
+    font-style: italic;
+    color: #666;
+}
+
+/* Modal styles */
+.report-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.report-modal-content {
+    background-color: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.4rem;
+    color: #333;
+}
+
+.close-button {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #999;
+}
+
+.close-button:hover {
+    color: #333;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.report-detail {
+    margin-bottom: 15px;
+    line-height: 1.4;
+}
+
+.report-detail.description {
+    margin-bottom: 20px;
+}
+
+.report-detail.description p {
+    margin-top: 5px;
+    padding: 10px;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+    border-left: 3px solid #2196f3;
+}
+
+.view-chat-button {
+    width: 100%;
+    padding: 10px;
+    margin: 15px 0;
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.view-chat-button:hover {
+    background-color: #43a047;
+}
+
+.view-chat-button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.admin-decision {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.admin-decision h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.decision-comment {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    min-height: 80px;
+    font-family: 'Roboto', sans-serif;
+    font-size: 14px;
+    resize: vertical;
+}
+
+.decision-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.reject-button, .ban-button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.reject-button {
+    background-color: #f44336;
+    color: white;
+}
+
+.reject-button:hover {
+    background-color: #e53935;
+}
+
+.ban-button {
+    background-color: #ff9800;
+    color: white;
+}
+
+.ban-button:hover {
+    background-color: #fb8c00;
+}
+
+.report-resolution-details {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+}
+
+.report-resolution-details h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.resolution-info {
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+/* Responsive styles */
+@media screen and (max-width: 768px) {
+    .admin-reports-container {
+        padding: 15px;
+    }
+    
+    .admin-reports-header h1 {
+        font-size: 1.5rem;
+    }
+    
+    .report-modal-content {
+        width: 95%;
+        max-height: 95vh;
+    }
+    
+    .decision-buttons {
+        flex-direction: column;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .admin-reports-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .admin-back-button {
+        margin-top: 10px;
+    }
+    
+    .report-header {
+        flex-direction: column;
+        gap: 5px;
+    }
+} 

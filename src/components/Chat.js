@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getChatById, sendMessage, subscribeToChatUpdates, endChat } from '../utils/chatService';
+import { getChatById, sendChatMessage, subscribeToChatUpdates, endChat } from '../utils/chatService';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../firebase';
-import { doc, updateDoc, getDoc, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, limit, where } from 'firebase/firestore';
 import DatabaseLoadingIndicator from './DatabaseLoadingIndicator';
 import '../styles/Chat.css';
 
@@ -126,8 +126,9 @@ const Chat = () => {
 
         // Запрос на получение сообщений, отсортированных по времени
         const messagesQuery = query(
-            collection(db, `chats/${chatId}/messages`),
-            orderBy('timestamp', 'asc'),
+            collection(db, "messages"),
+            where("chatId", "==", chatId),
+            orderBy('timestamp', 'desc'),
             limit(100)
         );
 
@@ -136,8 +137,8 @@ const Chat = () => {
             const newMessages = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
-                timestamp: doc.data().timestamp?.toDate() || new Date()
-            }));
+                timestamp: doc.data().timestamp?.toDate() || doc.data().clientTimestamp || new Date()
+            })).sort((a, b) => a.timestamp - b.timestamp); // Сортируем по времени
             
             setMessages(newMessages);
 
@@ -193,30 +194,21 @@ const Chat = () => {
         try {
             setIsSending(true);
             
-            // Добавляем сообщение в коллекцию messages для текущего чата
-            await addDoc(collection(db, `chats/${chatId}/messages`), {
-                text: messageText,
-                userId: user.id,
-                timestamp: serverTimestamp(),
-                isRead: false
-            });
+            // Используем функцию sendChatMessage из chatService
+            await sendChatMessage(chatId, user.id, messageText);
             
-            // Обновляем данные чата (последнее сообщение, счетчик и т.д.)
-            await updateDoc(doc(db, 'chats', chatId), {
-                lastMessage: {
-                    text: messageText,
-                    senderId: user.id,
-                    timestamp: serverTimestamp()
-                },
-                updatedAt: serverTimestamp()
-            });
-            
+            // После успешной отправки очищаем поле ввода
             setNewMessage('');
             setIsSending(false);
             
             // Устанавливаем фокус на поле ввода после отправки
             if (inputRef.current) {
                 inputRef.current.focus();
+            }
+            
+            // Прокручиваем чат вниз к последнему сообщению
+            if (messagesEndRef.current) {
+                messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
             }
         } catch (err) {
             console.error('Ошибка при отправке сообщения:', err);
@@ -351,19 +343,23 @@ const Chat = () => {
                         <p>Нет сообщений. Начните общение прямо сейчас!</p>
                     </div>
                 ) : (
-                    messages.map((msg, index) => (
-                        <div
-                            key={msg.id || index}
-                            className={`message ${msg.userId === user.id ? 'outgoing' : 'incoming'}`}
-                        >
-                            <div className="message-content">
-                                <p>{msg.text}</p>
-                                <span className="message-time">
-                                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
+                    messages.map((msg, index) => {
+                        // Определяем, является ли сообщение исходящим
+                        const isOutgoing = msg.senderId === user.id || msg.userId === user.id;
+                        return (
+                            <div
+                                key={msg.id || index}
+                                className={`message ${isOutgoing ? 'outgoing' : 'incoming'}`}
+                            >
+                                <div className="message-content">
+                                    <p>{msg.text}</p>
+                                    <span className="message-time">
+                                        {new Date(msg.timestamp || msg.clientTimestamp || new Date()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                </div>
                             </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
                 <div ref={messagesEndRef} />
             </div>

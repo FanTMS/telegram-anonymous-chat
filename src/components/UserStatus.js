@@ -1,11 +1,10 @@
 import React from 'react';
 import '../styles/UserStatus.css';
 
-const UserStatus = ({ isOnline, lastSeen, isSupportChat = false }) => {
+const UserStatus = ({ isOnline, lastSeen, isSupportChat = false, className = '' }) => {
     if (isSupportChat) {
         return (
-            <div className="user-status support-status">
-                <span className="status-indicator online"></span>
+            <div className={`user-status support-status ${className}`}>
                 <span className="status-text">Всегда на связи</span>
             </div>
         );
@@ -13,7 +12,7 @@ const UserStatus = ({ isOnline, lastSeen, isSupportChat = false }) => {
 
     if (isOnline) {
         return (
-            <div className="user-status">
+            <div className={`user-status ${className}`}>
                 <span className="status-indicator online"></span>
                 <span className="status-text">В сети</span>
             </div>
@@ -41,7 +40,7 @@ const UserStatus = ({ isOnline, lastSeen, isSupportChat = false }) => {
     }
 
     return (
-        <div className="user-status">
+        <div className={`user-status ${className}`}>
             <span className="status-indicator offline"></span>
             <span className="status-text">{statusText}</span>
         </div>

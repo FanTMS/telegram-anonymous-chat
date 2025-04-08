@@ -17,7 +17,7 @@
 }
 
 .welcome-section {
-    margin-bottom: 24px;
+    margin-bottom: 16px;
     text-align: center;
     padding: 24px 16px;
     border-radius: 12px;
@@ -34,6 +34,13 @@
 .welcome-section p {
     font-size: 16px;
     color: var(--tg-theme-hint-color, #999999);
+}
+
+/* Стили для раздела с админ-виджетом */
+.admin-widget-container {
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: center;
 }
 
 .features-section {

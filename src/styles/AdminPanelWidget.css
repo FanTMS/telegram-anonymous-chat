@@ -8,29 +8,40 @@
     background-color: #d13639;
     color: white;
     border: none;
-    border-radius: 8px;
-    padding: 10px 20px;
+    border-radius: 12px;
+    padding: 12px 20px;
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
     display: flex;
     align-items: center;
     gap: 10px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgba(209, 54, 57, 0.3);
     transition: all 0.2s ease;
+    max-width: 300px;
+    width: 100%;
+    justify-content: center;
 }
 
 .admin-panel-button:hover {
     background-color: #b92e31;
     transform: translateY(-2px);
-    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 6px 16px rgba(209, 54, 57, 0.4);
 }
 
 .admin-panel-button:active {
     transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(209, 54, 57, 0.3);
 }
 
 .admin-panel-button i {
     font-size: 1.2rem;
+    margin-right: 5px;
+}
+
+@media (max-width: 768px) {
+    .admin-panel-button {
+        font-size: 0.9rem;
+        padding: 10px 16px;
+    }
 } 

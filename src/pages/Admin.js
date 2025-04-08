@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
 import '../styles/Admin.css';
+import { isAdmin } from '../utils/user';
 
 // Список администраторов (Telegram IDs)
-const ADMIN_IDS = ['12345678', '87654321']; // Замените на реальные Telegram ID администраторов
+const ADMIN_IDS = ['5394381166', '12345678', '87654321']; // Администраторы по Telegram ID
 
 const Admin = () => {
     const navigate = useNavigate();
@@ -17,6 +18,32 @@ const Admin = () => {
             try {
                 setIsCheckingAuth(true);
 
+                // Проверяем, запущено ли приложение локально (в разработке)
+                const isLocalhost =
+                    window.location.hostname === 'localhost' ||
+                    window.location.hostname === '127.0.0.1' ||
+                    window.location.hostname.includes('192.168.');
+                
+                // В локальной разработке всегда разрешаем доступ
+                if (isLocalhost) {
+                    console.log('Admin: Локальная разработка - полные права администратора');
+                    setIsAuthorized(true);
+                    setIsCheckingAuth(false);
+                    return;
+                }
+
+                // Сначала пробуем использовать функцию isAdmin из utils/user.js
+                try {
+                    const adminStatus = await isAdmin();
+                    if (adminStatus) {
+                        setIsAuthorized(true);
+                        setIsCheckingAuth(false);
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('Не удалось проверить права через isAdmin:', error);
+                }
+                
                 // Получаем ID пользователя из WebApp
                 let userId = '';
 
@@ -34,25 +61,42 @@ const Admin = () => {
                         const userDataStr = sessionStorage.getItem('userData');
                         if (userDataStr) {
                             const userData = JSON.parse(userDataStr);
-                            userId = userData.telegramId.toString();
+                            userId = userData.telegramId ? userData.telegramId.toString() : 
+                                    (userData.id ? userData.id.toString() : '');
+                        }
+                        
+                        // Дополнительно проверяем telegramUser в sessionStorage
+                        const telegramUserStr = sessionStorage.getItem('telegramUser');
+                        if (!userId && telegramUserStr) {
+                            const telegramUser = JSON.parse(telegramUserStr);
+                            userId = telegramUser.id ? telegramUser.id.toString() : '';
                         }
                     } catch (error) {
-                        console.warn('Не удалось получить ID пользователя из sessionStorage:', error);
+                        console.warn('Не удалось получить ID пользователя из хранилища:', error);
                     }
                 }
 
                 // Проверяем, является ли пользователь администратором
-                const isAdmin = ADMIN_IDS.includes(userId);
-
-                setIsAuthorized(isAdmin);
-
-                // Если локальная разработка, разрешаем доступ
-                if (process.env.NODE_ENV === 'development') {
-                    setIsAuthorized(true);
+                if (userId) {
+                    const isAdminUser = ADMIN_IDS.includes(userId);
+                    setIsAuthorized(isAdminUser);
+                } else {
+                    setIsAuthorized(false);
                 }
             } catch (error) {
                 console.error('Ошибка при проверке статуса администратора:', error);
-                setIsAuthorized(false);
+                
+                // При ошибке в localhost все равно даем доступ
+                const isLocalDev = window.location.hostname === 'localhost' || 
+                                 window.location.hostname === '127.0.0.1' || 
+                                 window.location.hostname.includes('192.168.');
+                
+                if (isLocalDev) {
+                    console.log('Admin: Ошибка при проверке прав, но локальная разработка - доступ разрешен');
+                    setIsAuthorized(true);
+                } else {
+                    setIsAuthorized(false);
+                }
             } finally {
                 setIsCheckingAuth(false);
             }
@@ -124,6 +168,14 @@ const Admin = () => {
                     <div className="admin-menu-content">
                         <h2>Пользователи</h2>
                         <p>Управление пользователями и их правами</p>
+                    </div>
+                </div>
+                
+                <div className="admin-menu-item" onClick={() => navigate('/admin/config')}>
+                    <div className="admin-menu-icon">🔑</div>
+                    <div className="admin-menu-content">
+                        <h2>Управление администраторами</h2>
+                        <p>Добавление и управление правами администраторов</p>
                     </div>
                 </div>
             </div>

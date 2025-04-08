@@ -1,72 +1,108 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { getSupportRequests, updateSupportRequest } from '../utils/supportService';
-import { getUserById } from '../utils/userService';
-import WebApp from '@twa-dev/sdk';
-import { useToast } from '../components/Toast';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { db } from '../firebase';
+import { isAdmin } from '../utils/user';
+import { collection, query, where, orderBy, onSnapshot, doc, getDoc, addDoc, updateDoc, serverTimestamp, limitToLast } from 'firebase/firestore';
+import { getTelegramUser, isTelegramApp } from '../utils/telegramUtils';
 import '../styles/AdminSupport.css';
-
-// Список администраторов (Telegram IDs)
-const ADMIN_IDS = ['12345678', '87654321']; // Замените на реальные Telegram ID администраторов
 
 const AdminSupport = () => {
     const navigate = useNavigate();
+    const { chatId } = useParams();
     const [isAuthorized, setIsAuthorized] = useState(false);
     const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-    const [supportRequests, setSupportRequests] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const [supportChats, setSupportChats] = useState([]);
+    const [currentChat, setCurrentChat] = useState(null);
+    const [chatMessages, setChatMessages] = useState([]);
+    const [messageText, setMessageText] = useState('');
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentAdminId, setCurrentAdminId] = useState(null);
-    const [selectedRequest, setSelectedRequest] = useState(null);
-    const [responseText, setResponseText] = useState('');
-    const [filter, setFilter] = useState('all');
-    const [refreshTrigger, setRefreshTrigger] = useState(0);
-    const { showToast } = useToast();
+    const [unreadCount, setUnreadCount] = useState(0);
+    const messagesEndRef = useRef(null);
+    const [sidebarVisible, setSidebarVisible] = useState(true);
+    const [isTelegram, setIsTelegram] = useState(false);
 
-    // Проверка авторизации администратора
+    // Проверяем Telegram环境
+    useEffect(() => {
+        // Определяем, запущено ли приложение в Telegram WebApp
+        const isTelegramWebApp = window.Telegram && window.Telegram.WebApp;
+        setIsTelegram(!!isTelegramWebApp);
+        
+        const checkTelegramApp = () => {
+            const isInTelegram = isTelegramApp();
+            
+            if (isInTelegram) {
+                // Добавляем класс для Telegram-специфичных стилей
+                document.body.classList.add('in-telegram-webapp');
+                
+                // Расширяем WebApp для лучшего пользовательского опыта
+                try {
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        window.Telegram.WebApp.expand();
+                        window.Telegram.WebApp.ready();
+                    } else if (typeof WebApp !== 'undefined') {
+                        WebApp.expand();
+                        WebApp.ready();
+                    }
+                } catch (err) {
+                    console.warn('Ошибка при инициализации Telegram WebApp:', err);
+                }
+            }
+        };
+        
+        checkTelegramApp();
+    }, []);
+
+    // Проверка администраторских прав
     useEffect(() => {
         const checkAdminStatus = async () => {
             try {
                 setIsCheckingAuth(true);
-
-                // Получаем ID пользователя из WebApp
-                let userId = '';
-
-                try {
-                    if (WebApp && WebApp.initDataUnsafe && WebApp.initDataUnsafe.user) {
-                        userId = WebApp.initDataUnsafe.user.id.toString();
-                    }
-                } catch (error) {
-                    console.warn('Не удалось получить ID пользователя из WebApp:', error);
-                }
-
-                // Если не смогли получить ID из WebApp, пробуем из sessionStorage
-                if (!userId) {
-                    try {
-                        const userDataStr = sessionStorage.getItem('userData');
-                        if (userDataStr) {
-                            const userData = JSON.parse(userDataStr);
-                            userId = userData.telegramId.toString();
-                        }
-                    } catch (error) {
-                        console.warn('Не удалось получить ID пользователя из sessionStorage:', error);
-                    }
-                }
-
-                // Проверяем, является ли пользователь администратором
-                const isAdmin = ADMIN_IDS.includes(userId);
-
-                setIsAuthorized(isAdmin);
-                setCurrentAdminId(userId);
-
-                // Если локальная разработка, разрешаем доступ
-                if (process.env.NODE_ENV === 'development') {
+                
+                // Проверяем, запущено ли приложение локально (в разработке)
+                const isLocalhost =
+                    window.location.hostname === 'localhost' ||
+                    window.location.hostname === '127.0.0.1' ||
+                    window.location.hostname.includes('192.168.');
+                
+                // В локальной разработке сразу даем админ-права
+                if (isLocalhost) {
+                    console.log('AdminSupport: Локальная разработка - полные права администратора');
                     setIsAuthorized(true);
-                    setCurrentAdminId('12345678'); // ID для разработки
+                    setCurrentAdminId('admin_local_dev');
+                    setIsCheckingAuth(false);
+                    return;
+                }
+                
+                // Для не-локальной среды проверяем через isAdmin
+                const adminStatus = await isAdmin();
+                
+                if (adminStatus) {
+                    setIsAuthorized(true);
+                    // Получаем текущего администратора
+                    const telegramUser = getTelegramUser();
+                    if (telegramUser && telegramUser.id) {
+                        setCurrentAdminId('admin_' + telegramUser.id);
+                    } else {
+                        setCurrentAdminId('admin_unknown');
+                    }
+                } else {
+                    setIsAuthorized(false);
                 }
             } catch (error) {
-                console.error('Ошибка при проверке статуса администратора:', error);
-                setIsAuthorized(false);
+                console.error("Ошибка при проверке прав администратора:", error);
+                
+                // При ошибке в localhost все равно даем доступ
+                if (window.location.hostname === 'localhost' || 
+                    window.location.hostname === '127.0.0.1' || 
+                    window.location.hostname.includes('192.168.')) {
+                    console.log('AdminSupport: Ошибка при проверке прав, но локальная разработка - доступ разрешен');
+                    setIsAuthorized(true);
+                    setCurrentAdminId('admin_local_error');
+                } else {
+                    setIsAuthorized(false);
+                }
             } finally {
                 setIsCheckingAuth(false);
             }
@@ -75,437 +111,502 @@ const AdminSupport = () => {
         checkAdminStatus();
     }, []);
 
-    // Загрузка запросов в поддержку
+    // Автоматически скрываем сайдбар на мобильных устройствах при открытии чата
     useEffect(() => {
-        const loadSupportRequests = async () => {
-            if (!isAuthorized) return;
-
-            try {
-                setLoading(true);
-                setError(null);
-
-                // Определяем статус фильтра для запроса
-                let statusFilter = null;
-                if (filter !== 'all') {
-                    statusFilter = filter;
-                }
-
-                const requests = await getSupportRequests(statusFilter, 100);
-
-                // Получаем информацию о пользователях для запросов
-                const requestsWithUserData = await Promise.all(
-                    requests.map(async (request) => {
-                        try {
-                            if (request.userId) {
-                                const userData = await getUserById(request.userId);
-                                if (userData) {
-                                    return {
-                                        ...request,
-                                        userData: userData
-                                    };
-                                }
-                            }
-                            return request;
-                        } catch (error) {
-                            console.warn(`Не удалось получить информацию о пользователе ${request.userId}:`, error);
-                            return request;
-                        }
-                    })
-                );
-
-                setSupportRequests(requestsWithUserData);
-            } catch (error) {
-                console.error('Ошибка при загрузке запросов в поддержку:', error);
-                setError('Не удалось загрузить запросы. Пожалуйста, попробуйте позже.');
-            } finally {
-                setLoading(false);
+        const handleResize = () => {
+            const isMobile = window.innerWidth < 768;
+            if (isMobile && chatId) {
+                setSidebarVisible(false);
+            } else if (!isMobile && !chatId) {
+                setSidebarVisible(true);
             }
         };
 
-        if (!isCheckingAuth) {
-            loadSupportRequests();
+        // Вызываем сразу для инициализации
+        handleResize();
+
+        // Автоматически скрываем сайдбар на мобильных, когда выбран чат
+        if (chatId) {
+            setSidebarVisible(false);
         }
-    }, [isAuthorized, isCheckingAuth, filter, refreshTrigger]);
 
-    // Ручное обновление списка запросов
-    const handleRefresh = () => {
-        setRefreshTrigger(prev => prev + 1);
-    };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [chatId]);
 
-    // Обработка выбора запроса
-    const handleSelectRequest = (request) => {
-        setSelectedRequest(request);
-        setResponseText(request.response || '');
-    };
-
-    // Обработка изменения статуса запроса
-    const handleStatusChange = async (newStatus) => {
-        if (!selectedRequest) return;
-
-        try {
-            setLoading(true);
-
-            const result = await updateSupportRequest(
-                selectedRequest.id,
-                newStatus,
-                currentAdminId,
-                newStatus === 'resolved' ? responseText : selectedRequest.response
-            );
-
-            if (!result) {
-                throw new Error('Не удалось обновить статус запроса');
+    // Настройка для режима Telegram Mini App
+    useEffect(() => {
+        if (isTelegram) {
+            // Если в Telegram, настраиваем главный контейнер под Safe Area
+            const setupSafeArea = () => {
+                const container = document.querySelector('.admin-support-container');
+                if (container) {
+                    // Получаем высоту вьюпорта из Telegram WebApp
+                    let viewportHeight = 0;
+                    try {
+                        if (window.Telegram && window.Telegram.WebApp) {
+                            viewportHeight = window.Telegram.WebApp.viewportStableHeight || 0;
+                            container.style.setProperty('--tg-viewport-stable-height', `${viewportHeight}px`);
+                        } else if (typeof WebApp !== 'undefined') {
+                            viewportHeight = WebApp.viewportStableHeight || 0;
+                            container.style.setProperty('--tg-viewport-stable-height', `${viewportHeight}px`);
+                        }
+                    } catch (err) {
+                        console.warn('Ошибка при получении viewportStableHeight:', err);
+                    }
+                }
+            };
+            
+            setupSafeArea();
+            
+            // Обновляем при изменении размера
+            const handleTelegramViewportChange = () => {
+                setupSafeArea();
+            };
+            
+            try {
+                if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.onViewportChanged(handleTelegramViewportChange);
+                } else if (typeof WebApp !== 'undefined') {
+                    WebApp.onViewportChanged(handleTelegramViewportChange);
+                }
+            } catch (err) {
+                console.warn('Ошибка при настройке обработчика изменения вьюпорта:', err);
             }
+        }
+    }, [isTelegram]);
 
-            // Обновляем список запросов
-            handleRefresh();
+    // Загрузка списка чатов поддержки
+    useEffect(() => {
+        if (!isAuthorized) return;
 
-            // Если запрос разрешен или отклонен, закрываем детали
-            if (newStatus === 'resolved' || newStatus === 'rejected') {
-                setSelectedRequest(null);
-            }
-        } catch (error) {
-            console.error('Ошибка при обновлении статуса запроса:', error);
-            alert('Не удалось обновить статус запроса. Пожалуйста, попробуйте позже.');
-        } finally {
+        const supportChatsQuery = query(
+            collection(db, "chats"),
+            where("type", "==", "support"),
+            orderBy("lastMessageTime", "desc")
+        );
+
+        const unsubscribe = onSnapshot(supportChatsQuery, (querySnapshot) => {
+            const chats = [];
+            let totalUnread = 0;
+
+            querySnapshot.forEach((doc) => {
+                const chatData = doc.data();
+                const chat = {
+                    id: doc.id,
+                    ...chatData,
+                    lastMessageTime: chatData.lastMessageTime ? (typeof chatData.lastMessageTime.toDate === 'function' ? chatData.lastMessageTime.toDate() : chatData.lastMessageTime) : undefined,
+                    createdAt: chatData.createdAt ? (typeof chatData.createdAt.toDate === 'function' ? chatData.createdAt.toDate() : chatData.createdAt) : undefined
+                };
+                
+                if (chat.unreadBySupport) {
+                    totalUnread++;
+                }
+                
+                chats.push(chat);
+            });
+
+            setSupportChats(chats);
+            setUnreadCount(totalUnread);
             setLoading(false);
-        }
-    };
-
-    // Отправка ответа
-    const handleSendResponse = async () => {
-        if (!selectedRequest || !responseText.trim()) return;
-
-        try {
-            setLoading(true);
-
-            const result = await updateSupportRequest(
-                selectedRequest.id,
-                'resolved',
-                currentAdminId,
-                responseText
-            );
-
-            if (!result) {
-                throw new Error('Не удалось отправить ответ');
-            }
-
-            // Обновляем список запросов
-            handleRefresh();
-
-            // Закрываем детали запроса
-            setSelectedRequest(null);
-
-            showToast('Ответ успешно отправлен', 'success');
-        } catch (error) {
-            console.error('Ошибка при отправке ответа:', error);
-            showToast('Не удалось отправить ответ. Пожалуйста, попробуйте позже.', 'error');
-        } finally {
+        }, (error) => {
+            console.error("Ошибка при загрузке чатов поддержки:", error);
+            setError("Не удалось загрузить чаты поддержки");
             setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [isAuthorized]);
+
+    // Загрузка выбранного чата и сообщений
+    useEffect(() => {
+        if (!isAuthorized || !chatId) return;
+
+        // Загружаем данные о чате
+        const loadChatData = async () => {
+            try {
+                const chatRef = doc(db, "chats", chatId);
+                const chatSnap = await getDoc(chatRef);
+                
+                if (chatSnap.exists()) {
+                    const chatData = chatSnap.data();
+                    setCurrentChat({
+                        id: chatSnap.id,
+                        ...chatData,
+                        lastMessageTime: chatData.lastMessageTime ? (typeof chatData.lastMessageTime.toDate === 'function' ? chatData.lastMessageTime.toDate() : chatData.lastMessageTime) : undefined,
+                        createdAt: chatData.createdAt ? (typeof chatData.createdAt.toDate === 'function' ? chatData.createdAt.toDate() : chatData.createdAt) : undefined
+                    });
+                    
+                    // Отмечаем чат как прочитанный администратором
+                    if (chatData.unreadBySupport) {
+                        await updateDoc(chatRef, {
+                            unreadBySupport: false
+                        });
+                    }
+                    
+                    // Загружаем пользовательские данные
+                    if (chatData.participants && chatData.participants.length > 0) {
+                        const userId = chatData.participants.find(id => id !== 'support');
+                        if (userId) {
+                            const userRef = doc(db, "users", userId);
+                            const userSnap = await getDoc(userRef);
+                            if (userSnap.exists()) {
+                                const userData = userSnap.data();
+                                setCurrentChat(prev => ({
+                                    ...prev,
+                                    userData: userData
+                                }));
+                            }
+                        }
+                    }
+                } else {
+                    setError("Чат не найден");
+                }
+            } catch (error) {
+                console.error("Ошибка при загрузке данных чата:", error);
+                setError("Не удалось загрузить данные чата");
+            }
+        };
+
+        loadChatData();
+
+        // Подписываемся на сообщения чата
+        const messagesQuery = query(
+            collection(db, "messages"),
+            where("chatId", "==", chatId),
+            orderBy("timestamp", "asc"),
+            limitToLast(100)
+        );
+
+        const unsubscribe = onSnapshot(messagesQuery, (querySnapshot) => {
+            const messages = [];
+            querySnapshot.forEach((doc) => {
+                const messageData = doc.data();
+                messages.push({
+                    id: doc.id,
+                    ...messageData,
+                    timestamp: messageData.timestamp ? (typeof messageData.timestamp.toDate === 'function' ? messageData.timestamp.toDate() : messageData.timestamp) : undefined
+                });
+            });
+
+            setChatMessages(messages);
+            
+            // Прокручиваем к последнему сообщению
+            setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            }, 100);
+        }, (error) => {
+            console.error("Ошибка при загрузке сообщений:", error);
+        });
+
+        return () => unsubscribe();
+    }, [isAuthorized, chatId]);
+
+    // Отправка сообщения
+    const handleSendMessage = async (e) => {
+        e.preventDefault();
+        
+        if (!messageText.trim() || !currentChat || !currentAdminId) return;
+        
+        try {
+            // Создаем новое сообщение
+            const messageData = {
+                chatId: currentChat.id,
+                senderId: 'support',
+                senderName: 'Техническая поддержка',
+                text: messageText.trim(),
+                timestamp: serverTimestamp(),
+                adminId: currentAdminId,
+                isAdminMessage: true
+            };
+            
+            // Добавляем сообщение в коллекцию messages
+            await addDoc(collection(db, "messages"), messageData);
+            
+            // Обновляем информацию о чате
+            const chatRef = doc(db, "chats", currentChat.id);
+            await updateDoc(chatRef, {
+                lastMessage: messageText.trim().substring(0, 50) + (messageText.length > 50 ? '...' : ''),
+                lastMessageTime: serverTimestamp(),
+                lastMessageSenderId: 'support',
+                unreadByUser: true,
+                unreadBySupport: false
+            });
+            
+            // Очищаем поле ввода
+            setMessageText('');
+        } catch (error) {
+            console.error("Ошибка при отправке сообщения:", error);
+            alert("Не удалось отправить сообщение");
         }
     };
 
-    // Форматирование даты
-    const formatDate = (date) => {
-        if (!date) return 'Неизвестно';
-
-        return new Date(date).toLocaleString('ru-RU', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
+    // Форматирование времени сообщения
+    const formatMessageTime = (timestamp) => {
+        if (!timestamp) return '';
+        
+        return timestamp.toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit'
         });
     };
 
-    // Получение цвета статуса запроса
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'new': return '#ff9800';
-            case 'processing': return '#2196f3';
-            case 'resolved': return '#4caf50';
-            case 'rejected': return '#f44336';
-            default: return '#999999';
+    // Форматирование даты для заголовка
+    const formatDate = (date) => {
+        if (!date) return '';
+        
+        return date.toLocaleDateString('ru-RU', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        });
+    };
+
+    // Переключение видимости сайдбара
+    const toggleSidebar = () => {
+        setSidebarVisible(!sidebarVisible);
+        // Добавляем класс к body для предотвращения прокрутки на мобильных
+        if (window.innerWidth < 768) {
+            if (sidebarVisible) {
+                document.body.classList.remove('sidebar-open');
+            } else {
+                document.body.classList.add('sidebar-open');
+            }
+        }
+        
+        // Тактильный отклик в Telegram
+        if (isTelegram) {
+            try {
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+                    window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+                } else if (typeof WebApp !== 'undefined' && WebApp.HapticFeedback) {
+                    WebApp.HapticFeedback.impactOccurred('medium');
+                }
+            } catch (err) {
+                console.warn('Ошибка при вызове тактильного отклика:', err);
+            }
         }
     };
 
-    // Получение текста статуса запроса
-    const getStatusText = (status) => {
-        switch (status) {
-            case 'new': return 'Новый';
-            case 'processing': return 'В обработке';
-            case 'resolved': return 'Решен';
-            case 'rejected': return 'Отклонен';
-            default: return 'Неизвестно';
+    // При выборе чата на мобильных - скрываем сайдбар
+    const handleChatSelect = (chatId) => {
+        navigate(`/admin/support/${chatId}`);
+        if (window.innerWidth < 768) {
+            setSidebarVisible(false);
+            
+            // Тактильный отклик в Telegram
+            if (isTelegram) {
+                try {
+                    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+                        window.Telegram.WebApp.HapticFeedback.selectionChanged();
+                    } else if (typeof WebApp !== 'undefined' && WebApp.HapticFeedback) {
+                        WebApp.HapticFeedback.selectionChanged();
+                    }
+                } catch (err) {
+                    console.warn('Ошибка при вызове тактильного отклика:', err);
+                }
+            }
         }
     };
 
-    // Функция для получения текста фильтра
-    const getFilterText = (status) => {
-        switch (status) {
-            case 'all': return 'Все';
-            case 'new': return 'Новые';
-            case 'processing': return 'В работе';
-            case 'resolved': return 'Решенные';
-            case 'rejected': return 'Отклоненные';
-            default: return 'Все';
-        }
-    };
-
-    // Если проверка прав завершена и пользователь не админ - редирект
-    if (!isCheckingAuth && !isAuthorized) {
-        return (
-            <div className="admin-unauthorized">
-                <h2>Доступ запрещен</h2>
-                <p>У вас нет прав для доступа к этой странице.</p>
-                <button onClick={() => navigate('/home')}>На главную</button>
-            </div>
-        );
-    }
-
-    // Если идет проверка прав - показываем загрузчик
+    // Если проверка прав не завершена, показываем загрузчик
     if (isCheckingAuth) {
         return (
-            <div className="admin-loading-container">
-                <div className="admin-loading-spinner"></div>
+            <div className={`admin-loading ${isTelegram ? 'telegram-webapp' : ''}`}>
+                <div className="loading-spinner"></div>
                 <p>Проверка прав доступа...</p>
             </div>
         );
     }
 
+    // Если пользователь не админ, показываем сообщение об ошибке
+    if (!isAuthorized) {
+        return (
+            <div className={`admin-unauthorized ${isTelegram ? 'telegram-webapp' : ''}`}>
+                <h2>Доступ запрещен</h2>
+                <p>У вас нет прав для доступа к панели администрирования.</p>
+                <button 
+                    className="admin-button"
+                    onClick={() => navigate('/home')}
+                >
+                    На главную
+                </button>
+            </div>
+        );
+    }
+
+    // Если произошла ошибка, показываем сообщение
+    if (error) {
+        return (
+            <div className={`admin-error ${isTelegram ? 'telegram-webapp' : ''}`}>
+                <h2>Ошибка</h2>
+                <p>{error}</p>
+                <button 
+                    className="admin-button"
+                    onClick={() => navigate('/admin')}
+                >
+                    Вернуться
+                </button>
+            </div>
+        );
+    }
+
     return (
-        <div className="admin-support-container">
-            <div className="admin-header">
-                <h1>Панель поддержки</h1>
-                <div className="admin-actions">
+        <div className={`admin-support-container ${!sidebarVisible ? 'sidebar-hidden' : ''} ${isTelegram ? 'telegram-webapp' : ''}`}>
+            <div className={`admin-support-sidebar ${sidebarVisible ? 'visible' : 'hidden'}`}>
+                <div className="admin-support-header">
+                    <h1>Чаты поддержки</h1>
+                    <span className="unread-badge">{unreadCount > 0 ? unreadCount : ''}</span>
+                </div>
+
+                <div className="admin-support-chats">
+                    {loading ? (
+                        <div className="loading-indicator">
+                            <div className="loading-spinner"></div>
+                            <p>Загрузка чатов...</p>
+                        </div>
+                    ) : supportChats.length === 0 ? (
+                        <div className="no-chats-message">
+                            <p>Нет активных чатов поддержки</p>
+                        </div>
+                    ) : (
+                        supportChats.map(chat => {
+                            // Получаем ID пользователя (не support)
+                            const userId = chat.participants.find(id => id !== 'support');
+                            return (
+                                <div 
+                                    key={chat.id} 
+                                    className={`support-chat-item ${chat.id === chatId ? 'active' : ''} ${chat.unreadBySupport ? 'unread' : ''}`}
+                                    onClick={() => handleChatSelect(chat.id)}
+                                >
+                                    <div className="support-chat-avatar">
+                                        {chat.participantsData && chat.participantsData[userId]?.name
+                                            ? chat.participantsData[userId].name.substring(0, 2).toUpperCase()
+                                            : userId?.substring(0, 2).toUpperCase() || 'U'}
+                                    </div>
+                                    <div className="support-chat-details">
+                                        <div className="support-chat-header">
+                                            <h3>{
+                                                chat.participantsData && chat.participantsData[userId]?.name
+                                                    ? chat.participantsData[userId].name
+                                                    : 'Пользователь'
+                                            }</h3>
+                                            <span className="support-chat-time">
+                                                {chat.lastMessageTime ? formatMessageTime(chat.lastMessageTime) : ''}
+                                            </span>
+                                        </div>
+                                        <p className="support-chat-preview">
+                                            {chat.lastMessage || 'Нет сообщений'}
+                                        </p>
+                                        {chat.unreadBySupport && (
+                                            <span className="unread-indicator"></span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+
+                <div className="admin-support-actions">
                     <button
-                        className="admin-refresh-button"
-                        onClick={handleRefresh}
-                        disabled={loading}
+                        className="admin-button"
+                        onClick={() => navigate('/admin')}
                     >
-                        <svg className={`admin-refresh-icon ${loading ? 'rotating' : ''}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M23 4v6h-6"></path>
-                            <path d="M1 20v-6h6"></path>
-                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
-                            <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
-                        </svg>
-                        {loading ? 'Обновляется...' : 'Обновить'}
-                    </button>
-                    <button className="admin-back-button" onClick={() => navigate('/admin')}>
-                        К администрированию
+                        Назад
                     </button>
                 </div>
             </div>
 
-            <div className="admin-filter-buttons">
-                {['all', 'new', 'processing', 'resolved', 'rejected'].map((statusFilter) => (
-                    <button
-                        key={statusFilter}
-                        className={`admin-filter-button ${filter === statusFilter ? 'active' : ''}`}
-                        onClick={() => setFilter(statusFilter)}
-                    >
-                        {statusFilter === 'all' && (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="8" y1="6" x2="21" y2="6"></line>
-                                <line x1="8" y1="12" x2="21" y2="12"></line>
-                                <line x1="8" y1="18" x2="21" y2="18"></line>
-                                <line x1="3" y1="6" x2="3.01" y2="6"></line>
-                                <line x1="3" y1="12" x2="3.01" y2="12"></line>
-                                <line x1="3" y1="18" x2="3.01" y2="18"></line>
-                            </svg>
-                        )}
-                        {statusFilter === 'new' && (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <line x1="12" y1="8" x2="12" y2="12"></line>
-                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                            </svg>
-                        )}
-                        {statusFilter === 'processing' && (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <polyline points="12 6 12 12 16 14"></polyline>
-                            </svg>
-                        )}
-                        {statusFilter === 'resolved' && (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                            </svg>
-                        )}
-                        {statusFilter === 'rejected' && (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <line x1="15" y1="9" x2="9" y2="15"></line>
-                                <line x1="9" y1="9" x2="15" y2="15"></line>
-                            </svg>
-                        )}
-                        {getFilterText(statusFilter)}
-                    </button>
-                ))}
-            </div>
+            <div className="admin-support-chat">
+                <button 
+                    className="toggle-sidebar-button" 
+                    onClick={toggleSidebar}
+                    title={sidebarVisible ? "Скрыть список чатов" : "Показать список чатов"}
+                    aria-label={sidebarVisible ? "Скрыть список чатов" : "Показать список чатов"}
+                >
+                    {sidebarVisible ? '◀' : '▶'}
+                </button>
 
-            {error && (
-                <div className="admin-error-message">
-                    {error}
-                </div>
-            )}
-
-            <div className="admin-support-content">
-                <div className="admin-requests-list">
-                    <h2>Запросы в поддержку</h2>
-
-                    {loading && !supportRequests.length && (
-                        <div className="admin-loading">
-                            <div className="admin-loading-spinner"></div>
-                            <p>Загрузка запросов...</p>
-                        </div>
-                    )}
-
-                    {!loading && !supportRequests.length && (
-                        <div className="admin-no-requests">
-                            <p>Запросов не найдено</p>
-                        </div>
-                    )}
-
-                    {supportRequests.map((request) => (
-                        <div
-                            key={request.id}
-                            className={`admin-request-item ${selectedRequest?.id === request.id ? 'selected' : ''}`}
-                            onClick={() => handleSelectRequest(request)}
-                        >
-                            <div className="admin-request-header">
-                                <div className="admin-request-user">
-                                    <span className="admin-request-name">
-                                        {request.firstName || request.username || request.userId || 'Неизвестный пользователь'}
-                                    </span>
-                                </div>
-                                <div
-                                    className="admin-request-status"
-                                    style={{ backgroundColor: getStatusColor(request.status) }}
-                                >
-                                    {getStatusText(request.status)}
-                                </div>
+                {!chatId ? (
+                    <div className="no-chat-selected">
+                        <h2>Выберите чат</h2>
+                        <p>Выберите чат из списка для просмотра сообщений</p>
+                    </div>
+                ) : !currentChat ? (
+                    <div className="loading-indicator centered">
+                        <div className="loading-spinner"></div>
+                        <p>Загрузка чата...</p>
+                    </div>
+                ) : (
+                    <div className="chat-container">
+                        <div className="chat-header">
+                            <div className="chat-header-info">
+                                <h2>
+                                    {currentChat.userData?.name || 'Пользователь'}
+                                </h2>
+                                <p>
+                                    {currentChat.createdAt 
+                                        ? `Чат создан: ${formatDate(currentChat.createdAt)}`
+                                        : 'Дата создания неизвестна'}
+                                </p>
                             </div>
-
-                            <div className="admin-request-message">
-                                {request.message.length > 100
-                                    ? `${request.message.substring(0, 100)}...`
-                                    : request.message}
-                            </div>
-
-                            <div className="admin-request-date">
-                                {formatDate(request.createdAt)}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                <div className="admin-request-details">
-                    {selectedRequest ? (
-                        <>
-                            <h2>Детали запроса</h2>
-
-                            <div className="admin-request-detail-item">
-                                <span className="admin-detail-label">Пользователь:</span>
-                                <span className="admin-detail-value">
-                                    {selectedRequest.firstName || selectedRequest.username || selectedRequest.userId || 'Неизвестный пользователь'}
-                                    {selectedRequest.username && ` (@${selectedRequest.username})`}
-                                </span>
-                            </div>
-
-                            <div className="admin-request-detail-item">
-                                <span className="admin-detail-label">Telegram ID:</span>
-                                <span className="admin-detail-value">{selectedRequest.userId || 'Неизвестно'}</span>
-                            </div>
-
-                            <div className="admin-request-detail-item">
-                                <span className="admin-detail-label">Дата создания:</span>
-                                <span className="admin-detail-value">{formatDate(selectedRequest.createdAt)}</span>
-                            </div>
-
-                            <div className="admin-request-detail-item">
-                                <span className="admin-detail-label">Статус:</span>
-                                <span
-                                    className="admin-detail-value admin-status-badge"
-                                    style={{ backgroundColor: getStatusColor(selectedRequest.status) }}
-                                >
-                                    {getStatusText(selectedRequest.status)}
-                                </span>
-                            </div>
-
-                            <div className="admin-request-message-full">
-                                <span className="admin-detail-label">Сообщение:</span>
-                                <div className="admin-message-content">
-                                    {selectedRequest.message}
-                                </div>
-                            </div>
-
-                            {selectedRequest.assignedTo && (
-                                <div className="admin-request-detail-item">
-                                    <span className="admin-detail-label">Назначено:</span>
-                                    <span className="admin-detail-value">
-                                        {selectedRequest.assignedTo === currentAdminId ? 'Вам' : selectedRequest.assignedTo}
-                                    </span>
-                                </div>
-                            )}
-
-                            <div className="admin-response-area">
-                                <span className="admin-detail-label">Ответ:</span>
-                                <textarea
-                                    className="admin-response-input"
-                                    value={responseText}
-                                    onChange={(e) => setResponseText(e.target.value)}
-                                    placeholder="Введите ответ пользователю..."
-                                    rows={5}
-                                    disabled={selectedRequest.status === 'resolved' || selectedRequest.status === 'rejected'}
-                                />
-                            </div>
-
-                            <div className="admin-request-actions">
-                                {selectedRequest.status === 'new' && (
-                                    <button
-                                        className="admin-action-button processing"
-                                        onClick={() => handleStatusChange('processing')}
-                                        disabled={loading}
-                                    >
-                                        Взять в работу
-                                    </button>
-                                )}
-
-                                {(selectedRequest.status === 'new' || selectedRequest.status === 'processing') && (
-                                    <>
-                                        <button
-                                            className="admin-action-button resolve"
-                                            onClick={handleSendResponse}
-                                            disabled={loading || !responseText.trim()}
-                                        >
-                                            Решить и ответить
-                                        </button>
-
-                                        <button
-                                            className="admin-action-button reject"
-                                            onClick={() => handleStatusChange('rejected')}
-                                            disabled={loading}
-                                        >
-                                            Отклонить
-                                        </button>
-                                    </>
-                                )}
-
+                            <div className="chat-header-actions">
                                 <button
-                                    className="admin-action-button cancel"
-                                    onClick={() => setSelectedRequest(null)}
+                                    className="admin-button"
+                                    onClick={() => navigate('/admin')}
                                 >
-                                    Закрыть
+                                    Назад в Панель
                                 </button>
                             </div>
-                        </>
-                    ) : (
-                        <div className="admin-no-request-selected">
-                            <p>Выберите запрос для просмотра деталей</p>
                         </div>
-                    )}
-                </div>
+
+                        <div className="chat-messages">
+                            {chatMessages.length === 0 ? (
+                                <div className="no-messages">
+                                    <p>Нет сообщений</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {chatMessages.map(message => (
+                                        <div 
+                                            key={message.id}
+                                            className={`message ${message.senderId === 'support' ? 'admin-message' : 'user-message'}`}
+                                        >
+                                            <div className="message-content">
+                                                <div className="message-header">
+                                                    <span className="message-sender">
+                                                        {message.senderId === 'support' ? 'Поддержка' : (currentChat.userData?.name || 'Пользователь')}
+                                                    </span>
+                                                    <span className="message-time">
+                                                        {message.timestamp ? formatMessageTime(message.timestamp) : ''}
+                                                    </span>
+                                                </div>
+                                                <p className="message-text">{message.text}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div ref={messagesEndRef} />
+                                </>
+                            )}
+                        </div>
+
+                        <form className="chat-input" onSubmit={handleSendMessage}>
+                            <input
+                                type="text"
+                                placeholder="Введите сообщение..."
+                                value={messageText}
+                                onChange={(e) => setMessageText(e.target.value)}
+                            />
+                            <button 
+                                type="submit" 
+                                disabled={!messageText.trim()}
+                            >
+                                Отправить
+                            </button>
+                        </form>
+                    </div>
+                )}
             </div>
         </div>
     );

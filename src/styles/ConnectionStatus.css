@@ -1,0 +1,30 @@
+.connection-status-hidden {
+    display: none !important;
+}
+
+.status-bar {
+    position: fixed;
+    top: env(safe-area-inset-top, 0);
+    left: 0;
+    right: 0;
+    padding: 8px 16px;
+    color: white;
+    font-size: 14px;
+    text-align: center;
+    z-index: 9999;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Скрываем зеленое уведомление о восстановлении соединения */
+.status-bar.connected {
+    display: none !important;
+}
+
+/* Показываем только сообщение о потере соединения */
+.status-bar.disconnected {
+    background-color: rgba(244, 67, 54, 0.9);
+} 

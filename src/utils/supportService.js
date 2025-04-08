@@ -113,8 +113,8 @@ export const getSupportRequests = async (status = null, maxResults = 50) => {
             requests.push({
                 id: doc.id,
                 ...data,
-                createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
-                updatedAt: data.updatedAt ? data.updatedAt.toDate() : new Date()
+                createdAt: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate() : data.createdAt) : new Date(),
+                updatedAt: data.updatedAt ? (typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate() : data.updatedAt) : new Date()
             });
         });
 
@@ -195,8 +195,8 @@ export const getUserSupportRequests = async (userId) => {
             requests.push({
                 id: doc.id,
                 ...data,
-                createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
-                updatedAt: data.updatedAt ? data.updatedAt.toDate() : new Date()
+                createdAt: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate() : data.createdAt) : new Date(),
+                updatedAt: data.updatedAt ? (typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate() : data.updatedAt) : new Date()
             });
         });
 
@@ -231,13 +231,32 @@ export const addSupportChat = async (userId, message) => {
             throw new Error('Не удалось создать чат с поддержкой');
         }
 
+        // Получаем информацию о пользователе для отображения имени
+        let senderName = "Пользователь";
+        try {
+            const userDoc = await getDoc(doc(db, "users", userId));
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                if (userData.name) {
+                    senderName = userData.name;
+                } else if (userData.telegramData && userData.telegramData.firstName) {
+                    senderName = userData.telegramData.firstName;
+                }
+            }
+        } catch (userError) {
+            console.warn('Не удалось получить данные пользователя:', userError);
+        }
+
         // Добавляем сообщение в чат
         const messageData = {
             chatId: supportChatId,
             senderId: userId, // ID отправителя
+            senderName: senderName, // Имя отправителя
             text: message,
             timestamp: serverTimestamp(),
-            isRead: false
+            clientTimestamp: new Date(), // Время на клиенте
+            read: false,
+            type: 'text'
         };
 
         console.log('Добавление сообщения в коллекцию messages:', messageData);
@@ -248,7 +267,9 @@ export const addSupportChat = async (userId, message) => {
         console.log('Обновление информации о последнем сообщении в чате');
         await updateDoc(doc(db, 'chats', supportChatId), {
             lastMessageTime: serverTimestamp(),
-            lastMessage: message.substring(0, 50) + (message.length > 50 ? '...' : '')
+            lastMessage: message,
+            lastMessageSenderId: userId,
+            unreadBySupport: true // Отмечаем, что есть непрочитанные сообщения для поддержки
         });
 
         return true;

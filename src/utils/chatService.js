@@ -366,7 +366,31 @@ export const checkChatMatchStatus = async (userId) => {
         // Проверка корректного ID пользователя
         if (!userId) {
             console.error("ID пользователя не определен при проверке статуса чата");
-            return null;
+            
+            // Пытаемся получить ID из localStorage или sessionStorage
+            const savedUserId = localStorage.getItem('current_user_id') || sessionStorage.getItem('current_user_id');
+            if (savedUserId) {
+                console.log("Получен ID пользователя из хранилища:", savedUserId);
+                userId = savedUserId;
+            } else {
+                // Пытаемся получить из Telegram данных
+                try {
+                    const telegramData = sessionStorage.getItem('telegramUser');
+                    if (telegramData) {
+                        const parsedData = JSON.parse(telegramData);
+                        if (parsedData && parsedData.id) {
+                            userId = `tg_${parsedData.id}`;
+                            console.log("Получен ID пользователя из данных Telegram:", userId);
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Ошибка при получении ID из данных Telegram:", e);
+                }
+                
+                if (!userId) {
+                    return null;
+                }
+            }
         }
 
         const chatsQuery = query(
@@ -493,14 +517,27 @@ export const cancelSearch = async (userId) => {
  * @param {string} chatId ID чата
  * @param {string} senderId ID отправителя
  * @param {string} text Текст сообщения
- * @returns {Promise<string>} ID созданного сообщения
+ * @returns {Promise<string>} ID нового сообщения
  */
 export const sendChatMessage = async (chatId, senderId, text) => {
     try {
+        console.log(`Отправка сообщения в чат ${chatId} от пользователя ${senderId}`);
+        
         // Проверка валидности параметров
         if (!chatId || !senderId || !text.trim()) {
             throw new Error("Недостаточно данных для отправки сообщения");
         }
+
+        // Получаем информацию о чате для определения его типа (обычный чат или поддержка)
+        const chatDoc = await getDoc(doc(db, "chats", chatId));
+        if (!chatDoc.exists()) {
+            throw new Error("Чат не существует");
+        }
+        
+        const chatData = chatDoc.data();
+        const isSupportChat = chatData.type === 'support';
+        
+        console.log(`Тип чата: ${isSupportChat ? 'поддержка' : 'обычный'}`);
 
         // Получаем информацию о пользователе
         const userDoc = await getDoc(doc(db, "users", senderId));
@@ -563,6 +600,7 @@ export const sendChatMessage = async (chatId, senderId, text) => {
         // Добавляем сообщение в коллекцию
         const messageRef = await addDoc(collection(db, "messages"), messageData);
         const messageId = messageRef.id;
+        console.log(`Сообщение добавлено с ID: ${messageId}`);
 
         // Обновляем информацию о последнем сообщении в чате
         // Важно: не используем serverTimestamp() внутри arrayUnion()
@@ -583,19 +621,27 @@ export const sendChatMessage = async (chatId, senderId, text) => {
             };
         }
         
-        await updateDoc(doc(db, "chats", chatId), {
-            lastMessage: lastMessageData,
+        // Обновляем данные чата в зависимости от его типа
+        const updateData = {
+            lastMessage: text.substring(0, 100), // Сокращаем длинные сообщения
+            lastMessageTime: serverTimestamp(),
+            lastMessageSenderId: senderId,
             updatedAt: serverTimestamp(),
-            messagesCount: increment(1),
-            // Если нужно обновить массив с сообщениями, используем clientTimestamp вместо serverTimestamp()
-            recentMessages: arrayUnion({
-                id: messageId,
-                text: text.substring(0, 50) + (text.length > 50 ? "..." : ""),
-                senderId,
-                senderName: userData.name || (telegramData?.firstName || "Неизвестный пользователь"),
-                timestamp: currentTime.toISOString() // Преобразуем Date в строку ISO
-            })
-        });
+            messagesCount: increment(1)
+        };
+        
+        // Для чата поддержки добавляем флаг непрочитанных сообщений
+        if (isSupportChat) {
+            // Определяем, нужно ли устанавливать флаг непрочитанных сообщений
+            if (senderId !== 'support') {
+                updateData.unreadBySupport = true;
+            } else {
+                updateData.unreadByUser = true;
+            }
+        }
+        
+        await updateDoc(doc(db, "chats", chatId), updateData);
+        console.log(`Данные чата обновлены с последним сообщением`);
 
         // Обновляем статистику отправителя
         try {
@@ -641,29 +687,82 @@ export const getChatById = async (chatId) => {
  */
 export const getUserChats = async (userId) => {
     try {
+        console.log('Получение чатов пользователя:', userId);
+        
+        if (!userId) {
+            console.error('ID пользователя не передан в getUserChats');
+            return [];
+        }
+        
+        // Создаем запрос для получения всех чатов пользователя
         const q = query(
             collection(db, "chats"),
-            where("participants", "array-contains", userId),
-            orderBy("lastMessageTime", "desc")
+            where("participants", "array-contains", userId)
         );
 
         const querySnapshot = await getDocs(q);
         const chats = [];
+        
+        console.log(`Найдено ${querySnapshot.size} чатов для пользователя ${userId}`);
 
+        // Преобразуем данные чатов
         querySnapshot.forEach((doc) => {
             const chatData = doc.data();
-
+            
+            // Включаем активные чаты и чаты поддержки (даже если они не активны)
             if (chatData.isActive || chatData.type === 'support') {
-                chats.push({
-                    id: doc.id,
+                const chatId = doc.id;
+                
+                // Получаем информацию о собеседнике для обычных чатов
+                let partnerInfo = null;
+                if (chatData.participants && chatData.participants.length > 0 && chatData.type !== 'support') {
+                    // Находим ID собеседника
+                    const partnerId = chatData.participants.find(id => id !== userId && id !== 'support');
+                    
+                    // Если есть информация о собеседнике в данных чата
+                    if (partnerId && chatData.participantsData && chatData.participantsData[partnerId]) {
+                        partnerInfo = chatData.participantsData[partnerId];
+                    }
+                }
+                
+                // Формируем объект чата с необходимыми данными
+                const chat = {
+                    id: chatId,
                     ...chatData,
                     createdAt: chatData.createdAt ? chatData.createdAt.toDate() : new Date(),
+                    lastActivity: chatData.lastMessageTime ? chatData.lastMessageTime.toDate() : 
+                                (chatData.updatedAt ? chatData.updatedAt.toDate() : new Date()),
                     lastMessageTime: chatData.lastMessageTime ? chatData.lastMessageTime.toDate() : new Date(),
-                    isSupport: chatData.type === 'support'
-                });
+                    isSupportChat: chatData.type === 'support',
+                    name: chatData.type === 'support' ? 'Техническая поддержка' : 
+                         (partnerInfo ? partnerInfo.name : 'Собеседник'),
+                    partnerInfo
+                };
+                
+                // Если это чат поддержки, отмечаем его специальным флагом
+                if (chatData.type === 'support') {
+                    chat.isSupportChat = true;
+                    chat.pinned = true;
+                }
+                
+                chats.push(chat);
             }
         });
-
+        
+        // Сортируем чаты: закрепленные сверху, затем по времени последнего сообщения
+        chats.sort((a, b) => {
+            // Если один чат закреплен, а другой нет
+            if (a.pinned && !b.pinned) return -1;
+            if (!a.pinned && b.pinned) return 1;
+            
+            // Если оба закреплены или оба не закреплены, сортируем по времени последнего сообщения
+            const timeA = a.lastMessageTime ? a.lastMessageTime.getTime() : 0;
+            const timeB = b.lastMessageTime ? b.lastMessageTime.getTime() : 0;
+            
+            return timeB - timeA; // В порядке убывания (новые сверху)
+        });
+        
+        console.log(`Возвращаем ${chats.length} чатов (после фильтрации)`);
         return chats;
     } catch (error) {
         console.error("Ошибка при получении чатов пользователя:", error);
@@ -740,16 +839,14 @@ export const getChatMessages = async (chatId, limit = 100) => {
 /**
  * Завершение чата
  * @param {string} chatId ID чата
- * @param {Object} options Дополнительные параметры
+ * @param {string} userId ID пользователя, завершающего чат
  * @returns {Promise<boolean>} Результат операции
  */
-export const endChat = async (chatId, options = {}) => {
+export const endChat = async (chatId, userId) => {
     try {
         if (!chatId) {
             throw new Error("ID чата не указан");
         }
-
-        const userId = options.userId;
 
         // Получаем данные чата
         const chatRef = doc(db, "chats", chatId);
@@ -781,12 +878,14 @@ export const endChat = async (chatId, options = {}) => {
             ...(userId ? { endedBy: userId } : {})
         });
 
-        // Добавляем системное сообщение о завершении чата
-        await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        // Добавляем системное сообщение о завершении чата в основную коллекцию messages
+        await addDoc(collection(db, 'messages'), {
+            chatId: chatId,
+            senderId: 'system',
             text: 'Чат был завершен',
             type: 'system',
             timestamp: serverTimestamp(),
-            senderId: 'system'
+            read: true
         });
 
         // Обновляем статистику для всех участников
@@ -984,6 +1083,12 @@ export const addSupportChat = async (userId, message) => {
  */
 export const getSupportChatId = async (userId) => {
     try {
+        // Проверяем наличие userId
+        if (!userId) {
+            console.error('getSupportChatId: ID пользователя не передан');
+            return null;
+        }
+        
         const q = query(
             collection(db, 'chats'),
             where('type', '==', 'support'),
@@ -1010,41 +1115,119 @@ export const getSupportChatId = async (userId) => {
  */
 export const createSupportChat = async (userId) => {
     try {
+        // Проверяем, что ID пользователя существует
+        if (!userId) {
+            console.error('createSupportChat: ID пользователя не передан');
+            return null;
+        }
+        
+        console.log('Создание чата поддержки для пользователя:', userId);
+        
+        // Проверяем, возможно чат уже существует
+        try {
+            const existingChat = await getSupportChatId(userId);
+            if (existingChat) {
+                console.log('Чат поддержки уже существует:', existingChat);
+                return existingChat;
+            }
+        } catch (error) {
+            console.warn('Ошибка при проверке существующего чата поддержки:', error);
+            // Продолжаем выполнение - попробуем создать новый чат
+        }
+
+        // Получаем данные пользователя для более персонализированного приветствия
+        let userName = "пользователь";
+        let userData = null;
+        try {
+            const userRef = doc(db, "users", userId);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+                userData = userSnap.data();
+                if (userData.name) {
+                    userName = userData.name;
+                } else if (userData.telegramData && userData.telegramData.firstName) {
+                    userName = userData.telegramData.firstName;
+                }
+            } else {
+                // Пытаемся получить данные из localStorage
+                const cachedUser = localStorage.getItem('current_user');
+                if (cachedUser) {
+                    try {
+                        const parsedUser = JSON.parse(cachedUser);
+                        if (parsedUser.name) {
+                            userName = parsedUser.name;
+                        } else if (parsedUser.telegramData && parsedUser.telegramData.firstName) {
+                            userName = parsedUser.telegramData.firstName;
+                        }
+                    } catch (e) {
+                        console.warn('Ошибка при парсинге данных пользователя из localStorage:', e);
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn("Не удалось получить имя пользователя:", error);
+        }
+
+        // Текущее время для упорядочивания чатов
+        const currentTime = new Date();
+
+        // Создаем данные чата
         const chatData = {
             type: 'support',
             participants: [userId, 'support'],
             createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
             lastMessageTime: serverTimestamp(),
             isActive: true,
-            lastMessage: 'Чат с технической поддержкой',
+            lastMessage: 'Добро пожаловать в чат технической поддержки',
             name: 'Техническая поддержка',
-            icon: '👨‍💻'
-        };
-
-        const chatRef = await addDoc(collection(db, 'chats'), chatData);
-
-        await setDoc(doc(db, 'users', userId, 'chats', chatRef.id), {
-            chatId: chatRef.id,
+            icon: '👨‍💻',
+            pinned: true,
+            unreadBySupport: true,
+            unreadByUser: false,
             unreadCount: 0,
-            lastActivity: serverTimestamp()
-        });
-
-        const welcomeMessageData = {
-            chatId: chatRef.id,
-            senderId: 'support',
-            text: 'Добро пожаловать в чат поддержки! Опишите вашу проблему или задайте вопрос, и мы ответим вам как можно скорее.',
-            timestamp: serverTimestamp(),
-            readBy: ['support']
+            isSupportChat: true  // Явно отмечаем, что это чат поддержки
         };
 
+        console.log('Создание чата с данными:', chatData);
+        
+        // Создаем документ чата
+        const chatRef = await addDoc(collection(db, 'chats'), chatData);
+        const chatId = chatRef.id;
+        console.log('Чат поддержки создан с ID:', chatId);
+
+        // Создаем приветственное сообщение
+        const welcomeMessageData = {
+            chatId: chatId,
+            senderId: 'support',
+            senderName: 'Техническая поддержка',
+            text: `Здравствуйте, ${userName}!\n\nДобро пожаловать в чат технической поддержки. Здесь вы можете задать любые вопросы о работе приложения, сообщить о проблемах или внести предложения по улучшению сервиса.\n\nМы постараемся ответить вам как можно скорее.`,
+            timestamp: serverTimestamp(),
+            readBy: ['support'],
+            isAdminMessage: true
+        };
+
+        console.log('Создание приветственного сообщения');
         await addDoc(collection(db, "messages"), welcomeMessageData);
 
+        // Обновляем данные последнего сообщения в чате
         await updateDoc(chatRef, {
-            lastMessage: welcomeMessageData.text.substring(0, 50) + (welcomeMessageData.text.length > 50 ? '...' : ''),
-            lastMessageTime: serverTimestamp()
+            lastMessage: "Здравствуйте! Добро пожаловать в чат поддержки.",
+            lastMessageTime: serverTimestamp(),
+            lastMessageSenderId: 'support'
         });
 
-        return chatRef.id;
+        // Обновляем счетчик чатов поддержки
+        try {
+            const statsRef = doc(db, "statistics", "app");
+            await updateDoc(statsRef, {
+                supportChatsCount: increment(1)
+            });
+        } catch (error) {
+            console.warn("Не удалось обновить статистику чатов поддержки:", error);
+        }
+
+        return chatId;
     } catch (error) {
         console.error('Ошибка при создании чата поддержки:', error);
         return null;

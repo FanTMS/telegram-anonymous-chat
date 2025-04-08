@@ -223,23 +223,26 @@ export const triggerHapticFeedback = (type = 'impact') => {
 export const safeHapticFeedback = (type, style = null, notificationType = null) => {
     try {
         const WebApp = getTelegramWebApp();
-        if (!WebApp || !WebApp.HapticFeedback) return false;
+        if (!WebApp || !WebApp.HapticFeedback) {
+            console.log('\n [Telegram.WebApp] HapticFeedback is not supported');
+            return false;
+        }
 
         switch (type) {
             case 'impact':
-                if (WebApp.HapticFeedback.impactOccurred) {
+                if (WebApp.HapticFeedback && typeof WebApp.HapticFeedback.impactOccurred === 'function') {
                     WebApp.HapticFeedback.impactOccurred(style || 'medium');
                     return true;
                 }
                 break;
             case 'notification':
-                if (WebApp.HapticFeedback.notificationOccurred) {
+                if (WebApp.HapticFeedback && typeof WebApp.HapticFeedback.notificationOccurred === 'function') {
                     WebApp.HapticFeedback.notificationOccurred(notificationType || 'success');
                     return true;
                 }
                 break;
             case 'selection':
-                if (WebApp.HapticFeedback.selectionChanged) {
+                if (WebApp.HapticFeedback && typeof WebApp.HapticFeedback.selectionChanged === 'function') {
                     WebApp.HapticFeedback.selectionChanged();
                     return true;
                 }

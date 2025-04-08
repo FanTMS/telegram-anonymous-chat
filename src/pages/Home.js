@@ -115,8 +115,15 @@ const Home = () => {
                 <p>Добро пожаловать в анонимный чат Telegram</p>
             </motion.div>
 
-            {/* Добавляем виджет администратора */}
-            <AdminPanelWidget />
+            {/* Админ-панель */}
+            <motion.div
+                className="admin-widget-container"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.3, duration: 0.5 }}
+            >
+                <AdminPanelWidget />
+            </motion.div>
 
             <motion.div
                 className="features-section"

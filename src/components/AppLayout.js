@@ -74,6 +74,12 @@ const navigationItems = [
         includesPaths: ['/chat/']
     },
     {
+        path: '/friends',
+        label: 'Друзья',
+        icon: 'user-friends',
+        includesPaths: ['/friends/']
+    },
+    {
         path: '/groups',
         label: 'Группы',
         icon: 'group',

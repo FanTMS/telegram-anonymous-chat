@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { UserContext } from './contexts/UserContext';
 import { ToastProvider } from './components/Toast';
+import { NotificationProvider } from './contexts/NotificationContext';
 import './styles/global.css';
 
 // Импорт компонентов
@@ -24,6 +25,14 @@ import GroupDetail from './pages/GroupDetail';
 import GroupCreate from './pages/GroupCreate';
 import GroupEdit from './pages/GroupEdit';
 import IndexLoader from './components/IndexLoader';
+import Admin from './pages/Admin';
+import AdminDashboard from './pages/AdminDashboard';
+import AdminConfig from './pages/AdminConfig';
+import AdminUtility from './pages/AdminUtility';
+import Friends from './pages/Friends';
+import AdminReports from './pages/AdminReports';
+import AdminStats from './pages/AdminStats';
+import AdminUsers from './pages/AdminUsers';
 
 import './styles/BeginnerGuide.css';
 import './App.css';
@@ -37,6 +46,11 @@ import { saveUserSession, getUserSession, getUserById } from './utils/authServic
 import { initializeApp } from './utils/databaseInitializer';
 import connectionService from './utils/firebaseConnectionService';
 import { createRequiredIndexes } from './utils/firebaseIndexCreator';
+import { migrateUserStructure } from './utils/userStructureMigration';
+import { setupLocalAdminRights, addAdminByTelegramId, addAdminByUID } from './utils/adminManager';
+import { getTelegramUser } from './utils/telegramUtils';
+import { isUserAdminByTelegramId, isUserAdminByUID } from './utils/adminManager';
+import { auth } from './firebase';
 
 // Иконки для навигации
 const HomeIcon = () => (
@@ -101,6 +115,66 @@ const navigationItems = [
 const ProtectedRoute = ({ children, adminOnly = false }) => {
     const { isAuthenticated, loading, user } = useContext(UserContext);
     const navigate = useNavigate();
+    const [isAdmin, setIsAdmin] = useState(false);
+    
+    useEffect(() => {
+        const checkAdminAccess = async () => {
+            if (adminOnly) {
+                // Проверяем локальную разработку (всегда разрешено)
+                const isLocalhost =
+                    window.location.hostname === 'localhost' ||
+                    window.location.hostname === '127.0.0.1' ||
+                    window.location.hostname.includes('192.168.');
+                    
+                if (isLocalhost) {
+                    setIsAdmin(true);
+                    return;
+                }
+                
+                // Проверяем по данным пользователя
+                if (user && user.isAdmin) {
+                    setIsAdmin(true);
+                    return;
+                }
+                
+                // Проверяем по Telegram ID
+                const telegramUser = getTelegramUser();
+                if (telegramUser && telegramUser.id) {
+                    // Специальный администратор
+                    if (telegramUser.id.toString() === '5394381166') {
+                        setIsAdmin(true);
+                        return;
+                    }
+                    
+                    // Проверяем права через adminManager
+                    try {
+                        const adminStatus = await isUserAdminByTelegramId(telegramUser.id.toString());
+                        if (adminStatus) {
+                            setIsAdmin(true);
+                            return;
+                        }
+                    } catch (error) {
+                        console.error('Ошибка при проверке прав администратора:', error);
+                    }
+                }
+                
+                // Дополнительно проверяем по Firebase UID
+                if (auth.currentUser) {
+                    try {
+                        const adminStatus = await isUserAdminByUID(auth.currentUser.uid);
+                        setIsAdmin(adminStatus);
+                    } catch (error) {
+                        console.error('Ошибка при проверке админ-прав по UID:', error);
+                        setIsAdmin(false);
+                    }
+                }
+            }
+        };
+        
+        if (isAuthenticated && adminOnly) {
+            checkAdminAccess();
+        }
+    }, [isAuthenticated, adminOnly, user]);
     
     useEffect(() => {
         if (!loading && !isAuthenticated) {
@@ -108,14 +182,18 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
             navigate('/register', { replace: true });
         }
         
-        if (adminOnly && !loading && isAuthenticated && (!user || !user.isAdmin)) {
-            // Перенаправление на главную, если пользователь не администратор
+        if (adminOnly && !loading && isAuthenticated && !isAdmin) {
+            // Если проверка админ-прав завершена и пользователь не админ - редирект
             navigate('/home', { replace: true });
         }
-    }, [isAuthenticated, loading, navigate, adminOnly, user]);
+    }, [isAuthenticated, loading, navigate, adminOnly, isAdmin]);
     
     if (loading) {
         return <div className="loading-screen">Загрузка...</div>;
+    }
+    
+    if (adminOnly && !isAdmin) {
+        return <div className="loading-screen">Проверка прав доступа...</div>;
     }
     
     return isAuthenticated ? children : null;
@@ -354,6 +432,31 @@ function App() {
                 } catch (indexError) {
                     console.warn('Не удалось автоматически создать индексы Firebase:', indexError);
                 }
+                
+                // Запустить миграцию структуры пользователей
+                await migrateUserStructure().catch(error => {
+                    console.warn('Ошибка при миграции структуры пользователей:', error);
+                });
+                
+                // Настройка прав администратора для локальной разработки
+                try {
+                    // Установить права администратора для указанного Telegram ID
+                    const targetTelegramId = '5394381166';
+                    
+                    // Настройка локальных прав администратора
+                    await setupLocalAdminRights(targetTelegramId);
+                    
+                    // Добавить указанный Telegram ID как администратора в любом случае
+                    await addAdminByTelegramId(targetTelegramId);
+                    
+                    // Добавляем конкретного пользователя по UID как администратора
+                    const specificUserUID = 'hSv7Bj222hMe13UlsvkQX0Phyaj2';
+                    await addAdminByUID(specificUserUID);
+                    
+                    console.log(`Права администратора установлены для пользователя с UID: ${specificUserUID}`);
+                } catch (adminError) {
+                    console.warn('Ошибка при настройке прав администратора:', adminError);
+                }
             } catch (error) {
                 console.error('Ошибка при инициализации приложения:', error);
             }
@@ -378,141 +481,209 @@ function App() {
 
     return (
         <ToastProvider>
-            <div className={`app-container ${!isConnected ? 'offline-mode' : ''}`}>
-                {/* Connection status indicator */}
-                {!isConnected && (
-                    <div className="connection-status offline">
-                        <span className="status-icon">⚠️</span>
-                        <span className="status-text">Оффлайн режим. {connectionError && `Ошибка: ${connectionError}`}</span>
-                    </div>
-                )}
+            <NotificationProvider>
+                <div className={`app-container ${!isConnected ? 'offline-mode' : ''}`}>
+                    {/* Connection status indicator */}
+                    {!isConnected && (
+                        <div className="connection-status offline">
+                            <span className="status-icon">⚠️</span>
+                            <span className="status-text">Оффлайн режим. {connectionError && `Ошибка: ${connectionError}`}</span>
+                        </div>
+                    )}
 
-                {error ? (
-                    <div className="error-fallback">
-                        <h2>Произошла ошибка</h2>
-                        <p>{error.toString()}</p>
-                        <button onClick={() => window.location.reload()}>
-                            Перезагрузить приложение
-                        </button>
-                        {process.env.NODE_ENV === 'development' && (
-                            <pre className="error-stack">
-                                {error.stack}
-                            </pre>
-                        )}
-                    </div>
-                ) : (
-                    <>
-                        <Routes>
-                            <Route path="/register" element={<RegistrationForm />} />
-                            <Route path="/onboarding" element={<OnboardingTutorial />} />
-                            <Route path="/" element={<Navigate to="/home" replace />} />
-                            <Route path="/index.html" element={<Navigate to="/home" replace />} />
+                    {error ? (
+                        <div className="error-fallback">
+                            <h2>Произошла ошибка</h2>
+                            <p>{error.toString()}</p>
+                            <button onClick={() => window.location.reload()}>
+                                Перезагрузить приложение
+                            </button>
+                            {process.env.NODE_ENV === 'development' && (
+                                <pre className="error-stack">
+                                    {error.stack}
+                                </pre>
+                            )}
+                        </div>
+                    ) : (
+                        <>
+                            <Routes>
+                                <Route path="/register" element={<RegistrationForm />} />
+                                <Route path="/onboarding" element={<OnboardingTutorial />} />
+                                <Route path="/" element={<Navigate to="/home" replace />} />
+                                <Route path="/index.html" element={<Navigate to="/home" replace />} />
+                                
+                                {/* Routes requiring authentication */}
+                                <Route path="/home" element={
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <Home />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/chats" element={
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <ChatsList />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/chat/:chatId" element={
+                                    <ProtectedRoute>
+                                        <AppLayout hideNavigation>
+                                            <Chat />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/random-chat" element={
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <RandomChat />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/profile" element={
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <Profile />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/groups" element={
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <Groups />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/groups/:groupId" element={
+                                    <ProtectedRoute>
+                                        <AppLayout hideNavigation>
+                                            <GroupDetail />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/groups/create" element={
+                                    <ProtectedRoute>
+                                        <AppLayout hideNavigation>
+                                            <GroupCreate />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/groups/:groupId/edit" element={
+                                    <ProtectedRoute>
+                                        <AppLayout hideNavigation>
+                                            <GroupEdit />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/guide" element={
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <BeginnerGuide />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/admin" element={
+                                    <ProtectedRoute adminOnly={true}>
+                                        <AppLayout>
+                                            <Admin />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/admin/dashboard" element={
+                                    <ProtectedRoute adminOnly={true}>
+                                        <AppLayout>
+                                            <AdminDashboard />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/admin/support" element={
+                                    <ProtectedRoute adminOnly={true}>
+                                        <AppLayout hideNavigation>
+                                            <AdminSupport />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/admin/support/:chatId" element={
+                                    <ProtectedRoute adminOnly={true}>
+                                        <AppLayout hideNavigation>
+                                            <AdminSupport />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/support/diagnostics" element={
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <SupportDiagnostics />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/friends" element={
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <Friends />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/admin/config" element={
+                                    <ProtectedRoute adminOnly={true}>
+                                        <AppLayout>
+                                            <AdminConfig />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/admin-utility" element={<AdminUtility />} />
+                                
+                                <Route path="/admin/reports" element={
+                                    <ProtectedRoute adminOnly={true}>
+                                        <AppLayout>
+                                            <AdminReports />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/admin/stats" element={
+                                    <ProtectedRoute adminOnly={true}>
+                                        <AppLayout>
+                                            <AdminStats />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/admin/users" element={
+                                    <ProtectedRoute adminOnly={true}>
+                                        <AppLayout>
+                                            <AdminUsers />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="*" element={<NotFoundPage />} />
+                            </Routes>
                             
-                            {/* Routes requiring authentication */}
-                            <Route path="/home" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <Home />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/chats" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <ChatsList />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/chat/:chatId" element={
-                                <ProtectedRoute>
-                                    <AppLayout hideNavigation>
-                                        <Chat />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/random-chat" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <RandomChat />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/profile" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <Profile />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/groups" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <Groups />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/groups/:groupId" element={
-                                <ProtectedRoute>
-                                    <AppLayout hideNavigation>
-                                        <GroupDetail />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/groups/create" element={
-                                <ProtectedRoute>
-                                    <AppLayout hideNavigation>
-                                        <GroupCreate />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/groups/:groupId/edit" element={
-                                <ProtectedRoute>
-                                    <AppLayout hideNavigation>
-                                        <GroupEdit />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/guide" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <BeginnerGuide />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/admin/support" element={
-                                <ProtectedRoute adminOnly={true}>
-                                    <AppLayout>
-                                        <AdminSupport />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/support/diagnostics" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <SupportDiagnostics />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="*" element={<NotFoundPage />} />
-                        </Routes>
-                        
-                        {/* Компонент для автоматической загрузки индексов */}
-                        <IndexLoader />
-                    </>
-                )}
-            </div>
+                            {/* Компонент для автоматической загрузки индексов */}
+                            <IndexLoader />
+                        </>
+                    )}
+                </div>
+            </NotificationProvider>
         </ToastProvider>
     );
 }

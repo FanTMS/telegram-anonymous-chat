@@ -11,9 +11,11 @@ import {
 import { addSupportChat } from '../utils/supportService';
 import UserStatus from '../components/UserStatus';
 import { useToast } from '../components/Toast';
-import { collection, query, orderBy, limit, getDocs, onSnapshot, doc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, onSnapshot, doc, where, updateDoc, serverTimestamp, getDoc, arrayUnion, arrayRemove, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import '../styles/Chat.css';
+import { ensureUserFields } from '../utils/userStructureMigration';
+import ReportDialog from '../components/ReportDialog';
 
 const Chat = () => {
     const { chatId } = useParams();
@@ -33,6 +35,11 @@ const Chat = () => {
     const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [unsubscribeChat, setUnsubscribeChat] = useState(null);
+    const [unsubscribeMessages, setUnsubscribeMessages] = useState(null);
+    const [typingTimeout, setTypingTimeout] = useState(null);
+    const [showProfileModal, setShowProfileModal] = useState(false);
+    const [friendRequestStatus, setFriendRequestStatus] = useState('none'); // 'none', 'sent', 'received', 'friends'
+    const [showReportDialog, setShowReportDialog] = useState(false);
 
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
@@ -193,13 +200,28 @@ const Chat = () => {
     useEffect(() => {
         const loadChatDetails = async () => {
             try {
-                if (!chatId || !user) return;
+                if (!chatId) {
+                    console.error("ID чата не определен");
+                    return;
+                }
+                
+                if (!user || !user.uid) {
+                    console.error("Пользователь не аутентифицирован");
+                    setError('Необходимо авторизоваться');
+                    setIsLoading(false);
+                    return;
+                }
 
                 setIsLoading(true);
                 setError(null);
+                
+                // Объявляем переменную partnerId в этой области видимости
+                let partnerIdForFriendCheck = null;
 
+                console.log("Проверка статуса чата для пользователя:", user.uid);
+                
                 // Сначала проверяем статус чата для получения подробной информации о партнере
-                const chatStatus = await checkChatMatchStatus(user.id);
+                const chatStatus = await checkChatMatchStatus(user.uid);
                 let chatDetails;
                 
                 if (chatStatus && chatStatus.id === chatId) {
@@ -209,6 +231,7 @@ const Chat = () => {
                     // Если есть информация о партнере, обрабатываем её
                     if (chatStatus.partner) {
                         const partnerData = chatStatus.partner;
+                        partnerIdForFriendCheck = partnerData.id; // Сохраняем ID для проверки дружбы
                         setPartnerInfo({
                             id: partnerData.id,
                             name: partnerData.name || 'Собеседник',
@@ -226,16 +249,21 @@ const Chat = () => {
                     chatDetails = await getChatById(chatId);
                     
                     if (chatDetails.type === 'support') {
-                        setPartnerInfo({
+                        console.log('Устанавливаем данные партнера для чата поддержки');
+                        const supportInfo = {
+                            id: 'support',
                             name: 'Техническая поддержка',
                             isOnline: true,
                             profilePicture: null,
                             lastSeen: null,
                             isSupportChat: true
-                        });
+                        };
+                        setPartnerInfo(supportInfo);
+                        console.log('Информация о партнере в чате поддержки:', supportInfo);
                     } else if (chatDetails.participants && chatDetails.participants.length > 0) {
                         // Находим ID партнера
-                        const partnerId = chatDetails.participants.find(id => id !== user.id);
+                        const partnerId = chatDetails.participants.find(id => id !== user.uid);
+                        partnerIdForFriendCheck = partnerId; // Сохраняем ID для проверки дружбы
                         
                         if (partnerId && chatDetails.participantsData && chatDetails.participantsData[partnerId]) {
                             const partner = chatDetails.participantsData[partnerId];
@@ -252,96 +280,222 @@ const Chat = () => {
                     }
                 }
                 
+                // Устанавливаем данные чата в состояние
                 setChat(chatDetails);
-
-                // Настройка слушателя для чата на случай, если другой пользователь завершит чат
-                const unsubscribe = onSnapshot(doc(db, 'chats', chatId), (docSnapshot) => {
-                    if (docSnapshot.exists()) {
-                        const chatData = docSnapshot.data();
-                        // Проверяем, был ли чат завершен
-                        if (chatData.status === 'ended') {
-                            showToast('Чат был завершен', 'info');
-                            navigate('/chats');
+                
+                // Настраиваем слушатель обновлений чата в реальном времени (например, для статуса печати)
+                const unsubscribe = onSnapshot(doc(db, 'chats', chatId), (doc) => {
+                    if (doc.exists()) {
+                        const chatData = { id: doc.id, ...doc.data() };
+                        setChat(chatData);
+                        
+                        // Проверяем статус печати
+                        if (chatData.typingStatus) {
+                            const partnerId = chatData.participants.find(id => id !== user.uid);
+                            setIsPartnerTyping(chatData.typingStatus[partnerId] === true);
+                        } else {
+                            setIsPartnerTyping(false);
                         }
                     }
                 }, (error) => {
-                    console.error('Ошибка при слежении за статусом чата:', error);
+                    console.error('Ошибка при получении обновлений чата:', error);
                 });
                 
                 setUnsubscribeChat(() => unsubscribe);
-
-                const chatMessages = await getChatMessages(chatId);
-                setMessages(chatMessages);
-
-                setTimeout(() => {
-                    scrollToBottom(true);
-                }, 100);
-
+                
+                // Настраиваем слушатель сообщений в реальном времени
+                setupMessagesSubscription();
+                
+                // Проверяем статус дружбы только если это не чат поддержки
+                if (partnerIdForFriendCheck && partnerIdForFriendCheck !== 'support') {
+                    await checkFriendStatus(partnerIdForFriendCheck);
+                }
+                
+                setIsLoading(false);
             } catch (err) {
-                console.error("Ошибка при загрузке чата:", err);
-                setError("Не удалось загрузить чат");
-            } finally {
+                console.error('Ошибка при загрузке деталей чата:', err);
+                setError('Не удалось загрузить чат. Пожалуйста, попробуйте позже.');
                 setIsLoading(false);
             }
         };
 
         loadChatDetails();
         
-        // Создаем интервал для обновления сообщений
-        const messageInterval = setInterval(() => {
-            loadMessages();
-        }, 5000); // Обновляем каждые 5 секунд
-        
+        // Очистка при размонтировании компонента
         return () => {
-            clearInterval(messageInterval);
-            // Отписываемся от слушателя при размонтировании
             if (unsubscribeChat) {
                 unsubscribeChat();
+            }
+            if (unsubscribeMessages) {
+                unsubscribeMessages();
             }
         };
     }, [chatId, user, navigate, showToast]);
 
-    const loadMessages = async () => {
+    // Настраиваем слушатель сообщений в реальном времени
+    const setupMessagesSubscription = () => {
+        if (!chatId) return;
+        
+        // Отписываемся от предыдущего слушателя, если он существует
+        if (unsubscribeMessages) {
+            unsubscribeMessages();
+        }
+        
         try {
-            if (!chatId) return;
-            
-            const messagesCollection = collection(db, 'chats', chatId, 'messages');
-            const q = query(
-                messagesCollection,
-                orderBy('timestamp', 'desc'),
-                limit(50)
+            const messagesQuery = query(
+                collection(db, "messages"),
+                where("chatId", "==", chatId),
+                orderBy("timestamp", "asc")
             );
-
-            const snapshot = await getDocs(q);
-            const fetchedMessages = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
             
-            // Переворачиваем, чтобы последние сообщения были внизу
-            const sortedMessages = fetchedMessages.reverse();
+            console.log('Настройка подписки на сообщения в чате:', chatId);
             
-            // Обновляем только если получены новые сообщения
-            if (sortedMessages.length !== messages.length || 
-                (sortedMessages.length > 0 && messages.length > 0 && 
-                 sortedMessages[sortedMessages.length - 1].id !== messages[messages.length - 1].id)) {
-                setMessages(sortedMessages);
+            const unsubscribe = onSnapshot(messagesQuery, async (querySnapshot) => {
+                // Оптимизированное обновление сообщений
+                let newMessages = [];
+                let hasChanges = false;
                 
-                // Прокручиваем вниз только если пользователь уже находится внизу чата
-                const container = messagesContainerRef.current;
-                if (container) {
-                    const { scrollHeight, scrollTop, clientHeight } = container;
-                    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+                // Создаем карту существующих сообщений для быстрого поиска
+                const existingMessagesMap = {};
+                messages.forEach(msg => {
+                    if (msg.id && !msg.id.startsWith('temp-')) {
+                        existingMessagesMap[msg.id] = msg;
+                    }
+                });
+                
+                // Проверяем новые и измененные сообщения
+                querySnapshot.forEach((doc) => {
+                    const messageData = {
+                        id: doc.id,
+                        ...doc.data(),
+                        timestamp: doc.data().timestamp?.toDate() || new Date()
+                    };
                     
-                    if (isNearBottom) {
-                        setTimeout(() => scrollToBottom(true), 100);
+                    // Если сообщение новое или изменилось, отмечаем, что есть изменения
+                    if (!existingMessagesMap[doc.id]) {
+                        hasChanges = true;
+                    }
+                    
+                    newMessages.push(messageData);
+                });
+                
+                // Если есть новые или измененные сообщения, обновляем состояние
+                if (hasChanges || newMessages.length !== messages.length) {
+                    // Заменяем временные сообщения финальными версиями
+                    const tempMessages = messages.filter(msg => msg.id.startsWith('temp-'));
+                    if (tempMessages.length > 0) {
+                        // Находим соответствующие финальные сообщения для временных (по тексту и отправителю)
+                        tempMessages.forEach(tempMsg => {
+                            const matchingFinalMsg = newMessages.find(msg => 
+                                msg.text === tempMsg.text && 
+                                msg.senderId === tempMsg.senderId &&
+                                !msg.id.startsWith('temp-')
+                            );
+                            
+                            // Если нашли соответствующее финальное сообщение, удаляем временное
+                            if (matchingFinalMsg) {
+                                newMessages = newMessages.filter(msg => msg.id !== tempMsg.id);
+                            }
+                        });
+                    }
+                    
+                    // Mark messages as read
+                    if (user && user.uid && newMessages.length > 0) {
+                        markChatAsRead();
+                    }
+                    
+                    setMessages(newMessages);
+                    
+                    // Определяем, нужно ли прокручивать вниз
+                    const container = messagesContainerRef.current;
+                    if (container) {
+                        const { scrollHeight, scrollTop, clientHeight } = container;
+                        const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+                        
+                        if (isNearBottom) {
+                            // Используем requestAnimationFrame для более плавного скролла
+                            requestAnimationFrame(() => {
+                                scrollToBottom(true);
+                            });
+                        }
                     }
                 }
-            }
+            }, (error) => {
+                console.error('Ошибка при получении сообщений в реальном времени:', error);
+            });
+            
+            setUnsubscribeMessages(() => unsubscribe);
+            
+            // Возвращаем функцию отписки для использования при размонтировании
+            return unsubscribe;
         } catch (error) {
-            console.error('Ошибка при загрузке сообщений:', error);
+            console.error('Ошибка при настройке слушателя сообщений:', error);
+            setError('Не удалось загрузить сообщения. Пожалуйста, попробуйте позже.');
+            return null;
         }
     };
+
+    // Функция для маркировки чата как прочитанного
+    const markChatAsRead = async () => {
+        if (!user || !user.uid || !chatId) return;
+        
+        try {
+            // Обновляем индикатор непрочитанных сообщений в чате
+            const chatRef = doc(db, 'chats', chatId);
+            
+            // Mark all fields related to unread status to ensure complete clearing of notifications
+            const updateData = {
+                unreadByUser: false,
+                [`unreadBy.${user.uid}`]: false,
+                unreadCount: 0
+            };
+            
+            // If this is the current user's chat, mark it as read immediately
+            await updateDoc(chatRef, updateData);
+            
+            // Mark all messages as read for this user as well
+            const messagesQuery = query(
+                collection(db, "messages"),
+                where("chatId", "==", chatId)
+            );
+            
+            const messagesSnapshot = await getDocs(messagesQuery);
+            
+            // Loop through each message and mark it as read by this user if needed
+            const batch = writeBatch(db);
+            messagesSnapshot.forEach(doc => {
+                const messageData = doc.data();
+                if (messageData.senderId !== user.uid && !messageData.readBy?.includes(user.uid)) {
+                    const messageRef = doc.ref;
+                    batch.update(messageRef, {
+                        readBy: arrayUnion(user.uid),
+                        read: true
+                    });
+                }
+            });
+            
+            // Commit all message updates in a single batch
+            await batch.commit();
+            
+            console.log('Чат и все сообщения отмечены как прочитанные:', chatId);
+        } catch (error) {
+            console.error('Ошибка при маркировке чата как прочитанного:', error);
+        }
+    };
+
+    // Вызываем функцию маркировки чата как прочитанный при открытии компонента
+    useEffect(() => {
+        if (chatId && user && user.uid) {
+            console.log("Marking chat as read on component mount:", chatId);
+            markChatAsRead();
+            
+            // Also mark as read when component is unmounted to ensure clean state
+            return () => {
+                console.log("Marking chat as read on component unmount:", chatId);
+                markChatAsRead();
+            };
+        }
+    }, [chatId, user?.uid]);
 
     const scrollToBottom = (smooth = false) => {
         if (messagesEndRef.current) {
@@ -370,35 +524,54 @@ const Chat = () => {
     }, []);
 
     const handleBackClick = () => {
-        navigate(-1);
+        navigate('/chats');
     };
 
     const handleSendMessage = async () => {
         const messageText = inputMessage.trim();
-        if (!messageText || !chatId || !user?.id || isSending) return;
+        if (!messageText || !chatId || !user?.uid || isSending) return;
 
         setIsSending(true);
         setInputMessage('');
 
         try {
+            console.log('Отправка сообщения. Чат:', chat?.type, 'UserID:', user.uid, 'ChatID:', chatId);
+            
             // Добавляем сообщение локально для мгновенного отображения
+            const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
             const tempMessage = {
-                id: `temp-${Date.now()}`,
-                senderId: user.id,
+                id: tempId,
+                senderId: user.uid,
                 senderName: user.name || "Вы",
                 text: messageText,
                 timestamp: new Date(),
-                pending: true
+                chatId: chatId,
+                pending: true,
+                isTemp: true
             };
 
+            // Добавляем временное сообщение в список
             setMessages(prevMessages => [...prevMessages, tempMessage]);
-            scrollToBottom(true);
+            
+            // Прокручиваем чат вниз к новому сообщению
+            requestAnimationFrame(() => {
+                scrollToBottom(true);
+            });
 
             // Отправляем сообщение на сервер
-            await sendChatMessage(chatId, user.id, messageText);
-
-            // Обновляем список сообщений
-            loadMessages();
+            if (chat?.type === 'support') {
+                // Если это чат поддержки, используем функцию sendChatMessage
+                // Используем обычную функцию для отправки сообщений, т.к. чат уже создан
+                console.log('Отправка сообщения в чат поддержки через sendChatMessage');
+                await sendChatMessage(chatId, user.uid, messageText);
+            } else {
+                // Для обычных чатов используем стандартную функцию
+                console.log('Отправка сообщения в обычный чат');
+                await sendChatMessage(chatId, user.uid, messageText);
+            }
+            
+            // Firebase автоматически обновит состояние через onSnapshot
+            console.log('Сообщение успешно отправлено:', messageText);
         } catch (error) {
             console.error("Ошибка при отправке сообщения:", error);
             setError(error.message || "Не удалось отправить сообщение");
@@ -430,7 +603,7 @@ const Chat = () => {
 
     const handleEndChatConfirm = async () => {
         try {
-            await endChat(chatId, user.id);
+            await endChat(chatId, user.uid);
             showToast('Чат завершен', 'success');
             navigate('/chats');
         } catch (error) {
@@ -445,53 +618,244 @@ const Chat = () => {
         setShowEndChatModal(false);
     };
 
+    // Обработчик ввода текста сообщения
+    const handleInputChange = (e) => {
+        const newValue = e.target.value;
+        setInputMessage(newValue);
+        
+        // Если пользователь что-то вводит, отправляем статус "печатает"
+        if (newValue && chatId && user) {
+            try {
+                const chatRef = doc(db, 'chats', chatId);
+                
+                // Обновляем статус печати в Firebase
+                updateDoc(chatRef, { 
+                    [`typingStatus.${user.uid}`]: true,
+                    typingTimestamp: serverTimestamp()
+                });
+                
+                // Сбрасываем предыдущий таймаут, если он был
+                if (typingTimeout) {
+                    clearTimeout(typingTimeout);
+                }
+                
+                // Устанавливаем новый таймаут для сброса статуса печати
+                const timeout = setTimeout(() => {
+                    updateDoc(chatRef, { 
+                        [`typingStatus.${user.uid}`]: false
+                    });
+                }, 3000);
+                
+                setTypingTimeout(timeout);
+            } catch (error) {
+                console.error('Ошибка при обновлении статуса печати:', error);
+            }
+        }
+    };
+    
+    // Очищаем таймаут при размонтировании компонента
+    useEffect(() => {
+        return () => {
+            if (typingTimeout) {
+                clearTimeout(typingTimeout);
+            }
+        };
+    }, [typingTimeout]);
+
+    // Добавляем отдельный useEffect для настройки подписки на сообщения
+    useEffect(() => {
+        if (chatId && user && !isLoading) {
+            const unsubscribe = setupMessagesSubscription();
+            
+            return () => {
+                if (unsubscribe) {
+                    unsubscribe();
+                }
+            };
+        }
+    }, [chatId, user, isLoading]);
+
+    const checkFriendStatus = async (partnerId) => {
+        try {
+            if (!user?.uid || !partnerId) return;
+            
+            // Проверяем и обновляем структуру пользовательских полей
+            await ensureUserFields(user.uid);
+            
+            const userRef = doc(db, 'users', user.uid);
+            const userDoc = await getDoc(userRef);
+            
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                const friendsList = userData.friends || [];
+                const friendRequests = userData.friendRequests || [];
+                const sentRequests = userData.sentFriendRequests || [];
+                
+                if (friendsList.includes(partnerId)) {
+                    setFriendRequestStatus('friends');
+                } else if (friendRequests.includes(partnerId)) {
+                    setFriendRequestStatus('received');
+                } else if (sentRequests.includes(partnerId)) {
+                    setFriendRequestStatus('sent');
+                } else {
+                    setFriendRequestStatus('none');
+                }
+            }
+        } catch (error) {
+            console.error('Error checking friend status:', error);
+        }
+    };
+
+    const handleSendFriendRequest = async () => {
+        try {
+            if (!user?.uid || !partnerInfo?.id || partnerInfo.id === 'support') {
+                showToast('Невозможно добавить службу поддержки в друзья', 'error');
+                return;
+            }
+            
+            // Update current user's sent requests
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+                sentFriendRequests: arrayUnion(partnerInfo.id)
+            });
+            
+            // Add to partner's received requests
+            const partnerRef = doc(db, 'users', partnerInfo.id);
+            await updateDoc(partnerRef, {
+                friendRequests: arrayUnion(user.uid)
+            });
+            
+            setFriendRequestStatus('sent');
+            showToast('Запрос в друзья отправлен', 'success');
+        } catch (error) {
+            console.error('Error sending friend request:', error);
+            showToast('Ошибка при отправке запроса', 'error');
+        }
+    };
+
+    const handleAcceptFriendRequest = async () => {
+        try {
+            if (!user?.uid || !partnerInfo?.id) return;
+            
+            // Add to current user's friends and remove from requests
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+                friends: arrayUnion(partnerInfo.id),
+                friendRequests: arrayRemove(partnerInfo.id)
+            });
+            
+            // Add to partner's friends and remove from sent requests
+            const partnerRef = doc(db, 'users', partnerInfo.id);
+            await updateDoc(partnerRef, {
+                friends: arrayUnion(user.uid),
+                sentFriendRequests: arrayRemove(user.uid)
+            });
+            
+            setFriendRequestStatus('friends');
+            showToast('Запрос принят!', 'success');
+        } catch (error) {
+            console.error('Error accepting friend request:', error);
+            showToast('Ошибка при принятии запроса', 'error');
+        }
+    };
+
+    const handleCancelFriendRequest = async () => {
+        try {
+            if (!user?.uid || !partnerInfo?.id) return;
+            
+            // Remove from current user's sent requests
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+                sentFriendRequests: arrayRemove(partnerInfo.id)
+            });
+            
+            // Remove from partner's received requests
+            const partnerRef = doc(db, 'users', partnerInfo.id);
+            await updateDoc(partnerRef, {
+                friendRequests: arrayRemove(user.uid)
+            });
+            
+            setFriendRequestStatus('none');
+            showToast('Запрос отменен', 'info');
+        } catch (error) {
+            console.error('Error cancelling friend request:', error);
+            showToast('Ошибка при отмене запроса', 'error');
+        }
+    };
+
+    const handleRemoveFriend = async () => {
+        try {
+            if (!user?.uid || !partnerInfo?.id) return;
+            
+            // Remove from current user's friends
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+                friends: arrayRemove(partnerInfo.id)
+            });
+            
+            // Remove from partner's friends
+            const partnerRef = doc(db, 'users', partnerInfo.id);
+            await updateDoc(partnerRef, {
+                friends: arrayRemove(user.uid)
+            });
+            
+            setFriendRequestStatus('none');
+            showToast('Удалено из друзей', 'info');
+        } catch (error) {
+            console.error('Error removing friend:', error);
+            showToast('Ошибка при удалении из друзей', 'error');
+        }
+    };
+
+    // Новый метод для открытия диалога жалобы
+    const handleReportClick = () => {
+        setShowReportDialog(true);
+    };
+
     return (
         <div className="chat-container telegram-chat" ref={chatContainerRef}>
             <div className="chat-header">
-                <button className="back-button" onClick={handleBackClick} aria-label="Вернуться назад">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="19" y1="12" x2="5" y2="12"></line>
-                        <polyline points="12 19 5 12 12 5"></polyline>
-                    </svg>
-                </button>
-                <div className="partner-info">
-                    <div className="partner-avatar">
-                        {chat?.type === 'support' ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 12h-8v8h8v-8z"></path>
-                                <path d="M3 12h8V4H3v8z"></path>
-                                <path d="M3 20h8v-4H3v4z"></path>
-                                <path d="M17 4h4v4h-4V4z"></path>
-                            </svg>
-                        ) : (
-                            partnerInfo.profilePicture ? 
-                            <img src={partnerInfo.profilePicture} alt={partnerInfo.name} /> :
-                            <div className="partner-initials">{getInitials(partnerInfo.name)}</div>
-                        )}
-                    </div>
-                    <div className="partner-details">
+                <div className="header-left">
+                    <button 
+                        className="back-button" 
+                        onClick={handleBackClick}
+                    >
+                        <i className="fas fa-arrow-left"></i>
+                    </button>
+                    <div 
+                        className="chat-user-info"
+                        onClick={() => setShowProfileModal(true)}
+                    >
                         <h2>
-                            {chat?.type === 'support' ? 'Техническая поддержка' : partnerInfo.name}
+                            {(chat?.type === 'support' || partnerInfo?.id === 'support') 
+                                ? 'Техническая поддержка' 
+                                : (partnerInfo?.name || 'Собеседник')}
                         </h2>
-                        <UserStatus
-                            isOnline={partnerInfo.isOnline}
-                            lastSeen={partnerInfo.lastSeen}
-                            isSupportChat={chat?.type === 'support'}
+                        <UserStatus 
+                            isOnline={partnerInfo?.isOnline} 
+                            lastSeen={partnerInfo?.lastActive} 
+                            isSupportChat={chat?.type === 'support' || partnerInfo?.id === 'support'} 
+                            className="chat-status"
                         />
-                        {isPartnerTyping && (
-                            <div className="partner-typing">
-                                печатает<span className="typing-dots"><span>.</span><span>.</span><span>.</span></span>
-                            </div>
-                        )}
                     </div>
                 </div>
-                <div className="chat-actions">
-                    <button className="end-chat-btn" onClick={handleEndChatClick} aria-label="Завершить чат">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                <div className="header-actions">
+                    <button
+                        className="header-action-button"
+                        onClick={() => setShowProfileModal(true)}
+                    >
+                        <i className="fas fa-user"></i>
+                    </button>
+                    <button 
+                        className="report-button" 
+                        onClick={handleReportClick} 
+                        title="Пожаловаться"
+                    >
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
                         </svg>
-                        Завершить
                     </button>
                 </div>
             </div>
@@ -520,7 +884,7 @@ const Chat = () => {
                         ) : (
                             <>
                                 {messages.map((message, index) => {
-                                    const isOutgoing = message.senderId === user.id;
+                                    const isOutgoing = message.senderId === user.uid;
                                     const showSenderInfo = !isOutgoing && 
                                                           (index === 0 || 
                                                            messages[index - 1].senderId !== message.senderId);
@@ -551,7 +915,7 @@ const Chat = () => {
                                                 </div>
                                             ) : (
                                                 <div
-                                                    className={`message ${isOutgoing ? 'outgoing' : 'incoming'} ${message.pending ? 'pending' : ''}`}
+                                                    className={`message ${isOutgoing ? 'outgoing' : 'incoming'} ${message.pending ? 'pending' : ''} ${message.senderId === 'support' ? 'support-message' : ''}`}
                                                 >
                                                     <div className="message-content">
                                                         {showSenderInfo && (
@@ -587,7 +951,7 @@ const Chat = () => {
                             type="text"
                             placeholder="Введите сообщение..."
                             value={inputMessage}
-                            onChange={(e) => setInputMessage(e.target.value)}
+                            onChange={handleInputChange}
                             onKeyDown={handleKeyDown}
                             ref={inputRef}
                             disabled={isSending}
@@ -643,6 +1007,125 @@ const Chat = () => {
                     </div>
                 </div>
             )}
+
+            {showProfileModal && (
+                <div className="profile-modal-overlay" onClick={() => setShowProfileModal(false)}>
+                    <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
+                        <button 
+                            className="modal-close-button"
+                            onClick={() => setShowProfileModal(false)}
+                        >
+                            <i className="fas fa-times"></i>
+                        </button>
+                        
+                        <div className="profile-header">
+                            <div className="profile-avatar">
+                                {partnerInfo?.photoURL ? (
+                                    <img src={partnerInfo.photoURL} alt={partnerInfo.name} />
+                                ) : (
+                                    <div className="avatar-placeholder">
+                                        {(chat?.type === 'support' || partnerInfo?.id === 'support') 
+                                            ? 'ТП' 
+                                            : getInitials(partnerInfo?.name || 'Собеседник')}
+                                    </div>
+                                )}
+                            </div>
+                            <h2>
+                                {(chat?.type === 'support' || partnerInfo?.id === 'support') 
+                                    ? 'Техническая поддержка' 
+                                    : (partnerInfo?.name || 'Собеседник')}
+                            </h2>
+                            <UserStatus 
+                                isOnline={partnerInfo?.isOnline} 
+                                lastSeen={partnerInfo?.lastActive} 
+                                isSupportChat={chat?.type === 'support' || partnerInfo?.id === 'support'} 
+                                className="profile-status"
+                            />
+                        </div>
+                        
+                        <div className="profile-info">
+                            {partnerInfo?.bio && (
+                                <div className="info-section">
+                                    <h3>О себе</h3>
+                                    <p>{partnerInfo.bio}</p>
+                                </div>
+                            )}
+                            
+                            {partnerInfo?.interests && partnerInfo.interests.length > 0 && (
+                                <div className="info-section">
+                                    <h3>Интересы</h3>
+                                    <div className="interests-tags">
+                                        {partnerInfo.interests.map((interest, index) => (
+                                            <span key={index} className="interest-tag">{interest}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="profile-actions">
+                            {partnerInfo?.id !== 'support' && !chat?.type?.includes('support') && (
+                                <>
+                                    {friendRequestStatus === 'none' && (
+                                        <button 
+                                            className="action-button add-friend"
+                                            onClick={handleSendFriendRequest}
+                                        >
+                                            <i className="fas fa-user-plus"></i>
+                                            Добавить в друзья
+                                        </button>
+                                    )}
+                                    
+                                    {friendRequestStatus === 'sent' && (
+                                        <button 
+                                            className="action-button cancel-request"
+                                            onClick={handleCancelFriendRequest}
+                                        >
+                                            <i className="fas fa-user-minus"></i>
+                                            Отменить запрос
+                                        </button>
+                                    )}
+                                    
+                                    {friendRequestStatus === 'received' && (
+                                        <button 
+                                            className="action-button accept-request"
+                                            onClick={handleAcceptFriendRequest}
+                                        >
+                                            <i className="fas fa-check"></i>
+                                            Принять запрос в друзья
+                                        </button>
+                                    )}
+                                    
+                                    {friendRequestStatus === 'friends' && (
+                                        <button 
+                                            className="action-button remove-friend"
+                                            onClick={handleRemoveFriend}
+                                        >
+                                            <i className="fas fa-user-minus"></i>
+                                            Удалить из друзей
+                                        </button>
+                                    )}
+                                </>
+                            )}
+                            
+                            {(partnerInfo?.id === 'support' || chat?.type?.includes('support')) && (
+                                <div className="support-info">
+                                    <i className="fas fa-info-circle"></i>
+                                    <p>Это чат с технической поддержкой. Здесь вы можете получить помощь по вопросам работы с приложением.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <ReportDialog 
+                isOpen={showReportDialog}
+                onClose={() => setShowReportDialog(false)}
+                reportedUserId={partnerInfo?.id}
+                chatId={chatId}
+                currentUserId={user?.uid}
+            />
         </div>
     );
 };

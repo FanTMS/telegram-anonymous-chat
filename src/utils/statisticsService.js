@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp, collection, getDocs, query, where } from 'firebase/firestore';
 
 /**
  * Убедиться, что документ статистики существует для пользователя
@@ -158,9 +158,75 @@ export const getUserStatistics = async (userId) => {
     }
 };
 
+/**
+ * Получение общей статистики приложения
+ * @returns {Promise<object>} - Объект с общей статистикой приложения
+ */
+export const getAppStatistics = async () => {
+    try {
+        // Получаем статистику пользователей
+        const usersCollection = collection(db, "users");
+        const usersQuery = await getDocs(usersCollection);
+        const totalUsers = usersQuery.size;
+        
+        // Находим активных пользователей (пользователи, которые использовали приложение в течение последних 24 часов)
+        const oneDayAgo = new Date();
+        oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+        
+        const activeUsersQuery = query(
+            collection(db, "users"),
+            where("lastSeen", ">=", oneDayAgo)
+        );
+        const activeUsersSnapshot = await getDocs(activeUsersQuery);
+        const activeUsers = activeUsersSnapshot.size;
+        
+        // Получаем статистику чатов
+        const chatsCollection = collection(db, "chats");
+        const chatsQuery = await getDocs(chatsCollection);
+        const totalChats = chatsQuery.size;
+        
+        // Находим активные чаты
+        const activeChatsQuery = query(
+            collection(db, "chats"),
+            where("isActive", "==", true)
+        );
+        const activeChatsSnapshot = await getDocs(activeChatsQuery);
+        const activeChats = activeChatsSnapshot.size;
+        
+        // Получаем общее количество сообщений
+        // Так как сообщения могут храниться в отдельной коллекции, нам нужно их подсчитать
+        const messagesCollection = collection(db, "messages");
+        const messagesQuery = await getDocs(messagesCollection);
+        const totalMessages = messagesQuery.size;
+        
+        // Получаем статистику запросов в техподдержку
+        const supportChatsQuery = query(
+            collection(db, "chats"),
+            where("type", "==", "support")
+        );
+        const supportChatsSnapshot = await getDocs(supportChatsQuery);
+        const supportChatsCount = supportChatsSnapshot.size;
+        
+        // Формируем объект статистики
+        return {
+            totalUsers,
+            activeUsers,
+            totalChats,
+            activeChats,
+            totalMessages,
+            supportChatsCount,
+            lastUpdated: new Date()
+        };
+    } catch (error) {
+        console.error("Ошибка при получении общей статистики приложения:", error);
+        throw error;
+    }
+};
+
 export default {
     updateChatStartStatistics,
     updateMessageStatistics,
     updateChatEndStatistics,
-    getUserStatistics
+    getUserStatistics,
+    getAppStatistics
 };
