@@ -4,10 +4,12 @@
     height: 100vh;
     max-width: 768px;
     background-color: var(--tg-theme-bg-color, #ffffff);
-    position: relative;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     overflow: hidden;
-    box-shadow: 0 0 10px rgba(43, 141, 233, 0.1);
-    border-radius: 12px;
     margin: 0 auto;
     width: 100%;
     padding-top: env(safe-area-inset-top, 0);
@@ -33,8 +35,10 @@
     background-color: var(--tg-theme-bg-color, #fff);
     border-bottom: 1px solid rgba(43, 141, 233, 0.1);
     min-height: 54px;
-    position: sticky;
+    position: absolute;
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 100;
     box-shadow: 0 1px 3px rgba(43, 141, 233, 0.08);
 }
@@ -342,9 +346,12 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    position: relative;
-    height: calc(100vh - 54px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
-    padding-bottom: calc(70px + env(safe-area-inset-bottom, 0));
+    position: absolute;
+    top: calc(54px + env(safe-area-inset-top, 0));
+    bottom: calc(60px + env(safe-area-inset-bottom, 0));
+    left: 0;
+    right: 0;
+    padding-bottom: 16px;
     -webkit-overflow-scrolling: touch;
 }
 
@@ -517,7 +524,7 @@
 }
 
 .message-input {
-    position: fixed;
+    position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
@@ -528,7 +535,7 @@
     border-top: 1px solid rgba(0, 0, 0, 0.05);
     z-index: 1000;
     margin: 0;
-    width: 100%;
+    min-height: 60px;
 }
 
 .message-input input {
@@ -791,8 +798,7 @@
 }
 
 .keyboard-open .chat-messages {
-    height: calc(100vh - 54px - var(--keyboard-height, 0) - env(safe-area-inset-top, 0));
-    margin-bottom: var(--keyboard-height, 0);
+    bottom: calc(60px + var(--keyboard-height, 0));
 }
 
 /* Поддержка темной темы */
@@ -850,7 +856,7 @@
 @media (max-width: 767px) {
     .chat-container {
         border-radius: 0;
-        height: 100vh;
+        width: 100%;
     }
 
     .chat-header {
@@ -859,10 +865,6 @@
 
     .message-input {
         padding-bottom: calc(8px + env(safe-area-inset-bottom, 0));
-    }
-
-    .chat-messages {
-        height: calc(100vh - 54px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
     }
 }
 
@@ -872,12 +874,12 @@
         height: -webkit-fill-available;
     }
 
-    .chat-header {
-        padding-top: calc(8px + env(safe-area-inset-top, 0));
+    .chat-messages {
+        top: calc(54px + env(safe-area-inset-top, 0));
+        bottom: calc(60px + env(safe-area-inset-bottom, 0));
     }
 
     .message-input {
-        padding-bottom: calc(8px + env(safe-area-inset-bottom, 0));
         bottom: env(safe-area-inset-bottom, 0);
     }
 }

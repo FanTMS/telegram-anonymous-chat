@@ -257,33 +257,21 @@ const Chat = () => {
 
     // Завершение чата
     const handleEndChat = async () => {
-        try {
-            // Для обычных чатов - стандартное завершение
-            if (!isSupportChat) {
+        // Если это чат поддержки и пользователь не админ, просто возвращаемся к списку чатов
+        if (isSupportChat && !isAdmin) {
+            navigate('/chats');
+            return;
+        }
+
+        // Для всех остальных случаев показываем подтверждение
+        if (window.confirm('Вы уверены, что хотите завершить чат?')) {
+            try {
                 await endChat(chatId);
                 navigate('/chats');
-                return;
+            } catch (error) {
+                console.error('Error ending chat:', error);
+                setError('Не удалось завершить чат');
             }
-
-            // Для чата поддержки - только админ может завершить
-            if (isSupportChat && isAdmin) {
-                const chatRef = doc(db, 'chats', chatId);
-                await updateDoc(chatRef, {
-                    status: 'resolved',
-                    resolvedAt: serverTimestamp(),
-                    resolvedBy: userId
-                });
-
-                // Добавляем системное сообщение о завершении
-                await addDoc(collection(db, 'chats', chatId, 'messages'), {
-                    type: 'system',
-                    text: 'Обращение закрыто специалистом поддержки',
-                    createdAt: serverTimestamp()
-                });
-            }
-        } catch (error) {
-            console.error('Error ending chat:', error);
-            setError('Не удалось завершить чат. Попробуйте позже.');
         }
     };
 
@@ -377,10 +365,11 @@ const Chat = () => {
     return (
         <div className="chat-container" ref={chatContainerRef}>
             <ChatHeader
+                chat={chat}
                 partnerInfo={partnerInfo}
                 isPartnerTyping={isPartnerTyping}
+                onBack={() => isSupportChat && !isAdmin ? navigate('/chats') : handleEndChat()}
                 isSupportChat={isSupportChat}
-                onEndChat={handleEndChat}
                 isAdmin={isAdmin}
             />
 
