@@ -2,17 +2,50 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getChatById, sendChatMessage, subscribeToChatUpdates, endChat } from '../utils/chatService';
 import { useAuth } from '../hooks/useAuth';
+import ChatHeader from './ChatHeader';
 import { db } from '../firebase';
 import { doc, updateDoc, getDoc, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, limit, where } from 'firebase/firestore';
 import DatabaseLoadingIndicator from './DatabaseLoadingIndicator';
 import '../styles/Chat.css';
 
+const RatingMessage = ({ onRate }) => {
+    return (
+        <div className="message system rating-request">
+            <div className="message-content">
+                <div className="message-text">
+                    Пожалуйста, оцените качество поддержки
+                </div>
+                <div className="rating-stars">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                            key={star}
+                            className="rating-star"
+                            onClick={() => onRate(star)}
+                        >
+                            <svg
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            >
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                            </svg>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const Chat = () => {
     const { chatId } = useParams();
     const navigate = useNavigate();
-    const { user, isAuthenticated } = useAuth();
-    
-    // Define userId at the component level for consistent access
+    const { user, isAuthenticated, isAdmin } = useAuth();
     const userId = user?.uid || user?.id;
     
     const [chat, setChat] = useState(null);
@@ -29,6 +62,9 @@ const Chat = () => {
     const inputRef = useRef(null);
     const chatContainerRef = useRef(null);
     
+    // Определяем, является ли чат чатом технической поддержки
+    const isSupportChat = chat?.type === 'support';
+
     // Проверка соединения с базой данных
     useEffect(() => {
         const checkDbConnection = async () => {
@@ -221,22 +257,33 @@ const Chat = () => {
 
     // Завершение чата
     const handleEndChat = async () => {
-        if (!chatId || !isAuthenticated) return;
-
         try {
-            await endChat(chatId);
-            
-            // Обновляем статус чата в Firebase
-            await updateDoc(doc(db, 'chats', chatId), {
-                isActive: false,
-                endedAt: serverTimestamp(),
-                endedBy: userId
-            });
-            
-            navigate('/'); // Переходим на главную страницу
-        } catch (err) {
-            console.error("Ошибка при завершении чата:", err);
-            setError('Не удалось завершить чат');
+            // Для обычных чатов - стандартное завершение
+            if (!isSupportChat) {
+                await endChat(chatId);
+                navigate('/chats');
+                return;
+            }
+
+            // Для чата поддержки - только админ может завершить
+            if (isSupportChat && isAdmin) {
+                const chatRef = doc(db, 'chats', chatId);
+                await updateDoc(chatRef, {
+                    status: 'resolved',
+                    resolvedAt: serverTimestamp(),
+                    resolvedBy: userId
+                });
+
+                // Добавляем системное сообщение о завершении
+                await addDoc(collection(db, 'chats', chatId, 'messages'), {
+                    type: 'system',
+                    text: 'Обращение закрыто специалистом поддержки',
+                    createdAt: serverTimestamp()
+                });
+            }
+        } catch (error) {
+            console.error('Error ending chat:', error);
+            setError('Не удалось завершить чат. Попробуйте позже.');
         }
     };
 
@@ -265,6 +312,27 @@ const Chat = () => {
             } catch (err) {
                 console.error('Ошибка при обновлении статуса печати:', err);
             }
+        }
+    };
+
+    const handleRating = async (rating) => {
+        try {
+            const chatRef = doc(db, 'chats', chatId);
+            await updateDoc(chatRef, {
+                rating,
+                waitingForRating: false,
+                ratedAt: serverTimestamp()
+            });
+
+            // Добавляем сообщение с оценкой
+            await addDoc(collection(db, 'chats', chatId, 'messages'), {
+                type: 'system',
+                text: `Вы оценили качество поддержки на ${rating} ${rating === 1 ? 'звезду' : 
+                    rating < 5 ? 'звезды' : 'звёзд'}`,
+                createdAt: serverTimestamp()
+            });
+        } catch (error) {
+            console.error('Error rating chat:', error);
         }
     };
 
@@ -308,36 +376,13 @@ const Chat = () => {
 
     return (
         <div className="chat-container" ref={chatContainerRef}>
-            <div className="chat-header">
-                <div className="partner-info">
-                    <div className="partner-avatar">
-                        {partnerInfo.avatar ? (
-                            <img src={partnerInfo.avatar} alt="Аватар собеседника" />
-                        ) : (
-                            <div className="partner-initials">
-                                {partnerInfo.name.charAt(0).toUpperCase()}
-                            </div>
-                        )}
-                    </div>
-                    <div className="partner-details">
-                        <h2>{partnerInfo.name}</h2>
-                        {isPartnerTyping ? (
-                            <span className="partner-typing">печатает...</span>
-                        ) : partnerInfo.lastSeen && (
-                            <span className="partner-status">
-                                {typeof partnerInfo.lastSeen === 'object' && partnerInfo.lastSeen.seconds
-                                    ? `был(а) онлайн ${new Date(partnerInfo.lastSeen.seconds * 1000).toLocaleString()}`
-                                    : 'в сети'}
-                            </span>
-                        )}
-                    </div>
-                </div>
-                <div className="chat-actions">
-                    <button className="end-chat-btn" onClick={handleEndChat}>
-                        Завершить чат
-                    </button>
-                </div>
-            </div>
+            <ChatHeader
+                partnerInfo={partnerInfo}
+                isPartnerTyping={isPartnerTyping}
+                isSupportChat={isSupportChat}
+                onEndChat={handleEndChat}
+                isAdmin={isAdmin}
+            />
 
             <div className="chat-messages">
                 {messages.length === 0 ? (
@@ -346,19 +391,24 @@ const Chat = () => {
                         <p>Нет сообщений. Начните общение прямо сейчас!</p>
                     </div>
                 ) : (
-                    messages.map((msg, index) => {
-                        // Определяем, является ли сообщение исходящим
-                        const isOutgoing = userId && (msg.senderId === userId || msg.userId === userId);
+                    messages.map((message, index) => {
+                        if (message.type === 'rating_request' && chat?.waitingForRating) {
+                            return <RatingMessage key={message.id || index} onRate={handleRating} />;
+                        }
+
                         return (
-                            <div
-                                key={msg.id || index}
-                                className={`message ${isOutgoing ? 'outgoing' : 'incoming'}`}
+                            <div 
+                                key={message.id || index}
+                                className={`message ${
+                                    message.type === 'system' ? 'system' : 
+                                    message.senderId === userId ? 'outgoing' : 'incoming'
+                                }`}
                             >
                                 <div className="message-content">
-                                    <p>{typeof msg.text === 'string' ? msg.text : JSON.stringify(msg.text)}</p>
-                                    <span className="message-time">
-                                        {new Date(msg.timestamp || msg.clientTimestamp || new Date()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
+                                    <div className="message-text">{message.text}</div>
+                                    <div className="message-time">
+                                        {new Date(message.createdAt || message.timestamp || message.clientTimestamp || new Date()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
                                 </div>
                             </div>
                         );

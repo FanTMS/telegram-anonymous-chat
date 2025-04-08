@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getGroupMessages, sendGroupMessage, joinGroup } from '../../services/groupService';
 import { formatMessageTime } from '../../utils/dateUtils';
 import connectionService from '../../utils/firebaseConnectionService';
+import MessageInput from '../MessageInput';
 
 const MessagesContainer = styled.div`
   display: flex;
@@ -11,6 +12,14 @@ const MessagesContainer = styled.div`
   flex: 1;
   overflow: hidden;
   background-color: var(--tg-theme-bg-color, #fff);
+  height: 100vh;
+  position: relative;
+  
+  @media (min-width: 481px) {
+    height: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+  }
 `;
 
 const MessagesList = styled.div`
@@ -19,8 +28,10 @@ const MessagesList = styled.div`
   flex: 1;
   overflow-y: auto;
   padding: 16px;
+  padding-bottom: calc(80px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   scroll-behavior: smooth;
-  padding-bottom: calc(16px + var(--safe-area-inset-bottom, 0px) + 60px);
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 0;
   
   &::-webkit-scrollbar {
     width: 6px;
@@ -34,51 +45,6 @@ const MessagesList = styled.div`
   &::-webkit-scrollbar-thumb {
     background: var(--tg-theme-hint-color, rgba(0, 0, 0, 0.2));
     border-radius: 3px;
-  }
-`;
-
-const InputArea = styled.form`
-  display: flex;
-  padding: 8px 16px;
-  background-color: var(--tg-theme-bg-color, #fff);
-  border-top: 1px solid var(--tg-theme-secondary-bg-color, rgba(0, 0, 0, 0.05));
-  position: sticky;
-  bottom: 0;
-  padding-bottom: calc(16px + var(--safe-area-inset-bottom, 0px));
-  z-index: 2;
-`;
-
-const MessageInput = styled.input`
-  flex: 1;
-  border: 1px solid var(--tg-theme-hint-color, rgba(0, 0, 0, 0.2));
-  border-radius: 18px;
-  padding: 10px 16px;
-  font-size: 14px;
-  background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
-  color: var(--tg-theme-text-color, #000);
-
-  &:focus {
-    outline: none;
-    border-color: var(--tg-theme-button-color, #2481cc);
-  }
-`;
-
-const SendButton = styled.button`
-  background-color: var(--tg-theme-button-color, #2481cc);
-  color: var(--tg-theme-button-text-color, #fff);
-  border: none;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  margin-left: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 `;
 
@@ -205,7 +171,6 @@ const EmptyMessagesContainer = styled.div`
 
 const GroupMessages = ({ groupId, user, isMember }) => {
     const [messages, setMessages] = useState([]);
-    const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [isSending, setIsSending] = useState(false);
@@ -518,24 +483,11 @@ const GroupMessages = ({ groupId, user, isMember }) => {
                 <div ref={messagesEndRef} />
             </MessagesList>
 
-            <InputArea onSubmit={(e) => {
-                e.preventDefault();
-                handleSendMessage(message);
-                setMessage('');
-            }}>
-                <MessageInput
-                    type="text"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Введите сообщение..."
-                    disabled={isSending}
-                />
-                <SendButton type="submit" disabled={!message.trim() || isSending}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                    </svg>
-                </SendButton>
-            </InputArea>
+            <MessageInput
+                onSendMessage={handleSendMessage}
+                disabled={isSending}
+                placeholder="Введите сообщение..."
+            />
         </MessagesContainer>
     );
 };

@@ -5,65 +5,101 @@ import connectionService from '../utils/firebaseConnectionService';
 const InputContainer = styled.form`
   display: flex;
   align-items: center;
-  padding: 8px 12px;
-  background-color: #f5f5f5;
-  border-top: 1px solid #e0e0e0;
-  position: relative;
+  padding: 12px 16px;
+  background-color: var(--tg-theme-bg-color, #ffffff);
+  border-top: 1px solid var(--tg-theme-secondary-bg-color, rgba(0, 0, 0, 0.1));
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding-bottom: calc(12px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  width: 100%;
+  margin: 0;
+  
+  @media (min-width: 481px) {
+    position: absolute;
+    width: 100%;
+    max-width: 480px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
 `;
 
 const MessageTextarea = styled.textarea`
   flex: 1;
-  border: 1px solid #ddd;
-  border-radius: 18px;
-  padding: 8px 12px;
+  border: 1px solid var(--tg-theme-secondary-bg-color, rgba(0, 0, 0, 0.1));
+  border-radius: 20px;
+  padding: 10px 16px;
   font-size: 15px;
   resize: none;
   max-height: 120px;
   min-height: 40px;
   line-height: 20px;
   outline: none;
+  background-color: var(--tg-theme-secondary-bg-color, #f5f5f5);
+  color: var(--tg-theme-text-color, #000000);
   
   &:focus {
-    border-color: #0088cc;
+    border-color: var(--tg-theme-button-color, #3390ec);
+    background-color: var(--tg-theme-bg-color, #ffffff);
+  }
+  
+  &::placeholder {
+    color: var(--tg-theme-hint-color, #999999);
   }
 `;
 
 const SendButton = styled.button`
-  background-color: #0088cc;
-  color: white;
+  background-color: var(--tg-theme-button-color, #3390ec);
+  color: var(--tg-theme-button-text-color, #ffffff);
   border: none;
   border-radius: 50%;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   margin-left: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: transform 0.2s ease, background-color 0.2s ease;
   
   &:disabled {
-    background-color: #cccccc;
+    background-color: var(--tg-theme-secondary-bg-color, #cccccc);
     cursor: not-allowed;
+  }
+  
+  &:active {
+    transform: scale(0.95);
   }
   
   svg {
     width: 20px;
     height: 20px;
+    fill: currentColor;
   }
 `;
 
 const OfflineIndicator = styled.div`
   position: absolute;
-  top: -24px;
+  top: -32px;
   left: 0;
   right: 0;
   background-color: #ffcc00;
-  color: #333;
-  padding: 4px;
+  color: #333333;
+  padding: 6px;
   text-align: center;
-  font-size: 12px;
+  font-size: 13px;
   opacity: ${props => props.$visible ? '1' : '0'};
   transition: opacity 0.3s ease;
+  transform: translateY(${props => props.$visible ? '0' : '100%'});
+  
+  @media (min-width: 481px) {
+    max-width: 480px;
+    left: 50%;
+    transform: translateX(-50%) translateY(${props => props.$visible ? '0' : '100%'});
+    border-radius: 8px 8px 0 0;
+  }
 `;
 
 const MessageInput = ({ onSendMessage, disabled, placeholder = "Введите сообщение..." }) => {

@@ -12,38 +12,48 @@ import { safeHapticFeedback, safeShowPopup } from '../../utils/telegramWebAppUti
 const GroupContainer = styled.div`
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100vh;
+  background-color: var(--tg-theme-bg-color, #ffffff);
+  position: relative;
+  
+  @media (min-width: 481px) {
+    height: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+    border-left: 1px solid var(--tg-theme-secondary-bg-color, rgba(0, 0, 0, 0.1));
+    border-right: 1px solid var(--tg-theme-secondary-bg-color, rgba(0, 0, 0, 0.1));
+  }
 `;
 
 const GroupDetailContainer = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 0;
-  background-color: var(--tg-theme-bg-color, #fff);
+  background-color: var(--tg-theme-bg-color, #ffffff);
+  padding-bottom: calc(80px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 `;
 
 const GroupHeader = styled.div`
   padding: 16px;
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid var(--tg-theme-secondary-bg-color, rgba(0, 0, 0, 0.05));
+  border-bottom: 1px solid var(--tg-theme-secondary-bg-color, rgba(0, 0, 0, 0.1));
   position: sticky;
   top: 0;
-  background-color: var(--tg-theme-bg-color, #fff);
+  background-color: var(--tg-theme-bg-color, #ffffff);
   z-index: 10;
 `;
 
 const GroupTitle = styled.h1`
   font-size: 20px;
   margin: 0 0 8px 0;
-  color: var(--tg-theme-text-color, #000);
+  color: var(--tg-theme-text-color, #000000);
 `;
 
 const GroupDescription = styled.p`
   font-size: 14px;
   margin: 0 0 12px 0;
-  color: var(--tg-theme-hint-color, #999);
+  color: var(--tg-theme-hint-color, #999999);
 `;
 
 const GroupInfo = styled.div`
@@ -51,7 +61,7 @@ const GroupInfo = styled.div`
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
-  color: var(--tg-theme-hint-color, #999);
+  color: var(--tg-theme-hint-color, #999999);
 `;
 
 const GroupContent = styled.div`
@@ -59,6 +69,7 @@ const GroupContent = styled.div`
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 `;
 
 const GroupAvatar = styled.div`

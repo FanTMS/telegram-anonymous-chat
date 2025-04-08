@@ -383,3 +383,114 @@ export const createSupportChat = async (userId) => {
         return null;
     }
 };
+
+// Создание нового обращения в поддержку
+export const createSupportTicket = async (userId, initialMessage) => {
+    try {
+        // Проверяем, нет ли уже активного обращения
+        const activeTicketQuery = query(
+            collection(db, 'chats'),
+            where('userId', '==', userId),
+            where('type', '==', 'support'),
+            where('status', '==', 'active')
+        );
+
+        const activeTickets = await getDocs(activeTicketQuery);
+        if (!activeTickets.empty) {
+            // Возвращаем ID существующего активного обращения
+            return activeTickets.docs[0].id;
+        }
+
+        // Создаем новое обращение
+        const chatRef = await addDoc(collection(db, 'chats'), {
+            type: 'support',
+            userId,
+            status: 'active',
+            createdAt: serverTimestamp(),
+            lastMessage: initialMessage,
+            lastMessageAt: serverTimestamp(),
+            unreadBySupport: true,
+            unreadByUser: false
+        });
+
+        // Добавляем первое сообщение
+        await addDoc(collection(db, 'chats', chatRef.id, 'messages'), {
+            text: initialMessage,
+            senderId: userId,
+            createdAt: serverTimestamp(),
+            type: 'user'
+        });
+
+        return chatRef.id;
+    } catch (error) {
+        console.error('Error creating support ticket:', error);
+        throw error;
+    }
+};
+
+// Завершение обращения в поддержку
+export const resolveSupportTicket = async (chatId, adminId) => {
+    try {
+        const chatRef = doc(db, 'chats', chatId);
+        await updateDoc(chatRef, {
+            status: 'resolved',
+            resolvedAt: serverTimestamp(),
+            resolvedBy: adminId
+        });
+
+        // Добавляем системное сообщение
+        await addDoc(collection(db, 'chats', chatId, 'messages'), {
+            type: 'system',
+            text: 'Обращение закрыто специалистом поддержки',
+            createdAt: serverTimestamp()
+        });
+
+        return true;
+    } catch (error) {
+        console.error('Error resolving support ticket:', error);
+        throw error;
+    }
+};
+
+// Получение истории обращений пользователя
+export const getUserSupportHistory = async (userId) => {
+    try {
+        const historyQuery = query(
+            collection(db, 'chats'),
+            where('userId', '==', userId),
+            where('type', '==', 'support'),
+            orderBy('createdAt', 'desc'),
+            limit(10)
+        );
+
+        const history = await getDocs(historyQuery);
+        return history.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+    } catch (error) {
+        console.error('Error getting support history:', error);
+        throw error;
+    }
+};
+
+// Получение активных обращений для админов
+export const getActiveSupportTickets = async () => {
+    try {
+        const activeTicketsQuery = query(
+            collection(db, 'chats'),
+            where('type', '==', 'support'),
+            where('status', '==', 'active'),
+            orderBy('createdAt', 'desc')
+        );
+
+        const tickets = await getDocs(activeTicketsQuery);
+        return tickets.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+    } catch (error) {
+        console.error('Error getting active tickets:', error);
+        throw error;
+    }
+};

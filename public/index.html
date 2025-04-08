@@ -13,6 +13,8 @@
     <meta name="apple-mobile-web-app-title" content="Telegram Anonymous Chat" />
     <meta name="format-detection" content="telephone=no" />
     <meta name="description" content="Анонимный чат в Telegram для общения с незнакомцами" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-touch-fullscreen" content="yes" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <title>Telegram Anonymous Chat</title>
@@ -22,6 +24,10 @@
             let vh = window.innerHeight * 0.01;
             document.documentElement.style.setProperty('--tg-viewport-height', `${window.innerHeight}px`);
             document.documentElement.style.setProperty('--vh', `${vh}px`);
+            
+            // Для безопасных зон мы не устанавливаем значения в JavaScript,
+            // так как CSS переменные env() не доступны в JS
+            // Они будут использованы непосредственно в CSS через var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))
         }
 
         window.addEventListener('resize', setViewportHeight);
