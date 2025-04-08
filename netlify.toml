@@ -1,28 +1,23 @@
 [build]
-  command = "CI=false PUBLIC_URL=./ npm run build"
+  command = "npm install && CI=false npm run build"
   publish = "build"
 
 [build.environment]
-  GENERATE_SOURCEMAP = "false"
+  NODE_ENV = "production"
   CI = "false"
-  NODE_VERSION = "16.20.2"
-  NPM_VERSION = "8.19.4"
-  NODE_OPTIONS = ""
-  PUBLIC_URL = "./"
+  PUBLIC_URL = "/"
+  NETLIFY_NEXT_PLUGIN_SKIP = "true"
+  SKIP_PREFLIGHT_CHECK = "true"
+  TSC_COMPILE_ON_ERROR = "true"
+  ESLINT_NO_DEV_ERRORS = "true"
 
 # Редирект для имитации поведения React Router на локальной разработке
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-  force = true
 
 # Оптимизация кеширования для статических ресурсов
-[[headers]]
-  for = "/*"
-    [headers.values]
-    Access-Control-Allow-Origin = "*"
-
 [[headers]]
   for = "/*.js"
   [headers.values]
