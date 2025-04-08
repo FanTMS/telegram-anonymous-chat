@@ -25,14 +25,14 @@
     },
     "scripts": {
         "init": "node scripts/init-project.js",
-        "start": "react-scripts start",
+        "start": "set \"GENERATE_SOURCEMAP=false\" && react-scripts start",
         "prepare": "node scripts/prepare-project.js",
         "create-logos": "node scripts/create-logos.js",
         "create-indexes": "node scripts/create-firestore-indexes.js",
         "fix-paths": "node scripts/fix-static-paths.js",
         "ensure-index": "node scripts/ensure-index.js",
         "prestart": "npm run fix-paths",
-        "build": "cross-env DISABLE_ESLINT_PLUGIN=true react-scripts build && cp public/_redirects build/ && cp public/404.html build/"
+        "build": "GENERATE_SOURCEMAP=false react-scripts build && cp -r public/_redirects public/404.html build/"
     },
     "eslintConfig": {
         "extends": [

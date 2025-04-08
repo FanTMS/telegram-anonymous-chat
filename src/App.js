@@ -304,7 +304,7 @@ function App() {
                 console.error('Error initializing Telegram WebApp:', error);
             }
         };
-
+        
         initTelegram();
     }, []);
 
@@ -406,84 +406,84 @@ function App() {
 
     return (
         <div className="app-container">
-            <ToastProvider>
-                <NotificationProvider>
+        <ToastProvider>
+            <NotificationProvider>
                     <PageTransition>
-                        <Routes>
-                            <Route path="/register" element={<RegistrationForm />} />
-                            <Route path="/onboarding" element={<OnboardingTutorial />} />
-                            
+                            <Routes>
+                                <Route path="/register" element={<RegistrationForm />} />
+                                <Route path="/onboarding" element={<OnboardingTutorial />} />
+                                
                             <Route path="/" element={
-                                <ProtectedRoute>
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <Home />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/chats" element={
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <ChatsList />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/chat/:chatId" element={
+                                    <ProtectedRoute>
                                     <AppLayout>
-                                        <Home />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/chats" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <ChatsList />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/chat/:chatId" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <Chat />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
+                                            <Chat />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
                             <Route path="/random" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <RandomChat />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/profile" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <Profile />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/groups" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <Groups />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <RandomChat />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/profile" element={
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <Profile />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/groups" element={
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <Groups />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
                             <Route path="/groups/create" element={
-                                <ProtectedRoute>
+                                    <ProtectedRoute>
                                     <AppLayout>
                                         <GroupCreate />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
                             <Route path="/groups/:groupId" element={
-                                <ProtectedRoute>
+                                    <ProtectedRoute>
                                     <AppLayout>
                                         <GroupDetail />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/groups/:groupId/edit" element={
-                                <ProtectedRoute>
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/groups/:groupId/edit" element={
+                                    <ProtectedRoute>
                                     <AppLayout>
-                                        <GroupEdit />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
+                                            <GroupEdit />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
                             
                             <Route path="/friends" element={
                                 <ProtectedRoute>
@@ -492,31 +492,31 @@ function App() {
                                     </AppLayout>
                                 </ProtectedRoute>
                             } />
-                            
-                            <Route path="/guide" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <BeginnerGuide />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
+                                
+                                <Route path="/guide" element={
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <BeginnerGuide />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
                             <Route path="/support" element={
                                 <ProtectedRoute>
-                                    <AppLayout>
-                                        <AdminSupport />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/support/diagnostics" element={
-                                <ProtectedRoute>
-                                    <AppLayout>
-                                        <SupportDiagnostics />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
+                                        <AppLayout>
+                                            <AdminSupport />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/support/diagnostics" element={
+                                    <ProtectedRoute>
+                                        <AppLayout>
+                                            <SupportDiagnostics />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
                             <Route path="/admin" element={
                                 <ProtectedRoute adminOnly>
                                     <AppLayout>
@@ -527,20 +527,20 @@ function App() {
                             
                             <Route path="/admin/dashboard" element={
                                 <ProtectedRoute adminOnly>
-                                    <AppLayout>
+                                        <AppLayout>
                                         <AdminDashboard />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/admin/config" element={
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/admin/config" element={
                                 <ProtectedRoute adminOnly>
-                                    <AppLayout>
-                                        <AdminConfig />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
+                                        <AppLayout>
+                                            <AdminConfig />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
                             <Route path="/admin/utility" element={
                                 <ProtectedRoute adminOnly>
                                     <AppLayout>
@@ -548,36 +548,36 @@ function App() {
                                     </AppLayout>
                                 </ProtectedRoute>
                             } />
-                            
-                            <Route path="/admin/reports" element={
+                                
+                                <Route path="/admin/reports" element={
                                 <ProtectedRoute adminOnly>
-                                    <AppLayout>
-                                        <AdminReports />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/admin/stats" element={
+                                        <AppLayout>
+                                            <AdminReports />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/admin/stats" element={
                                 <ProtectedRoute adminOnly>
-                                    <AppLayout>
-                                        <AdminStats />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="/admin/users" element={
+                                        <AppLayout>
+                                            <AdminStats />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="/admin/users" element={
                                 <ProtectedRoute adminOnly>
-                                    <AppLayout>
-                                        <AdminUsers />
-                                    </AppLayout>
-                                </ProtectedRoute>
-                            } />
-                            
-                            <Route path="*" element={<NotFoundPage />} />
-                        </Routes>
+                                        <AppLayout>
+                                            <AdminUsers />
+                                        </AppLayout>
+                                    </ProtectedRoute>
+                                } />
+                                
+                                <Route path="*" element={<NotFoundPage />} />
+                            </Routes>
                     </PageTransition>
-                </NotificationProvider>
-            </ToastProvider>
+            </NotificationProvider>
+        </ToastProvider>
         </div>
     );
 }
