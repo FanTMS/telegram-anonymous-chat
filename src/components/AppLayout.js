@@ -70,7 +70,7 @@ const navigationItems = [
         path: '/',
         label: 'Главная',
         icon: 'home',
-        includesPaths: ['/home']
+        includesPaths: []
     },
     {
         path: '/chats',

@@ -421,6 +421,10 @@ function App() {
                                     </ProtectedRoute>
                                 } />
                                 
+                                <Route path="/home" element={
+                                    <Navigate to="/" replace />
+                                } />
+                                
                                 <Route path="/chats" element={
                                     <ProtectedRoute>
                                         <AppLayout>
@@ -592,43 +596,29 @@ const Root = () => {
     console.log('Root компонент загружен. Текущий путь:', location.pathname);
     console.log('Root: isAuthenticated =', isAuthenticated, 'loading =', loading);
     
-    // Добавляем безопасный механизм перенаправления с защитой от зацикливания
     useEffect(() => {
         console.log('Root: useEffect для перенаправления запущен');
         
-        // Если еще загружается, ждем
         if (loading) {
             console.log('Root: Загрузка еще не завершена, ожидаем...');
             return;
         }
 
-        // Если слишком много попыток перенаправления, значит что-то не так
         if (redirectAttempts > 5) {
             console.error('Root: Слишком много попыток перенаправления. Возможно, есть проблема с маршрутизацией.');
             return;
         }
 
-        // Увеличиваем счетчик попыток
         setRedirectAttempts(prev => prev + 1);
 
-        // Проверяем, находимся ли мы на странице регистрации или onboarding
         const isRegisterPath = location.pathname === '/register' || location.pathname === '/onboarding';
         
-        // Используем setTimeout, чтобы дать приложению время на обработку состояния
         const redirectTimer = setTimeout(() => {
-            // Перенаправление на соответствующую страницу
             try {
                 if (isAuthenticated && isRegisterPath) {
-                    // Если пользователь авторизован, но находится на странице регистрации,
-                    // перенаправляем его на домашнюю страницу
-                    console.log('Пользователь аутентифицирован, но находится на странице регистрации. Перенаправление на /home');
-                    navigate('/home', { replace: true });
-                } else if (isAuthenticated && location.pathname === '/') {
-                    // Если пользователь авторизован и находится на корневой странице
-                    console.log('Пользователь аутентифицирован, перенаправление на /home');
-                    navigate('/home', { replace: true });
+                    console.log('Пользователь аутентифицирован, но находится на странице регистрации. Перенаправление на /');
+                    navigate('/', { replace: true });
                 } else if (!isAuthenticated && !isRegisterPath && location.pathname !== '/') {
-                    // Если пользователь не авторизован и не находится на странице регистрации
                     console.log('Пользователь не аутентифицирован, перенаправление на /register');
                     navigate('/register', { replace: true });
                 }
@@ -640,9 +630,8 @@ const Root = () => {
         return () => {
             clearTimeout(redirectTimer);
         };
-    }, [isAuthenticated, loading, navigate, redirectAttempts, location.pathname]);
+    }, [isAuthenticated, loading, location.pathname, navigate, redirectAttempts]);
     
-    // Показываем загрузку во время проверки аутентификации
     return (
         <div className="loading-screen">
             <div className="loading-spinner"></div>

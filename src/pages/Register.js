@@ -24,7 +24,7 @@ const Register = () => {
             if (user) {
                 // Перенаправляем, только если это не страница регистрации
                 if (location.pathname === '/register') {
-                    navigate('/home');
+                    navigate('/');
                 }
             }
             setIsLoading(false);
@@ -51,7 +51,7 @@ const Register = () => {
         return () => {
             unsubscribe();
         };
-    }, [location, navigate]);
+    }, [navigate, location.pathname]);
 
     // Варианты анимации для страницы
     const pageVariants = {
