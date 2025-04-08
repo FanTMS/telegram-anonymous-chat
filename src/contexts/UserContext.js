@@ -282,22 +282,34 @@ export const UserProvider = ({ children }) => {
                             const userData = userDoc.data();
                             console.log('UserContext: Данные пользователя получены из Firestore:', userData);
                             
-                            // Убедимся, что у нас есть ID для сохранения в кэш и для проверки
-                            if (!userData.id) {
-                                userData.id = savedUserId;
-                            }
-                            
-                            if (userData.id) {
-                                // Сохраняем полученные данные в кэш
-                                saveUserToStorage(userData);
+                            // Проверяем, не удален ли пользователь
+                            if (userData.deleted || userData.status === 'deleted' || userData.status === 'banned') {
+                                console.log('UserContext: Пользователь удален или заблокирован');
+                                // Очищаем данные пользователя из хранилища
+                                localStorage.removeItem('current_user_id');
+                                sessionStorage.removeItem('current_user_id');
+                                localStorage.removeItem('current_user');
+                                sessionStorage.removeItem('current_user');
+                                // Не устанавливаем пользователя в состояние
+                                setUser(null);
+                            } else {
+                                // Убедимся, что у нас есть ID для сохранения в кэш и для проверки
+                                if (!userData.id) {
+                                    userData.id = savedUserId;
+                                }
                                 
-                                // Устанавливаем пользователя
-                                setUser(userData);
-                                
-                                // Обновляем данные о последней активности
-                                await setDoc(userRef, {
-                                    lastActive: serverTimestamp()
-                                }, { merge: true });
+                                if (userData.id) {
+                                    // Сохраняем полученные данные в кэш
+                                    saveUserToStorage(userData);
+                                    
+                                    // Устанавливаем пользователя
+                                    setUser(userData);
+                                    
+                                    // Обновляем данные о последней активности
+                                    await setDoc(userRef, {
+                                        lastActive: serverTimestamp()
+                                    }, { merge: true });
+                                }
                             }
                         } else {
                             console.log('UserContext: Пользователь не найден в Firestore');

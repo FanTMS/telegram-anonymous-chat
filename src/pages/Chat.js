@@ -383,6 +383,13 @@ const Chat = () => {
                         timestamp: doc.data().timestamp?.toDate() || new Date()
                     };
                     
+                    // Безопасно удаляем telegramData для предотвращения ошибки React #31
+                    if (messageData.telegramData) {
+                        // Получаем необходимые данные и затем удаляем telegramData
+                        // const tgName = messageData.telegramData.firstName || '';
+                        delete messageData.telegramData;
+                    }
+                    
                     // Если сообщение новое или изменилось, отмечаем, что есть изменения
                     if (!existingMessagesMap[doc.id]) {
                         hasChanges = true;
@@ -571,6 +578,8 @@ const Chat = () => {
                 pending: true,
                 isTemp: true
             };
+            
+            // Не добавляем telegramData в tempMessage, чтобы избежать ошибки React #31
 
             // Добавляем временное сообщение в список
             setMessages(prevMessages => [...prevMessages, tempMessage]);
