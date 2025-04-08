@@ -3,8 +3,8 @@
     "version": "0.1.0",
     "private": true,
     "engines": {
-        "node": "16.20.2",
-        "npm": "8.19.4"
+        "node": ">=16.0.0",
+        "npm": ">=8.0.0"
     },
     "dependencies": {
         "@tma.js/sdk": "^2.7.0",
@@ -19,12 +19,9 @@
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-router-dom": "^6.20.0",
-        "react-scripts": "4.0.3",
+        "react-scripts": "5.0.1",
         "react-transition-group": "^4.4.5",
         "styled-components": "^6.1.17"
-    },
-    "devDependencies": {
-        "@babel/plugin-proposal-private-property-in-object": "^7.21.11"
     },
     "scripts": {
         "init": "node scripts/init-project.js",
@@ -35,8 +32,7 @@
         "fix-paths": "node scripts/fix-static-paths.js",
         "ensure-index": "node scripts/ensure-index.js",
         "prestart": "npm run fix-paths",
-        "build": "react-scripts build && npm run copy-redirects",
-        "copy-redirects": "node scripts/copy-redirects.js"
+        "build": "cross-env DISABLE_ESLINT_PLUGIN=true react-scripts build && cp public/_redirects build/ && cp public/404.html build/"
     },
     "eslintConfig": {
         "extends": [
@@ -56,11 +52,9 @@
             "last 1 safari version"
         ]
     },
-    "resolutions": {
-        "react-error-overlay": "6.0.9"
-    },
-    "overrides": {
-        "react-error-overlay": "6.0.9"
+    "resolutions": {},
+    "overrides": {},
+    "devDependencies": {
     },
     "description": "1. Клонируйте репозиторий\r 2. Установите зависимости: `npm install`\r 3. Запустите приложение: `npm start`",
     "main": ".eslintrc.js",
@@ -74,5 +68,5 @@
     "bugs": {
         "url": "https://github.com/FanTMS/telegram-anonymous-chat/issues"
     },
-    "homepage": "."
+    "homepage": "/"
 }

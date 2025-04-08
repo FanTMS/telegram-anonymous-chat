@@ -390,21 +390,6 @@ const RandomChat = () => {
         }
     }, [isAuthenticated, user, isSearching, dbLoading]);
 
-    const startSearchTimer = () => {
-        setSearchTime(0);
-        const timer = setInterval(() => {
-            setSearchTime(prevTime => prevTime + 1);
-        }, 1000);
-        return timer;
-    };
-
-    useEffect(() => {
-        if (isSearching) {
-            const timer = startSearchTimer();
-            return () => clearInterval(timer);
-        }
-    }, [isSearching]);
-
     // Отображаем индикатор загрузки базы данных
     if (dbLoading) {
         return <DatabaseLoadingIndicator onComplete={handleDbLoadComplete} />;

@@ -7,46 +7,6 @@ import { db } from '../firebase';
 import { doc, updateDoc, getDoc, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, limit, where } from 'firebase/firestore';
 import DatabaseLoadingIndicator from './DatabaseLoadingIndicator';
 import '../styles/Chat.css';
-import styled from 'styled-components';
-import Message from './Message';
-import ChatInput from './ChatInput';
-
-const ChatContainer = styled.div`
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    width: 100%;
-    overflow: hidden;
-    background-color: var(--tg-theme-bg-color);
-`;
-
-const MessagesContainer = styled.div`
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: var(--app-spacing-sm);
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: contain;
-    scroll-behavior: smooth;
-    
-    /* Hide scrollbar for Chrome, Safari and Opera */
-    &::-webkit-scrollbar {
-        display: none;
-    }
-    
-    /* Hide scrollbar for IE, Edge and Firefox */
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-`;
-
-const InputWrapper = styled.div`
-    padding: var(--app-spacing-sm);
-    background-color: var(--tg-theme-bg-color);
-    border-top: 1px solid var(--tg-theme-secondary-bg-color);
-    position: relative;
-    z-index: 2;
-    flex-shrink: 0;
-`;
 
 const RatingMessage = ({ onRate }) => {
     return (
@@ -415,7 +375,7 @@ const Chat = () => {
     }
 
     return (
-        <ChatContainer ref={chatContainerRef}>
+        <div className="chat-container" ref={chatContainerRef}>
             <ChatHeader
                 partnerInfo={partnerInfo}
                 isPartnerTyping={isPartnerTyping}
@@ -424,7 +384,7 @@ const Chat = () => {
                 isAdmin={isAdmin}
             />
 
-            <MessagesContainer>
+            <div className="chat-messages">
                 {messages.length === 0 ? (
                     <div className="no-messages">
                         <div className="no-messages-icon">💬</div>
@@ -437,27 +397,47 @@ const Chat = () => {
                         }
 
                         return (
-                            <Message
+                            <div 
                                 key={message.id || index}
-                                message={message}
-                                isLastMessage={index === messages.length - 1}
-                            />
+                                className={`message ${
+                                    message.type === 'system' ? 'system' : 
+                                    message.senderId === userId ? 'outgoing' : 'incoming'
+                                }`}
+                            >
+                                <div className="message-content">
+                                    <div className="message-text">{message.text}</div>
+                                    <div className="message-time">
+                                        {new Date(message.createdAt || message.timestamp || message.clientTimestamp || new Date()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                </div>
+                            </div>
                         );
                     })
                 )}
                 <div ref={messagesEndRef} />
-            </MessagesContainer>
+            </div>
 
-            <InputWrapper>
-                <ChatInput
-                    onSendMessage={handleSendMessage}
-                    onMessageInput={handleMessageInput}
-                    newMessage={newMessage}
-                    isSending={isSending}
-                    isDisabled={!chat || !chat.isActive}
+            <form className="message-input" onSubmit={handleSendMessage}>
+                <input
+                    type="text"
+                    ref={inputRef}
+                    value={newMessage}
+                    onChange={handleMessageInput}
+                    placeholder="Напишите сообщение..."
+                    disabled={!chat || !chat.isActive}
                 />
-            </InputWrapper>
-        </ChatContainer>
+                <button
+                    type="submit"
+                    disabled={!newMessage.trim() || !chat || !chat.isActive || isSending}
+                >
+                    {isSending ? (
+                        <span className="send-loader"></span>
+                    ) : (
+                        <span className="send-icon">➤</span>
+                    )}
+                </button>
+            </form>
+        </div>
     );
 };
 

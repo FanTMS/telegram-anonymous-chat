@@ -5,13 +5,13 @@ const ChatHeader = ({
     partnerInfo, 
     isPartnerTyping, 
     isSupportChat, 
-    onBack,
+    onEndChat,
     isAdmin 
 }) => {
     return (
         <div className="chat-header">
             <div className="header-left">
-                <button className="back-button" onClick={onBack}>
+                <button className="back-button">
                     <svg 
                         width="24" 
                         height="24" 
@@ -31,14 +31,14 @@ const ChatHeader = ({
                         <span className="partner-typing">печатает...</span>
                     ) : (
                         <span className="online-status">
-                            {isSupportChat ? 'Техническая поддержка' : 'В сети'}
+                            {isSupportChat ? 'Всегда на связи' : 'В сети'}
                         </span>
                     )}
                 </div>
             </div>
             <div className="header-actions">
                 {!isSupportChat && (
-                    <button className="end-chat-button" onClick={onBack}>
+                    <button className="end-chat-button" onClick={onEndChat}>
                         <svg 
                             width="20" 
                             height="20" 
@@ -55,7 +55,7 @@ const ChatHeader = ({
                     </button>
                 )}
                 {isSupportChat && isAdmin && (
-                    <button className="end-chat-button admin" onClick={onBack}>
+                    <button className="end-chat-button admin" onClick={onEndChat}>
                         <svg 
                             width="20" 
                             height="20" 
@@ -84,7 +84,7 @@ ChatHeader.propTypes = {
     }).isRequired,
     isPartnerTyping: PropTypes.bool,
     isSupportChat: PropTypes.bool,
-    onBack: PropTypes.func.isRequired,
+    onEndChat: PropTypes.func.isRequired,
     isAdmin: PropTypes.bool
 };
 

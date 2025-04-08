@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, getDocs, doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
 
 /**
  * Функция для миграции структуры пользователей - добавляет поля для поддержки функции друзей
@@ -26,17 +26,17 @@ export const migrateUserStructure = async () => {
             const updates = {};
             
             // Добавляем поле friends, если его нет
-            if (!Object.prototype.hasOwnProperty.call(userData, 'friends')) {
+            if (!userData.hasOwnProperty('friends')) {
                 updates.friends = [];
             }
             
             // Добавляем поле friendRequests, если его нет 
-            if (!Object.prototype.hasOwnProperty.call(userData, 'friendRequests')) {
+            if (!userData.hasOwnProperty('friendRequests')) {
                 updates.friendRequests = [];
             }
             
             // Добавляем поле sentFriendRequests, если его нет
-            if (!Object.prototype.hasOwnProperty.call(userData, 'sentFriendRequests')) {
+            if (!userData.hasOwnProperty('sentFriendRequests')) {
                 updates.sentFriendRequests = [];
             }
             
@@ -88,15 +88,15 @@ export const ensureUserFields = async (userId) => {
         const updates = {};
         
         // Проверяем и добавляем необходимые поля
-        if (!Object.prototype.hasOwnProperty.call(userData, 'friends')) {
+        if (!userData.hasOwnProperty('friends')) {
             updates.friends = [];
         }
         
-        if (!Object.prototype.hasOwnProperty.call(userData, 'friendRequests')) {
+        if (!userData.hasOwnProperty('friendRequests')) {
             updates.friendRequests = [];
         }
         
-        if (!Object.prototype.hasOwnProperty.call(userData, 'sentFriendRequests')) {
+        if (!userData.hasOwnProperty('sentFriendRequests')) {
             updates.sentFriendRequests = [];
         }
         

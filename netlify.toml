@@ -1,38 +1,23 @@
 [build]
-  command = "npm ci --legacy-peer-deps && npm run build"
+  command = "npm install && CI=false npm run build"
   publish = "build"
 
 [build.environment]
   NODE_ENV = "production"
   CI = "false"
-  PUBLIC_URL = "."
+  PUBLIC_URL = "/"
   NETLIFY_NEXT_PLUGIN_SKIP = "true"
   SKIP_PREFLIGHT_CHECK = "true"
   TSC_COMPILE_ON_ERROR = "true"
   ESLINT_NO_DEV_ERRORS = "true"
-  NODE_VERSION = "16.20.2"
-  GENERATE_SOURCEMAP = "false"
-  BROWSER = "none"
-  BASE_URL = "."
-  NPM_FLAGS = "--legacy-peer-deps --no-audit --no-fund"
 
-# Редирект для имитации поведения React Router
+# Редирект для имитации поведения React Router на локальной разработке
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-  force = true
 
 # Оптимизация кеширования для статических ресурсов
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Frame-Options = "DENY"
-    X-XSS-Protection = "1; mode=block"
-    X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "no-referrer"
-    Access-Control-Allow-Origin = "*"
-
 [[headers]]
   for = "/*.js"
   [headers.values]
