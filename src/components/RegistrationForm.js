@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInAnonymously, updateProfile } from 'firebase/auth';
 import { collection, getDocs, query, limit, doc, setDoc } from 'firebase/firestore';
@@ -8,6 +8,7 @@ import { createOrUpdateUser } from '../utils/userService';
 import InterestSelector from './InterestSelector';
 import { safeHapticFeedback, safeShowPopup, getWebAppTheme } from '../utils/telegramWebAppUtils';
 import '../styles/RegistrationForm.css';
+import { UserContext } from '../contexts/UserContext';
 
 // Предопределенные интересы для выбора
 const PREDEFINED_INTERESTS = [
@@ -80,6 +81,9 @@ const RegistrationForm = ({ telegramUser = null }) => {
         age: null,
         aboutMe: null
     });
+    
+    // Get setUser from UserContext to update authentication state
+    const { setUser } = useContext(UserContext);
     
     // Определение темы Telegram
     useEffect(() => {
@@ -313,15 +317,22 @@ const RegistrationForm = ({ telegramUser = null }) => {
             // Сохраняем данные в Firestore
             await createOrUpdateUser(user.uid, userData);
             
-            // Сохраняем текущий user объект в localStorage для сохранения авторизации
-            localStorage.setItem('current_user', JSON.stringify({
+            // Создаем полный объект пользователя для хранения в состоянии
+            const fullUserData = {
+                id: user.uid,
                 uid: user.uid,
                 displayName: nickname,
                 ...userData
-            }));
+            };
+            
+            // Сохраняем текущий user объект в sessionStorage для сохранения авторизации
+            sessionStorage.setItem('current_user', JSON.stringify(fullUserData));
             
             // Также сохраняем current_user_id для совместимости
-            localStorage.setItem('current_user_id', user.uid);
+            sessionStorage.setItem('current_user_id', user.uid);
+            
+            // Обновляем состояние пользователя в UserContext
+            setUser(fullUserData);
             
             // Тактильная обратная связь об успехе
             safeHapticFeedback('notification', null, 'success');
@@ -358,7 +369,7 @@ const RegistrationForm = ({ telegramUser = null }) => {
         } finally {
             setIsSubmitting(false);
         }
-    }, [formData, currentStep, navigate, telegramUser, validateStep, validationErrors]);
+    }, [formData, currentStep, navigate, telegramUser, validateStep, validationErrors, setUser]);
     
     // Расчет прогресса заполнения формы
     const calculateProgress = () => {
