@@ -11,14 +11,24 @@ const GroupsContainer = styled.div`
   flex-direction: column;
   padding: 0;
   width: 100%;
+  min-height: 100vh;
+  position: relative;
+  background-color: var(--tg-theme-bg-color, #ffffff);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 `;
 
 const GroupsHeader = styled.div`
-  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
   position: sticky;
   top: 0;
+  background-color: var(--tg-theme-bg-color, #ffffff);
   z-index: 10;
-  background-color: var(--tg-theme-bg-color, #fff);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  padding-top: calc(16px + env(safe-area-inset-top, 0));
 `;
 
 const TabsContainer = styled.div`
@@ -77,6 +87,16 @@ const SearchNotFound = styled.div`
     fill: var(--tg-theme-hint-color, #999);
     opacity: 0.5;
   }
+`;
+
+const GroupsList = styled.div`
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 `;
 
 const Groups = ({ user }) => {

@@ -3,22 +3,25 @@
     flex-direction: column;
     height: 100vh;
     max-width: 768px;
-    background-color: #ffffff;
+    background-color: var(--tg-theme-bg-color, #ffffff);
     position: relative;
     overflow: hidden;
     box-shadow: 0 0 10px rgba(43, 141, 233, 0.1);
     border-radius: 12px;
     margin: 0 auto;
-    width: calc(100% - 32px);
+    width: 100%;
+    padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 .telegram-chat {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     max-width: 768px;
-    width: calc(100% - 32px);
-    height: 100%;
+    width: 100%;
+    height: 100vh;
     margin: 0 auto;
     position: relative;
+    display: flex;
+    flex-direction: column;
 }
 
 .chat-header {
@@ -334,14 +337,14 @@
     flex: 1;
     overflow-y: auto;
     padding: 15px;
-    background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+    background-color: var(--tg-theme-bg-color, #ffffff);
     display: flex;
     flex-direction: column;
     gap: 2px;
     position: relative;
-    height: calc(100% - 54px);
+    height: calc(100vh - 120px);
     overflow-x: hidden;
-    padding-bottom: 60px;
+    -webkit-overflow-scrolling: touch;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -387,6 +390,7 @@
     position: relative;
     animation: fadeIn 0.3s ease;
     line-height: 1.4;
+    background: none;
 }
 
 @keyframes fadeIn {
@@ -409,7 +413,7 @@
 }
 
 .message.incoming .message-content {
-    background-color: var(--tg-theme-bg-color, #ffffff);
+    background-color: var(--tg-theme-secondary-bg-color, #f5f5f5);
     border-radius: 18px 18px 18px 4px;
     padding: 8px 12px;
     position: relative;
@@ -512,17 +516,18 @@
 }
 
 .message-input {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
     display: flex;
     align-items: center;
     padding: 8px;
     background-color: var(--tg-theme-bg-color, #ffffff);
     border-top: 1px solid rgba(0, 0, 0, 0.05);
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
     z-index: 10;
+    margin-top: auto;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0));
 }
 
 .message-input input {
@@ -774,31 +779,22 @@
     background-color: #c0392b;
 }
 
-/* Telegram Mini App specific styles */
-.in-telegram .chat-container {
-    height: 100%;
-    padding-bottom: env(safe-area-inset-bottom, 0);
-}
-
-.in-telegram .message-input {
-    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0));
-}
-
-/* Адаптация к клавиатуре на мобильных устройствах */
+/* Стили для состояния с открытой клавиатурой */
 .keyboard-open .chat-container {
     height: calc(100vh - var(--keyboard-height, 0px));
 }
 
 .keyboard-open .message-input {
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    transform: translateY(calc(-1 * var(--keyboard-height, 0px)));
+    bottom: var(--keyboard-height, 0);
+    background-color: var(--tg-theme-bg-color, #ffffff);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    padding-bottom: 8px;
 }
 
 .keyboard-open .chat-messages {
-    padding-bottom: 70px; /* Дополнительный отступ для ввода */
+    height: calc(100vh - var(--keyboard-height, 0px) - 60px);
+    padding-bottom: 16px;
 }
 
 /* Поддержка темной темы */
@@ -852,41 +848,19 @@
     }
 }
 
-/* Адаптивность для разных устройств */
+/* Улучшенные стили для мобильных устройств */
 @media (max-width: 767px) {
     .chat-container {
         border-radius: 0;
-        width: 100%;
-    }
-    
-    .chat-header {
-        padding: 10px;
-        height: 60px;
-    }
-
-    .message-input {
-        position: fixed;
-        width: 100%;
-        left: 0;
-        right: 0;
-    }
-
-    .telegram-chat {
-        width: 100%;
+        height: 100vh;
     }
 
     .chat-messages {
-        height: calc(100vh - 120px); /* Корректируем под мобильные размеры */
+        height: calc(100vh - 120px);
     }
 
-    .input-container {
-        padding: 0;
-    }
-
-    .input-container .message-input {
-        max-width: 100%;
-        border-radius: 0;
-        padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    .message-input {
+        padding-bottom: calc(8px + env(safe-area-inset-bottom, 0));
     }
 }
 
