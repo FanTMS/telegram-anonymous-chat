@@ -4,6 +4,7 @@ import { UserContext } from './contexts/UserContext';
 import { ToastProvider } from './components/Toast';
 import { NotificationProvider } from './contexts/NotificationContext';
 import './styles/global.css';
+import './styles/safe-area.css';
 
 // Импорт компонентов
 import RegistrationForm from './components/RegistrationForm';
@@ -113,7 +114,7 @@ const navigationItems = [
 
 // Компонент для защиты маршрутов, требующих авторизации
 const ProtectedRoute = ({ children, adminOnly = false }) => {
-    const { isAuthenticated, loading, user, setUser } = useContext(UserContext);
+    const { isAuthenticated, loading, user, setUser, setIsAuthenticated } = useContext(UserContext);
     const navigate = useNavigate();
     const [isAdmin, setIsAdmin] = useState(false);
     const [checkedStorage, setCheckedStorage] = useState(false);
@@ -149,6 +150,10 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
                             setUser(userData);
                             console.log('ProtectedRoute: Данные пользователя установлены в контекст');
                             
+                            // Устанавливаем флаг аутентификации в true
+                            setIsAuthenticated(true);
+                            console.log('ProtectedRoute: Установлен флаг аутентификации в true');
+                            
                             // Обновляем сессионное хранилище
                             sessionStorage.setItem('current_user', JSON.stringify(userData));
                             sessionStorage.setItem('current_user_id', userData.id);
@@ -159,6 +164,10 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
                             const userData = JSON.parse(savedUserData);
                             setUser(userData);
                             console.log('ProtectedRoute: Данные пользователя из хранилища установлены в контекст');
+                            
+                            // Устанавливаем флаг аутентификации в true
+                            setIsAuthenticated(true);
+                            console.log('ProtectedRoute: Установлен флаг аутентификации в true');
                         } catch (error) {
                             console.error('ProtectedRoute: Ошибка при парсинге данных пользователя:', error);
                         }
@@ -174,7 +183,7 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
         if (!isAuthenticated && !loading && !checkedStorage) {
             checkStorageAuth();
         }
-    }, [isAuthenticated, loading, setUser, checkedStorage]);
+    }, [isAuthenticated, loading, setUser, checkedStorage, setIsAuthenticated]);
     
     useEffect(() => {
         const checkAdminAccess = async () => {
@@ -269,6 +278,9 @@ function App() {
     const [telegramInitialized, setTelegramInitialized] = useState(false);
     const [error, setError] = useState(null);
     const [initializeAttempts, setInitializeAttempts] = useState(0);
+    const [user, setUser] = useState(null);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     console.log('App компонент инициализирован');
 
@@ -428,8 +440,13 @@ function App() {
                         }
                     }
                 }
+                
+                // Завершаем загрузку после инициализации
+                setLoading(false);
             } catch (error) {
                 console.error('Ошибка при инициализации Telegram WebApp:', error);
+                // Завершаем загрузку даже в случае ошибки
+                setLoading(false);
             }
         };
         
@@ -450,6 +467,8 @@ function App() {
                 }
             } catch (error) {
                 console.error("Ошибка при проверке соединения:", error);
+                // Завершаем загрузку даже в случае ошибки
+                setLoading(false);
             }
         };
 
@@ -532,218 +551,236 @@ function App() {
         };
     }, []);
 
-    return (
-        <ToastProvider>
-            <NotificationProvider>
-                <div className={`app-container ${!isConnected ? 'offline-mode' : ''}`}>
-                    {/* Connection status indicator */}
-                    {!isConnected && (
-                        <div className="connection-status offline">
-                            <span className="status-icon">⚠️</span>
-                            <span className="status-text">Оффлайн режим. {connectionError && `Ошибка: ${connectionError}`}</span>
-                        </div>
-                    )}
+    // Добавляем таймаут для завершения загрузки, если что-то пошло не так
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            if (loading) {
+                console.warn('Принудительное завершение загрузки по таймауту');
+                setLoading(false);
+            }
+        }, 5000); // 5 секунд таймаут
+        
+        return () => clearTimeout(timeoutId);
+    }, [loading]);
 
-                    {error ? (
-                        <div className="error-fallback">
-                            <h2>Произошла ошибка</h2>
-                            <p>{error.toString()}</p>
-                            <button onClick={() => window.location.reload()}>
-                                Перезагрузить приложение
-                            </button>
-                            {process.env.NODE_ENV === 'development' && (
-                                <pre className="error-stack">
-                                    {error.stack}
-                                </pre>
-                            )}
-                        </div>
-                    ) : (
-                        <>
-                            <Routes>
-                                <Route path="/register" element={<RegistrationForm />} />
-                                <Route path="/onboarding" element={<OnboardingTutorial />} />
-                                <Route path="/" element={<Navigate to="/home" replace />} />
-                                <Route path="/index.html" element={<Navigate to="/home" replace />} />
-                                
-                                {/* Routes requiring authentication */}
-                                <Route path="/home" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <Home />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/chats" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <ChatsList />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/chat/:chatId" element={
-                                    <ProtectedRoute>
-                                        <AppLayout hideNavigation>
-                                            <Chat />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/random-chat" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <RandomChat />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/profile" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <Profile />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/groups" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <Groups />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/groups/:groupId" element={
-                                    <ProtectedRoute>
-                                        <AppLayout hideNavigation>
-                                            <GroupDetail />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/groups/create" element={
-                                    <ProtectedRoute>
-                                        <AppLayout hideNavigation>
-                                            <GroupCreate />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/groups/:groupId/edit" element={
-                                    <ProtectedRoute>
-                                        <AppLayout hideNavigation>
-                                            <GroupEdit />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/guide" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <BeginnerGuide />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout>
-                                            <Admin />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin/dashboard" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout>
-                                            <AdminDashboard />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin/support" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout hideNavigation>
-                                            <AdminSupport />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin/support/:chatId" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout hideNavigation>
-                                            <AdminSupport />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/support/diagnostics" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <SupportDiagnostics />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/friends" element={
-                                    <ProtectedRoute>
-                                        <AppLayout>
-                                            <Friends />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin/config" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout>
-                                            <AdminConfig />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin-utility" element={<AdminUtility />} />
-                                
-                                <Route path="/admin/reports" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout>
-                                            <AdminReports />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin/stats" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout>
-                                            <AdminStats />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="/admin/users" element={
-                                    <ProtectedRoute adminOnly={true}>
-                                        <AppLayout>
-                                            <AdminUsers />
-                                        </AppLayout>
-                                    </ProtectedRoute>
-                                } />
-                                
-                                <Route path="*" element={<NotFoundPage />} />
-                            </Routes>
-                            
-                            {/* Компонент для автоматической загрузки индексов */}
-                            <IndexLoader />
-                        </>
-                    )}
-                </div>
-            </NotificationProvider>
-        </ToastProvider>
+    return (
+        <div className="safe-area-container">
+            <div className="safe-area-content">
+                <UserContext.Provider value={{ user, setUser, isAuthenticated, setIsAuthenticated, loading, setLoading }}>
+                    <ToastProvider>
+                        <NotificationProvider>
+                            <div className={`app-container ${!isConnected ? 'offline-mode' : ''}`}>
+                                {/* Connection status indicator */}
+                                {!isConnected && (
+                                    <div className="connection-status offline">
+                                        <span className="status-icon">⚠️</span>
+                                        <span className="status-text">Оффлайн режим. {connectionError && `Ошибка: ${connectionError}`}</span>
+                                    </div>
+                                )}
+
+                                {error ? (
+                                    <div className="error-fallback">
+                                        <h2>Произошла ошибка</h2>
+                                        <p>{error.toString()}</p>
+                                        <button onClick={() => window.location.reload()}>
+                                            Перезагрузить приложение
+                                        </button>
+                                        {process.env.NODE_ENV === 'development' && (
+                                            <pre className="error-stack">
+                                                {error.stack}
+                                            </pre>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <>
+                                        <Routes>
+                                            <Route path="/register" element={<RegistrationForm />} />
+                                            <Route path="/onboarding" element={<OnboardingTutorial />} />
+                                            <Route path="/" element={<Navigate to="/home" replace />} />
+                                            <Route path="/index.html" element={<Navigate to="/home" replace />} />
+                                            
+                                            {/* Routes requiring authentication */}
+                                            <Route path="/home" element={
+                                                <ProtectedRoute>
+                                                    <AppLayout>
+                                                        <Home />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/chats" element={
+                                                <ProtectedRoute>
+                                                    <AppLayout>
+                                                        <ChatsList />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/chat/:chatId" element={
+                                                <ProtectedRoute>
+                                                    <AppLayout hideNavigation>
+                                                        <Chat />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/random-chat" element={
+                                                <ProtectedRoute>
+                                                    <AppLayout>
+                                                        <RandomChat />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/profile" element={
+                                                <ProtectedRoute>
+                                                    <AppLayout>
+                                                        <Profile />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/groups" element={
+                                                <ProtectedRoute>
+                                                    <AppLayout>
+                                                        <Groups />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/groups/:groupId" element={
+                                                <ProtectedRoute>
+                                                    <AppLayout hideNavigation>
+                                                        <GroupDetail />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/groups/create" element={
+                                                <ProtectedRoute>
+                                                    <AppLayout hideNavigation>
+                                                        <GroupCreate />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/groups/:groupId/edit" element={
+                                                <ProtectedRoute>
+                                                    <AppLayout hideNavigation>
+                                                        <GroupEdit />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/guide" element={
+                                                <ProtectedRoute>
+                                                    <AppLayout>
+                                                        <BeginnerGuide />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/admin" element={
+                                                <ProtectedRoute adminOnly={true}>
+                                                    <AppLayout>
+                                                        <Admin />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/admin/dashboard" element={
+                                                <ProtectedRoute adminOnly={true}>
+                                                    <AppLayout>
+                                                        <AdminDashboard />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/admin/support" element={
+                                                <ProtectedRoute adminOnly={true}>
+                                                    <AppLayout hideNavigation>
+                                                        <AdminSupport />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/admin/support/:chatId" element={
+                                                <ProtectedRoute adminOnly={true}>
+                                                    <AppLayout hideNavigation>
+                                                        <AdminSupport />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/support/diagnostics" element={
+                                                <ProtectedRoute>
+                                                    <AppLayout>
+                                                        <SupportDiagnostics />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/friends" element={
+                                                <ProtectedRoute>
+                                                    <AppLayout>
+                                                        <Friends />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/admin/config" element={
+                                                <ProtectedRoute adminOnly={true}>
+                                                    <AppLayout>
+                                                        <AdminConfig />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/admin-utility" element={<AdminUtility />} />
+                                            
+                                            <Route path="/admin/reports" element={
+                                                <ProtectedRoute adminOnly={true}>
+                                                    <AppLayout>
+                                                        <AdminReports />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/admin/stats" element={
+                                                <ProtectedRoute adminOnly={true}>
+                                                    <AppLayout>
+                                                        <AdminStats />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="/admin/users" element={
+                                                <ProtectedRoute adminOnly={true}>
+                                                    <AppLayout>
+                                                        <AdminUsers />
+                                                    </AppLayout>
+                                                </ProtectedRoute>
+                                            } />
+                                            
+                                            <Route path="*" element={<NotFoundPage />} />
+                                        </Routes>
+                                        
+                                        {/* Компонент для автоматической загрузки индексов */}
+                                        <IndexLoader />
+                                    </>
+                                )}
+                            </div>
+                        </NotificationProvider>
+                    </ToastProvider>
+                </UserContext.Provider>
+            </div>
+        </div>
     );
 }
 
 // Обновленный компонент Root для обработки корневого маршрута
 const Root = () => {
-    const { isAuthenticated, loading, user } = useContext(UserContext);
+    const { isAuthenticated, setIsAuthenticated, loading, user } = useContext(UserContext);
     const navigate = useNavigate();
     const location = useLocation();
     const [redirectAttempts, setRedirectAttempts] = useState(0);
