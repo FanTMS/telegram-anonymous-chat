@@ -22,7 +22,10 @@ const Container = styled.div`
 `;
 
 const Header = styled.header`
-  position: relative;
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 1000;
   background-color: var(--tg-theme-bg-color, #ffffff);
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
@@ -36,6 +39,10 @@ const Header = styled.header`
   flex-shrink: 0;
 
   @media (max-width: 768px) {
+    position: fixed;
+    width: 100%;
+    max-width: 768px;
+    margin: 0 auto;
     padding: 8px 12px;
     padding-top: calc(8px + env(safe-area-inset-top, 0px));
   }
@@ -50,16 +57,18 @@ const MessagesContainer = styled.div`
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   position: relative;
-  height: 100%;
+  height: calc(100% - var(--header-height, 0px));
+  margin-top: var(--header-height, 0px);
 
   &.keyboard-visible {
-    height: calc(100% - var(--keyboard-height, 0px));
+    height: calc(100% - var(--header-height, 0px) - var(--keyboard-height, 0px));
     padding-bottom: calc(80px + var(--keyboard-height, 0px));
   }
 
   @media (max-width: 768px) {
     padding: 12px;
     padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    margin-top: var(--header-height, 0px);
 
     &.keyboard-visible {
       padding-bottom: calc(70px + var(--keyboard-height, 0px));
