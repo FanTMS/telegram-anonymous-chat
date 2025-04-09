@@ -10,10 +10,11 @@ const Container = styled.div`
   margin: 0 auto;
   position: relative;
   background: var(--tg-theme-bg-color, #ffffff);
+  overflow: hidden;
 `;
 
 const Header = styled.header`
-  position: fixed;
+  position: sticky;
   top: 0;
   left: 0;
   right: 0;
@@ -29,7 +30,7 @@ const Header = styled.header`
   -webkit-backdrop-filter: blur(10px);
   max-width: 768px;
   margin: 0 auto;
-  height: var(--header-height);
+  flex-shrink: 0;
 
   @media (max-width: 768px) {
     padding: 8px 12px;
@@ -41,18 +42,18 @@ const MessagesContainer = styled.div`
   flex: 1;
   overflow-y: auto;
   padding: 16px;
-  padding-top: calc(var(--header-height) + 16px);
   padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
+  height: calc(100vh - var(--header-height) - var(--keyboard-height, 0px));
 
   &.keyboard-visible {
+    height: calc(100vh - var(--header-height) - var(--keyboard-height, 0px));
     padding-bottom: calc(80px + var(--keyboard-height, 0px));
   }
 
   @media (max-width: 768px) {
     padding: 12px;
-    padding-top: calc(var(--header-height) + 12px);
     padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
 
     &.keyboard-visible {
@@ -107,27 +108,22 @@ const Title = styled.h1`
 const ChatContainer = ({ children, title, onBack }) => {
   useEffect(() => {
     // Set header height
-    const header = document.querySelector('header');
-    if (header) {
-      const headerHeight = header.offsetHeight;
-      document.documentElement.style.setProperty('--header-height', `${headerHeight}px`);
-    }
-
-    // Update header height on resize
-    const resizeObserver = new ResizeObserver(entries => {
-      for (let entry of entries) {
-        document.documentElement.style.setProperty('--header-height', `${entry.contentRect.height}px`);
+    const updateHeaderHeight = () => {
+      const header = document.querySelector('header');
+      if (header) {
+        const headerHeight = header.offsetHeight;
+        document.documentElement.style.setProperty('--header-height', `${headerHeight}px`);
       }
-    });
+    };
 
-    if (header) {
-      resizeObserver.observe(header);
-    }
+    // Initial update
+    updateHeaderHeight();
+
+    // Update on resize
+    window.addEventListener('resize', updateHeaderHeight);
 
     return () => {
-      if (header) {
-        resizeObserver.unobserve(header);
-      }
+      window.removeEventListener('resize', updateHeaderHeight);
     };
   }, []);
 
