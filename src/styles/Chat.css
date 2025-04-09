@@ -7,10 +7,8 @@
     position: relative;
     overflow: hidden;
     box-shadow: 0 0 10px rgba(43, 141, 233, 0.1);
-    border-radius: 12px;
     margin: 0 auto;
     width: 100%;
-    padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 .telegram-chat {
@@ -25,17 +23,21 @@
 }
 
 .chat-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 16px 8px 20px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
     background-color: var(--tg-theme-bg-color, #fff);
     border-bottom: 1px solid rgba(43, 141, 233, 0.1);
     height: 54px;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    box-shadow: 0 1px 3px rgba(43, 141, 233, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    max-width: 768px;
+    margin: 0 auto;
+    width: 100%;
 }
 
 .header-left {
@@ -337,15 +339,12 @@
     flex: 1;
     overflow-y: auto;
     padding: 15px;
-    background-color: var(--tg-theme-bg-color, #ffffff);
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    margin-top: 54px;
+    margin-bottom: 60px;
+    height: calc(100vh - 114px);
     position: relative;
-    height: calc(100vh - 120px);
-    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
-    padding-bottom: 16px;
+    overscroll-behavior-y: contain;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -521,17 +520,15 @@
     bottom: 0;
     left: 0;
     right: 0;
+    background-color: var(--tg-theme-bg-color, #ffffff);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 8px;
+    z-index: 1000;
+    margin: 0 auto;
+    max-width: 768px;
+    width: 100%;
     display: flex;
     align-items: center;
-    padding: 8px;
-    background-color: var(--tg-theme-bg-color, #ffffff);
-    border-top: 1px solid rgba(0, 0, 0, 0.05);
-    z-index: 10;
-    margin-top: auto;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0));
-    max-width: 768px;
-    margin-left: auto;
-    margin-right: auto;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
 }
@@ -1282,12 +1279,14 @@
 
 /* Handle keyboard visibility */
 .keyboard-visible .chat-messages {
-    height: calc(100vh - 120px - var(--keyboard-height, 0px));
-    padding-bottom: calc(16px + var(--keyboard-height, 0px));
+    height: calc(100vh - 114px - var(--keyboard-height, 0px));
+    margin-bottom: calc(60px + var(--keyboard-height, 0px));
 }
 
 .keyboard-visible .message-input {
     bottom: var(--keyboard-height, 0px);
+    transform: translateY(0);
+    transition: bottom 0.3s ease;
 }
 
 /* Ensure proper layout on iOS */
@@ -1297,10 +1296,14 @@
     }
     
     .chat-messages {
-        height: calc(100vh - 120px - env(safe-area-inset-bottom, 0px));
+        height: calc(100vh - 114px - env(safe-area-inset-bottom, 0px));
     }
     
     .message-input {
-        bottom: env(safe-area-inset-bottom, 0px);
+        padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    }
+    
+    .keyboard-visible .chat-messages {
+        height: calc(100vh - 114px - var(--keyboard-height, 0px));
     }
 }

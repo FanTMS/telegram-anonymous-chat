@@ -29,42 +29,29 @@ const pulse = keyframes`
 const InputContainer = styled.form`
   display: flex;
   align-items: center;
-  padding: 12px 16px;
+  padding: 8px 16px;
   background-color: var(--tg-theme-bg-color, #ffffff);
-  border-top: 1px solid var(--tg-theme-secondary-bg-color, rgba(0, 0, 0, 0.1));
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   z-index: 1000;
-  padding-bottom: calc(12px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   width: 100%;
-  margin: 0;
-  animation: ${slideUp} 0.3s ease-out;
+  max-width: 768px;
+  margin: 0 auto;
+  transform: translateY(0);
+  transition: transform 0.3s ease, bottom 0.3s ease;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
-  max-width: 768px;
-  margin-left: auto;
-  margin-right: auto;
-  
-  ${props => props.compact && `
-    padding: 8px 12px;
-    padding-bottom: calc(8px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
-  `}
-  
-  @media (min-width: 481px) {
-    position: fixed;
-    width: 100%;
-    max-width: 480px;
-    left: 50%;
-    transform: translateX(-50%);
-    border-radius: 16px 16px 0 0;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
-  }
-  
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+
   &.keyboard-visible {
     bottom: var(--keyboard-height, 0px);
+  }
+
+  @media (max-width: 768px) {
+    padding: 8px 12px;
   }
 `;
 
@@ -270,11 +257,13 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
       setIsKeyboardVisible(true);
       document.body.classList.add('keyboard-visible');
       
-      // Set keyboard height
-      if (window.visualViewport) {
-        const keyboardHeight = window.innerHeight - window.visualViewport.height;
-        document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
-      }
+      // Set keyboard height with a slight delay to ensure accurate height
+      setTimeout(() => {
+        if (window.visualViewport) {
+          const keyboardHeight = window.innerHeight - window.visualViewport.height;
+          document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
+        }
+      }, 100);
     };
 
     const handleKeyboardHide = () => {
@@ -284,17 +273,32 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
     };
 
     // For iOS
-    window.addEventListener('focusin', handleKeyboardShow);
-    window.addEventListener('focusout', handleKeyboardHide);
+    window.addEventListener('focusin', (e) => {
+      if (e.target === textareaRef.current) {
+        handleKeyboardShow();
+      }
+    });
+    window.addEventListener('focusout', (e) => {
+      if (e.target === textareaRef.current) {
+        handleKeyboardHide();
+      }
+    });
 
     // For Android
     if (window.visualViewport) {
+      let lastHeight = window.visualViewport.height;
+      
       window.visualViewport.addEventListener('resize', () => {
-        if (window.visualViewport.height < window.innerHeight) {
+        const newHeight = window.visualViewport.height;
+        const heightDiff = lastHeight - newHeight;
+        
+        if (heightDiff > 150) { // Keyboard is shown
           handleKeyboardShow();
-        } else {
+        } else if (heightDiff < -150) { // Keyboard is hidden
           handleKeyboardHide();
         }
+        
+        lastHeight = newHeight;
       });
     }
 
@@ -388,7 +392,6 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
   return (
     <InputContainer 
       onSubmit={handleSubmit} 
-      compact={isCompact}
       className={isKeyboardVisible ? 'keyboard-visible' : ''}
     >
       <OfflineIndicator $visible={isOffline}>
