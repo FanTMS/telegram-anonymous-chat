@@ -18,9 +18,6 @@ import AppLayout from './components/AppLayout';
 import BeginnerGuide from './pages/BeginnerGuide';
 import AdminSupport from './pages/AdminSupport';
 import SupportDiagnostics from './pages/SupportDiagnostics';
-import PageTransition from './components/PageTransition';
-import OnboardingTutorial from './components/OnboardingTutorial';
-import BottomNavigation from './components/BottomNavigation';
 import Groups from './pages/Groups';
 import GroupDetail from './pages/GroupDetail';
 import GroupCreate from './pages/GroupCreate';
@@ -38,13 +35,9 @@ import AdminUsers from './pages/AdminUsers';
 import './styles/BeginnerGuide.css';
 import './App.css';
 
-import { testFirebaseConnection, ensureRequiredCollectionsExist } from './utils/firebaseUtils';
-import { isBrowser } from './utils/browserUtils';
 import WebApp from '@twa-dev/sdk';
-import { getFirestore, collection, doc, setDoc, query, where, getDocs, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
-import { saveUserSession, getUserSession, getUserById } from './utils/authService';
-import { initializeApp } from './utils/databaseInitializer';
 import connectionService from './utils/firebaseConnectionService';
 import { createRequiredIndexes } from './utils/firebaseIndexCreator';
 import { migrateUserStructure } from './utils/userStructureMigration';
@@ -55,7 +48,10 @@ import { auth } from './firebase';
 import { 
     isCompactMode, 
     applyCompactModeStyles, 
-    shouldAllowScrolling 
+    isMobileDevice,
+    isIphoneWithNotch,
+    updateSafeAreaVars,
+    mobileKeyboardHandlers
 } from './utils/telegramUtils';
 
 // Иконки для навигации
@@ -567,6 +563,86 @@ function App() {
         return () => {
             window.removeEventListener('resize', handleResize);
             window.removeEventListener('orientationchange', handleResize);
+        };
+    }, []);
+
+    useEffect(() => {
+        // Initialize mobile-specific utilities and handlers
+        const initializeMobile = () => {
+            // Update safe area variables for notched devices
+            updateSafeAreaVars();
+            
+            // Setup keyboard handlers for mobile
+            if (isMobileDevice()) {
+                const { addListeners, removeListeners } = mobileKeyboardHandlers();
+                addListeners();
+                
+                // Set data attribute on body for mobile-specific styling
+                document.body.setAttribute('data-is-mobile', 'true');
+                
+                // Set viewport height variable for mobile browsers
+                const vh = window.innerHeight * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+                
+                // Add special class for iPhone with notch
+                if (isIphoneWithNotch()) {
+                    document.body.classList.add('iphone-with-notch');
+                }
+                
+                return () => {
+                    removeListeners();
+                    document.body.removeAttribute('data-is-mobile');
+                    document.body.classList.remove('iphone-with-notch');
+                };
+            }
+        };
+        
+        const mobileCleanup = initializeMobile();
+        
+        // Cleanup function
+        return () => {
+            if (mobileCleanup) mobileCleanup();
+        };
+    }, []);
+    
+    useEffect(() => {
+        const handleResize = () => {
+            // Check compact mode and apply styles
+            if (isCompactMode()) {
+                applyCompactModeStyles();
+            }
+            
+            // Update safe area variables on resize
+            updateSafeAreaVars();
+            
+            // Set viewport height CSS variable for mobile devices
+            const vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+            
+            // For mobile devices, adjust when keyboard shows/hides
+            if (isMobileDevice() && window.visualViewport) {
+                const viewportHeight = window.visualViewport.height;
+                document.documentElement.style.setProperty('--viewport-height', `${viewportHeight}px`);
+            }
+        };
+        
+        // Initialize resize handler
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        
+        // Add viewport event listener for iOS devices
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', handleResize);
+            window.visualViewport.addEventListener('scroll', handleResize);
+        }
+        
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener('resize', handleResize);
+                window.visualViewport.removeEventListener('scroll', handleResize);
+            }
         };
     }, []);
 

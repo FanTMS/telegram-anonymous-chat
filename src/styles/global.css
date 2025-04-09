@@ -14,6 +14,13 @@
     --app-border-radius: 12px;
     --app-spacing: 16px;
     --app-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+    --viewport-height: 100vh;
+    --keyboard-height: 0px;
+    --safe-area-top: 0px;
+    --safe-area-bottom: 0px;
+    --safe-area-left: 0px;
+    --safe-area-right: 0px;
 }
 
 * {
@@ -33,10 +40,13 @@ body {
     -moz-osx-font-smoothing: grayscale;
     background-color: var(--tg-theme-bg-color);
     color: var(--tg-theme-text-color);
-    height: 100%;
+    height: 100vh;
+    height: calc(var(--vh, 1vh) * 100);
     width: 100%;
     overflow-x: hidden;
     scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
 }
 
 body {
@@ -51,6 +61,9 @@ body {
 
 body.keyboard-visible {
     overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
 }
 
 #root {
@@ -60,6 +73,7 @@ body.keyboard-visible {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+    min-height: -webkit-fill-available;
 }
 
 /* Глобальные стили для адаптации с клавиатурой */
@@ -276,4 +290,122 @@ screen and (min-resolution: 192dpi) {
     to {
         transform: rotate(360deg);
     }
+}
+
+/* Mobile optimization enhanced */
+:root {
+  --vh: 1vh;
+  --viewport-height: 100vh;
+  --keyboard-height: 0px;
+  --safe-area-top: 0px;
+  --safe-area-bottom: 0px;
+  --safe-area-left: 0px;
+  --safe-area-right: 0px;
+}
+
+/* Use dynamic viewport height for better mobile experience */
+html, body {
+  height: 100vh; /* Fallback */
+  height: calc(var(--vh, 1vh) * 100);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+/* Improved iOS Safari handling */
+@supports (-webkit-touch-callout: none) {
+  html, body {
+    /* Mobile Safari treats 100vh differently */
+    height: -webkit-fill-available;
+  }
+  
+  .chat-container, 
+  .telegram-chat,
+  [class*="ChatContainer"],
+  [class*="MessagesContainer"] {
+    height: -webkit-fill-available;
+  }
+  
+  #root {
+    min-height: -webkit-fill-available;
+  }
+}
+
+/* Improved keyboard visible state adjustments */
+body.keyboard-visible {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}
+
+body.keyboard-visible .message-input,
+body.keyboard-visible [class*="InputContainer"] {
+  bottom: var(--keyboard-height, 0);
+  transition: bottom 0.3s ease;
+}
+
+body.keyboard-visible .chat-messages,
+body.keyboard-visible [class*="MessagesContainer"] {
+  padding-bottom: calc(80px + var(--keyboard-height, 0));
+  transition: padding-bottom 0.3s ease;
+}
+
+/* iPhone notch improvements */
+.iphone-with-notch .chat-header,
+.iphone-with-notch [class*="HeaderContainer"] {
+  padding-top: max(calc(8px + var(--safe-area-top, 0)), calc(8px + env(safe-area-inset-top, 0px)));
+}
+
+.iphone-with-notch .chat-messages,
+.iphone-with-notch [class*="MessagesContainer"] {
+  padding-top: max(calc(76px + var(--safe-area-top, 0)), calc(76px + env(safe-area-inset-top, 0px)));
+}
+
+.iphone-with-notch .message-input,
+.iphone-with-notch [class*="InputContainer"] {
+  padding-bottom: max(calc(8px + var(--safe-area-bottom, 0)), calc(8px + env(safe-area-inset-bottom, 0px)));
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  [class*="ChatContainer"],
+  .chat-container {
+    max-width: 100%;
+    width: 100%;
+    margin: 0;
+    box-shadow: none;
+  }
+  
+  [class*="HeaderContainer"],
+  .chat-header {
+    max-width: 100%;
+    width: 100%;
+  }
+  
+  [class*="InputContainer"],
+  .message-input {
+    max-width: 100%;
+    width: 100%;
+  }
+  
+  [class*="MessagesContainer"],
+  .chat-messages {
+    max-width: 100%;
+    width: 100%;
+  }
+}
+
+/* Body attribute for mobile styling hooks */
+body[data-is-mobile="true"] {
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+body[data-is-mobile="true"] * {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }

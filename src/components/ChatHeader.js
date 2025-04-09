@@ -53,18 +53,18 @@ const HeaderContainer = styled.header`
     `}
   }
   
-  @media (min-width: 481px) {
-    max-width: 480px;
-    left: 50%;
-    transform: translateX(-50%);
-    border-radius: 0 0 16px 16px;
-  }
-  
-  @media (max-width: 480px) {
-    max-width: 768px;
+  @media (max-width: 768px) {
+    max-width: 100%;
     left: 0;
     right: 0;
     border-radius: 0;
+    margin: 0 auto;
+    height: auto;
+    min-height: ${props => props.isCompact ? 'var(--compact-header-height, 48px)' : '60px'};
+  }
+  
+  @media (min-width: 769px) {
+    max-width: 768px;
     margin: 0 auto;
   }
 `;

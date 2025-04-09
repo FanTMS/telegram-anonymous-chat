@@ -41,6 +41,13 @@ const MessageContainer = styled.div`
       padding-right: calc(12px + constant(safe-area-inset-right));
     }
   `}
+  
+  @media (max-width: 480px) {
+    margin-bottom: 6px;
+    padding: 0 10px;
+    padding-left: calc(10px + env(safe-area-inset-left, 0));
+    padding-right: calc(10px + env(safe-area-inset-right, 0));
+  }
 `;
 
 const MessageBubble = styled.div`
@@ -64,6 +71,12 @@ const MessageBubble = styled.div`
     border-radius: ${props.isOutgoing ? '16px 16px 4px 16px' : '16px 16px 16px 4px'};
     font-size: 14px;
   `}
+  
+  @media (max-width: 480px) {
+    max-width: 85%;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
 `;
 
 const MessageText = styled.div`

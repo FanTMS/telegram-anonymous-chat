@@ -53,6 +53,8 @@ const MessagesContainer = styled.div`
   width: 100%;
   max-width: 768px;
   margin: 0 auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
   
   &::-webkit-scrollbar {
     width: 5px;
@@ -69,7 +71,14 @@ const MessagesContainer = styled.div`
   
   @media (max-width: 767px) {
     width: 100%;
-    max-width: 768px;
+    max-width: 100%;
+    padding-top: calc(70px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  }
+  
+  &.keyboard-visible {
+    padding-bottom: calc(70px + var(--keyboard-height, 0px));
+    transition: padding-bottom 0.3s ease;
   }
 `;
 

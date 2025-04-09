@@ -48,13 +48,15 @@ const InputContainer = styled.form`
 
   &.keyboard-visible {
     bottom: var(--keyboard-height, 0px);
+    transform: translateY(0);
   }
 
   @media (max-width: 768px) {
     padding: 8px 12px;
     padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     width: 100%;
-    max-width: 768px;
+    max-width: 100%;
+    box-shadow: 0 -1px 5px rgba(0, 0, 0, 0.05);
   }
   
   @media (min-width: 769px) {
@@ -242,10 +244,10 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
   const [message, setMessage] = useState('');
   const [isOffline, setIsOffline] = useState(false);
   const [hasUserTyped, setHasUserTyped] = useState(false);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const textareaRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const isCompact = isCompactMode();
+  const containerRef = useRef(null);
 
   // Отслеживаем состояние подключения
   useEffect(() => {
@@ -262,22 +264,49 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
 
   useEffect(() => {
     const handleKeyboardShow = () => {
-      setIsKeyboardVisible(true);
+      // Add class to document body to allow components to adjust
       document.body.classList.add('keyboard-visible');
       
-      // Set keyboard height with a slight delay to ensure accurate height
-      setTimeout(() => {
-        if (window.visualViewport) {
-          const keyboardHeight = window.innerHeight - window.visualViewport.height;
+      // On iOS and some Android devices we can detect keyboard height
+      if (window.visualViewport) {
+        const viewportHeight = window.visualViewport.height;
+        const windowHeight = window.innerHeight;
+        const keyboardHeight = windowHeight - viewportHeight;
+        
+        if (keyboardHeight > 0) {
           document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
         }
-      }, 100);
+      }
+      
+      // Add class to the input container
+      if (containerRef.current) {
+        containerRef.current.classList.add('keyboard-visible');
+      }
+      
+      // Add class to parent messages container if it exists
+      const messagesContainer = document.querySelector('.chat-messages, [class*="MessagesContainer"]');
+      if (messagesContainer) {
+        messagesContainer.classList.add('keyboard-visible');
+      }
     };
 
     const handleKeyboardHide = () => {
-      setIsKeyboardVisible(false);
+      // Remove class from document body
       document.body.classList.remove('keyboard-visible');
+      
+      // Reset the keyboard height
       document.documentElement.style.setProperty('--keyboard-height', '0px');
+      
+      // Remove class from the input container
+      if (containerRef.current) {
+        containerRef.current.classList.remove('keyboard-visible');
+      }
+      
+      // Remove class from parent messages container if it exists
+      const messagesContainer = document.querySelector('.chat-messages, [class*="MessagesContainer"]');
+      if (messagesContainer) {
+        messagesContainer.classList.remove('keyboard-visible');
+      }
     };
 
     // For iOS
@@ -400,7 +429,8 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
   return (
     <InputContainer 
       onSubmit={handleSubmit} 
-      className={isKeyboardVisible ? 'keyboard-visible' : ''}
+      className={document.body.classList.contains('keyboard-visible') ? 'keyboard-visible' : ''}
+      ref={containerRef}
     >
       <OfflineIndicator $visible={isOffline}>
         Нет соединения с сервером

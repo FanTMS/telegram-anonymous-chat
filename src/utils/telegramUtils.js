@@ -548,3 +548,139 @@ export const applyCompactModeStyles = () => {
     document.documentElement.classList.remove('tg-compact-mode');
   }
 };
+
+/**
+ * Проверяет, загружено ли приложение на мобильном устройстве
+ * @returns {boolean} true если на мобильном устройстве
+ */
+export const isMobileDevice = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+           (window.innerWidth <= 768);
+};
+
+/**
+ * Проверяет, является ли текущее устройство iPhone с вырезом
+ * @returns {boolean} true если iPhone с вырезом (X и новее)
+ */
+export const isIphoneWithNotch = () => {
+    // Проверка на поддержку CSS env()
+    const hasEnv = CSS && CSS.supports && (
+        CSS.supports('padding-top: env(safe-area-inset-top)') || 
+        CSS.supports('padding-top: constant(safe-area-inset-top)')
+    );
+    
+    // Проверка на iPhone по user agent
+    const isIphone = /iPhone/i.test(navigator.userAgent) && !window.MSStream;
+    
+    // Проверка соотношения сторон экрана (iPhone X и новее имеют соотношение около 2:1)
+    const aspectRatio = window.screen.height / window.screen.width;
+    const hasNewAspectRatio = aspectRatio > 1.8;
+    
+    return hasEnv && isIphone && hasNewAspectRatio;
+};
+
+/**
+ * Обновляет переменные CSS для безопасной области и размеров клавиатуры
+ * @returns {void}
+ */
+export const updateSafeAreaVars = () => {
+    // Получаем размеры безопасной области
+    const safeAreaTop = window.env ? window.env('safe-area-inset-top', 0) : 0;
+    const safeAreaBottom = window.env ? window.env('safe-area-inset-bottom', 0) : 0;
+    const safeAreaLeft = window.env ? window.env('safe-area-inset-left', 0) : 0;
+    const safeAreaRight = window.env ? window.env('safe-area-inset-right', 0) : 0;
+    
+    // Устанавливаем CSS переменные
+    document.documentElement.style.setProperty('--safe-area-top', `${safeAreaTop}px`);
+    document.documentElement.style.setProperty('--safe-area-bottom', `${safeAreaBottom}px`);
+    document.documentElement.style.setProperty('--safe-area-left', `${safeAreaLeft}px`);
+    document.documentElement.style.setProperty('--safe-area-right', `${safeAreaRight}px`);
+};
+
+/**
+ * Обрабатывает события мобильной клавиатуры
+ * @returns {object} Объект с функциями для добавления и удаления обработчиков
+ */
+export const mobileKeyboardHandlers = () => {
+    // Обработчик для определения показа клавиатуры
+    const handleKeyboardShow = () => {
+        if (window.visualViewport) {
+            const viewportHeight = window.visualViewport.height;
+            const windowHeight = window.innerHeight;
+            const keyboardHeight = windowHeight - viewportHeight;
+            
+            if (keyboardHeight > 0) {
+                document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
+                document.body.classList.add('keyboard-visible');
+                
+                // Найти и добавить класс ко всем контейнерам сообщений
+                const messagesContainers = document.querySelectorAll('.chat-messages, [class*="MessagesContainer"]');
+                messagesContainers.forEach(container => {
+                    container.classList.add('keyboard-visible');
+                });
+                
+                // Добавить класс к контейнерам ввода
+                const inputContainers = document.querySelectorAll('.message-input, [class*="InputContainer"]');
+                inputContainers.forEach(container => {
+                    container.classList.add('keyboard-visible');
+                });
+            }
+        }
+    };
+    
+    // Обработчик для определения скрытия клавиатуры
+    const handleKeyboardHide = () => {
+        document.documentElement.style.setProperty('--keyboard-height', '0px');
+        document.body.classList.remove('keyboard-visible');
+        
+        // Найти и удалить класс со всех контейнеров сообщений
+        const messagesContainers = document.querySelectorAll('.chat-messages, [class*="MessagesContainer"]');
+        messagesContainers.forEach(container => {
+            container.classList.remove('keyboard-visible');
+        });
+        
+        // Удалить класс с контейнеров ввода
+        const inputContainers = document.querySelectorAll('.message-input, [class*="InputContainer"]');
+        inputContainers.forEach(container => {
+            container.classList.remove('keyboard-visible');
+        });
+    };
+    
+    // Функция для добавления обработчиков
+    const addListeners = () => {
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => {
+                if (window.visualViewport.height < window.innerHeight) {
+                    handleKeyboardShow();
+                } else {
+                    handleKeyboardHide();
+                }
+            });
+        }
+        
+        // Фолбек для iOS
+        window.addEventListener('focusin', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                handleKeyboardShow();
+            }
+        });
+        
+        window.addEventListener('focusout', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                handleKeyboardHide();
+            }
+        });
+    };
+    
+    // Функция для удаления обработчиков
+    const removeListeners = () => {
+        if (window.visualViewport) {
+            window.visualViewport.removeEventListener('resize', handleKeyboardShow);
+        }
+        
+        window.removeEventListener('focusin', handleKeyboardShow);
+        window.removeEventListener('focusout', handleKeyboardHide);
+    };
+    
+    return { addListeners, removeListeners, handleKeyboardShow, handleKeyboardHide };
+};

@@ -25,7 +25,8 @@ const Container = styled.div`
   
   @media (max-width: 768px) {
     width: 100%;
-    max-width: 768px;
+    max-width: 100%;
+    position: fixed;
   }
 `;
 
@@ -54,7 +55,7 @@ const Header = styled.header`
     padding: 8px 12px;
     padding-top: calc(8px + env(safe-area-inset-top, 0px));
     width: 100%;
-    max-width: 768px;
+    max-width: 100%;
     height: 54px;
   }
 `;
@@ -77,6 +78,7 @@ const MessagesContainer = styled.div`
 
   &.keyboard-visible {
     padding-bottom: calc(80px + var(--keyboard-height, 0px));
+    transition: padding-bottom 0.3s ease;
   }
 
   @media (max-width: 768px) {
@@ -85,7 +87,7 @@ const MessagesContainer = styled.div`
     padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
     margin-top: 0;
     width: 100%;
-    max-width: 768px;
+    max-width: 100%;
 
     &.keyboard-visible {
       padding-bottom: calc(70px + var(--keyboard-height, 0px));
