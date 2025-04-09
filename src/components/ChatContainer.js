@@ -8,16 +8,21 @@ const Container = styled.div`
   height: 100vh;
   max-width: 768px;
   margin: 0 auto;
-  position: relative;
-  background: var(--tg-theme-bg-color, #ffffff);
-  overflow: hidden;
-`;
-
-const Header = styled.header`
-  position: sticky;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
+  bottom: 0;
+  background: var(--tg-theme-bg-color, #ffffff);
+  overflow: hidden;
+
+  @media (min-width: 769px) {
+    position: relative;
+  }
+`;
+
+const Header = styled.header`
+  position: relative;
   z-index: 1000;
   background-color: var(--tg-theme-bg-color, #ffffff);
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
@@ -28,8 +33,6 @@ const Header = styled.header`
   justify-content: space-between;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  max-width: 768px;
-  margin: 0 auto;
   flex-shrink: 0;
 
   @media (max-width: 768px) {
@@ -41,14 +44,16 @@ const Header = styled.header`
 const MessagesContainer = styled.div`
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px;
   padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  height: calc(100vh - var(--header-height) - var(--keyboard-height, 0px));
+  position: relative;
+  height: 100%;
 
   &.keyboard-visible {
-    height: calc(100vh - var(--header-height) - var(--keyboard-height, 0px));
+    height: calc(100% - var(--keyboard-height, 0px));
     padding-bottom: calc(80px + var(--keyboard-height, 0px));
   }
 
