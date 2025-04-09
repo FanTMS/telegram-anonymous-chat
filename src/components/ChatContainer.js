@@ -119,7 +119,7 @@ const Title = styled.h1`
   }
 `;
 
-const ChatContainer = ({ children, title, onBack }) => {
+const ChatContainer = ({ children, title, onBack, isSupportChat, onEndChat }) => {
   useEffect(() => {
     // Set header height
     const updateHeaderHeight = () => {
@@ -141,6 +141,26 @@ const ChatContainer = ({ children, title, onBack }) => {
     };
   }, []);
 
+  const EndChatButton = styled.button`
+    background: none;
+    border: none;
+    padding: 8px 12px;
+    color: var(--tg-theme-destructive-text-color, #ff3b30);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+
+    &:hover {
+      opacity: 0.8;
+    }
+
+    &:active {
+      opacity: 0.6;
+    }
+  `;
+
   return (
     <Container>
       <Header>
@@ -150,12 +170,21 @@ const ChatContainer = ({ children, title, onBack }) => {
           </BackButton>
         )}
         <Title>{title}</Title>
+        {!isSupportChat && onEndChat && (
+          <EndChatButton onClick={onEndChat}>
+            Завершить чат
+          </EndChatButton>
+        )}
       </Header>
       <MessagesContainer className={document.body.classList.contains('keyboard-visible') ? 'keyboard-visible' : ''}>
         {children}
       </MessagesContainer>
     </Container>
   );
+};
+
+ChatContainer.defaultProps = {
+  isSupportChat: false,
 };
 
 export default ChatContainer; 
