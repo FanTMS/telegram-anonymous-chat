@@ -16,7 +16,8 @@ import {
     setDoc,
     limit,
     limitToLast,
-    increment
+    increment,
+    runTransaction
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { incrementCompletedChats, incrementMessagesCount, incrementChatStarted } from './statisticsService';
@@ -875,58 +876,89 @@ export const getChatMessages = async (chatId, limit = 100) => {
 export const endChat = async (chatId, userId) => {
     try {
         if (!chatId) {
+            console.error("Ошибка: ID чата не указан");
             throw new Error("ID чата не указан");
         }
 
         // Получаем данные чата
         const chatRef = doc(db, "chats", chatId);
-        const chatSnap = await getDoc(chatRef);
+        
+        // Транзакция для безопасного обновления статуса чата
+        return await runTransaction(db, async (transaction) => {
+            const chatSnap = await transaction.get(chatRef);
 
-        if (!chatSnap.exists()) {
-            throw new Error(`Чат с ID ${chatId} не найден`);
-        }
-
-        const chatData = chatSnap.data();
-        const { participants = [], messagesCount = 0, createdAt } = chatData;
-
-        // Проверяем, является ли пользователь участником чата (если указан userId)
-        if (userId && !participants.includes(userId)) {
-            throw new Error('Вы не являетесь участником этого чата');
-        }
-
-        // Вычисляем продолжительность чата в минутах
-        const startTime = createdAt?.toDate?.() || new Date();
-        const endTime = new Date();
-        const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
-
-        // Обновляем статус чата
-        await updateDoc(chatRef, {
-            isActive: false,
-            status: 'ended',
-            endedAt: serverTimestamp(),
-            duration: durationMinutes,
-            ...(userId ? { endedBy: userId } : {})
-        });
-
-        // Добавляем системное сообщение о завершении чата в основную коллекцию messages
-        await addDoc(collection(db, 'messages'), {
-            chatId: chatId,
-            senderId: 'system',
-            text: 'Чат был завершен',
-            type: 'system',
-            timestamp: serverTimestamp(),
-            read: true
-        });
-
-        // Обновляем статистику для всех участников
-        for (const participantId of participants) {
-            try {
-                await updateChatEndStatistics(participantId, chatId, messagesCount, durationMinutes);
-            } catch (statsError) {
-                console.warn(`Ошибка при обновлении статистики для пользователя ${participantId}:`, statsError);
+            if (!chatSnap.exists()) {
+                console.error(`Ошибка: Чат с ID ${chatId} не найден`);
+                throw new Error(`Чат с ID ${chatId} не найден`);
             }
-        }
 
+            const chatData = chatSnap.data();
+            
+            // Проверяем, не завершен ли уже чат
+            if (chatData.status === 'ended' || chatData.isActive === false) {
+                console.warn("Чат уже завершен");
+                return true; // Возвращаем true, так как это не ошибка с точки зрения пользователя
+            }
+            
+            const { participants = [], messagesCount = 0, createdAt } = chatData;
+
+            // Проверяем, является ли пользователь участником чата (если указан userId)
+            if (userId && !participants.includes(userId)) {
+                console.error('Ошибка: Пользователь не является участником чата', {userId, participants});
+                throw new Error('Вы не являетесь участником этого чата');
+            }
+
+            // Вычисляем продолжительность чата в минутах
+            const startTime = createdAt?.toDate?.() || new Date();
+            const endTime = new Date();
+            const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
+
+            // Обновляем статус чата в транзакции
+            transaction.update(chatRef, {
+                isActive: false,
+                status: 'ended',
+                endedAt: serverTimestamp(),
+                duration: durationMinutes,
+                ...(userId ? { endedBy: userId } : {})
+            });
+            
+            return true;
+        });
+        
+        // Остальные операции выполняем после завершения транзакции (не критичные для статуса чата)
+        try {
+            // Добавляем системное сообщение о завершении чата
+            await addDoc(collection(db, 'messages'), {
+                chatId: chatId,
+                senderId: 'system',
+                text: 'Чат был завершен',
+                type: 'system',
+                timestamp: serverTimestamp(),
+                read: true
+            });
+            
+            // Получаем актуальные данные чата для обновления статистики
+            const updatedChatRef = doc(db, "chats", chatId);
+            const updatedChatSnap = await getDoc(updatedChatRef);
+            
+            if (updatedChatSnap.exists()) {
+                const chatData = updatedChatSnap.data();
+                const { participants = [], messagesCount = 0 } = chatData;
+                
+                // Обновляем статистику для всех участников
+                for (const participantId of participants) {
+                    try {
+                        await updateChatEndStatistics(participantId, chatId, messagesCount, chatData.duration || 0);
+                    } catch (statsError) {
+                        console.warn(`Ошибка при обновлении статистики для пользователя ${participantId}:`, statsError);
+                    }
+                }
+            }
+        } catch (nonCriticalError) {
+            console.warn("Некритическая ошибка после завершения чата:", nonCriticalError);
+            // Чат уже завершен в транзакции, поэтому не выбрасываем ошибку
+        }
+        
         return true;
     } catch (error) {
         console.error("Ошибка при завершении чата:", error);

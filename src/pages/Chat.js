@@ -205,98 +205,39 @@ const Chat = () => {
 
     useEffect(() => {
         const loadChatDetails = async () => {
+            setIsLoading(true);
+            let loadErrors = [];
+            
             try {
                 if (!chatId) {
-                    console.error("ID чата не определен");
+                    setError('ID чата не определен');
                     return;
                 }
                 
-                if (!user) {
-                    console.error("Пользователь не аутентифицирован");
-                    setError('Необходимо авторизоваться');
-                    setIsLoading(false);
+                // Проверяем доступность Firestore
+                try {
+                    const dbTestRef = doc(db, "system", "status");
+                    await getDoc(dbTestRef);
+                } catch (dbError) {
+                    console.error('Ошибка подключения к базе данных:', dbError);
+                    throw new Error('Не удалось подключиться к базе данных. Проверьте ваше подключение к интернету.');
+                }
+                
+                // Получаем информацию о чате
+                const chatData = await getChatById(chatId);
+                
+                if (!chatData) {
+                    setError('Чат не найден или был удален');
                     return;
                 }
-
-                // Обеспечиваем наличие ID пользователя, используя либо uid, либо id
-                const userId = user.uid || user.id;
-                if (!userId) {
-                    console.error("ID пользователя не определен");
-                    setError('Ошибка авторизации: отсутствует ID пользователя');
-                    setIsLoading(false);
-                    return;
-                }
-
-                setIsLoading(true);
-                setError(null);
                 
-                // Объявляем переменную partnerId в этой области видимости
-                let partnerIdForFriendCheck = null;
-
-                console.log("Проверка статуса чата для пользователя:", userId);
-                
-                // Сначала проверяем статус чата для получения подробной информации о партнере
-                const chatStatus = await checkChatMatchStatus(userId);
-                let chatDetails;
-                
-                if (chatStatus && chatStatus.id === chatId) {
-                    // Используем данные из checkChatMatchStatus, которые содержат информацию о партнере
-                    chatDetails = chatStatus;
-                    
-                    // Если есть информация о партнере, обрабатываем её
-                    if (chatStatus.partner) {
-                        const partnerData = chatStatus.partner;
-                        partnerIdForFriendCheck = partnerData.id; // Сохраняем ID для проверки дружбы
-                        setPartnerInfo({
-                            id: partnerData.id,
-                            name: partnerData.name || 'Собеседник',
-                            platform: partnerData.platform || 'unknown',
-                            telegramData: partnerData.telegramData || null,
-                            profilePicture: null, // Можно добавить аватар из telegramData если доступен
-                            isOnline: true, // Можно обновить на основе статуса партнера
-                            lastSeen: null
-                        });
-                        
-                        console.log('Информация о партнере:', partnerData);
-                    }
+                // Проверка на активность чата
+                if (!chatData.isActive && chatData.status === 'ended') {
+                    setChat({...chatData, isEnded: true});
+                    showToast('Этот чат был завершен', 'info');
                 } else {
-                    // Если не получили данные из checkChatMatchStatus, используем обычный getChatById
-                    chatDetails = await getChatById(chatId);
-                    
-                    if (chatDetails.type === 'support') {
-                        console.log('Устанавливаем данные партнера для чата поддержки');
-                        const supportInfo = {
-                            id: 'support',
-                            name: 'Техническая поддержка',
-                            isOnline: true,
-                            profilePicture: null,
-                            lastSeen: null,
-                            isSupportChat: true
-                        };
-                        setPartnerInfo(supportInfo);
-                        console.log('Информация о партнере в чате поддержки:', supportInfo);
-                    } else if (chatDetails.participants && chatDetails.participants.length > 0) {
-                        // Находим ID партнера
-                        const partnerId = chatDetails.participants.find(id => id !== userId);
-                        partnerIdForFriendCheck = partnerId; // Сохраняем ID для проверки дружбы
-                        
-                        if (partnerId && chatDetails.participantsData && chatDetails.participantsData[partnerId]) {
-                            const partner = chatDetails.participantsData[partnerId];
-                            setPartnerInfo({
-                                id: partnerId,
-                                name: partner.name || 'Собеседник',
-                                platform: partner.platform || 'unknown',
-                                telegramData: partner.telegramData || null,
-                                profilePicture: null,
-                                isOnline: true,
-                                lastSeen: null
-                            });
-                        }
-                    }
+                    setChat(chatData);
                 }
-                
-                // Устанавливаем данные чата в состояние
-                setChat(chatDetails);
                 
                 // Настраиваем слушатель обновлений чата в реальном времени (например, для статуса печати)
                 const unsubscribe = onSnapshot(doc(db, 'chats', chatId), (doc) => {
@@ -322,14 +263,14 @@ const Chat = () => {
                 setupMessagesSubscription();
                 
                 // Проверяем статус дружбы только если это не чат поддержки
-                if (partnerIdForFriendCheck && partnerIdForFriendCheck !== 'support') {
-                    await checkFriendStatus(partnerIdForFriendCheck);
+                if (chatData.participants && chatData.participants.length > 0) {
+                    const partnerId = chatData.participants.find(id => id !== userId);
+                    await checkFriendStatus(partnerId);
                 }
-                
-                setIsLoading(false);
-            } catch (err) {
-                console.error('Ошибка при загрузке деталей чата:', err);
-                setError('Не удалось загрузить чат. Пожалуйста, попробуйте позже.');
+            } catch (error) {
+                console.error('Ошибка при загрузке данных чата:', error);
+                setError(`Ошибка при загрузке чата: ${error.message}`);
+            } finally {
                 setIsLoading(false);
             }
         };
@@ -647,13 +588,39 @@ const Chat = () => {
 
     const handleEndChatConfirm = async () => {
         try {
+            setIsLoading(true); // Добавляем индикатор загрузки
+            
+            if (!chatId) {
+                showToast('Ошибка: ID чата не определен', 'error');
+                setShowEndChatModal(false);
+                return;
+            }
+            
+            // Проверяем, что у нас есть ID пользователя
+            if (!userId) {
+                showToast('Ошибка: Не удалось определить пользователя', 'error');
+                setShowEndChatModal(false);
+                return;
+            }
+            
+            // Проверяем, что чат еще активен
+            if (chat && !chat.isActive) {
+                showToast('Чат уже завершен', 'info');
+                navigate('/chats');
+                return;
+            }
+            
+            // Вызываем функцию завершения чата
             await endChat(chatId, userId);
             showToast('Чат завершен', 'success');
             navigate('/chats');
         } catch (error) {
             console.error('Ошибка при завершении чата:', error);
-            showToast('Не удалось завершить чат', 'error');
+            
+            // Более понятное сообщение для пользователя
+            showToast('Не удалось завершить чат. Попробуйте еще раз позже.', 'error');
         } finally {
+            setIsLoading(false);
             setShowEndChatModal(false);
         }
     };
@@ -1057,11 +1024,26 @@ const Chat = () => {
                             Вы уверены, что хотите завершить этот чат? После завершения чат будет недоступен для обоих пользователей.
                         </div>
                         <div className="end-chat-modal-actions">
-                            <button className="end-chat-modal-btn cancel" onClick={handleEndChatCancel}>
+                            <button 
+                                className="end-chat-modal-btn cancel" 
+                                onClick={handleEndChatCancel}
+                                disabled={isLoading}
+                            >
                                 Отмена
                             </button>
-                            <button className="end-chat-modal-btn confirm" onClick={handleEndChatConfirm}>
-                                Завершить
+                            <button 
+                                className="end-chat-modal-btn confirm" 
+                                onClick={handleEndChatConfirm}
+                                disabled={isLoading}
+                            >
+                                {isLoading ? (
+                                    <>
+                                        <span className="loading-spinner"></span>
+                                        Завершение...
+                                    </>
+                                ) : (
+                                    'Завершить'
+                                )}
                             </button>
                         </div>
                     </div>
