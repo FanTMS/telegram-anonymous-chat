@@ -22,7 +22,7 @@ const Container = styled.div`
 `;
 
 const Header = styled.header`
-  position: sticky;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
@@ -37,12 +37,11 @@ const Header = styled.header`
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   flex-shrink: 0;
+  width: 100%;
+  max-width: 768px;
+  margin: 0 auto;
 
   @media (max-width: 768px) {
-    position: fixed;
-    width: 100%;
-    max-width: 768px;
-    margin: 0 auto;
     padding: 8px 12px;
     padding-top: calc(8px + env(safe-area-inset-top, 0px));
   }
@@ -53,22 +52,23 @@ const MessagesContainer = styled.div`
   overflow-y: auto;
   overflow-x: hidden;
   padding: 16px;
+  padding-top: calc(16px + var(--header-height, 60px));
   padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   position: relative;
-  height: calc(100% - var(--header-height, 0px));
-  margin-top: var(--header-height, 0px);
+  height: 100%;
+  margin-top: 0;
 
   &.keyboard-visible {
-    height: calc(100% - var(--header-height, 0px) - var(--keyboard-height, 0px));
     padding-bottom: calc(80px + var(--keyboard-height, 0px));
   }
 
   @media (max-width: 768px) {
     padding: 12px;
+    padding-top: calc(12px + var(--header-height, 60px));
     padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
-    margin-top: var(--header-height, 0px);
+    margin-top: 0;
 
     &.keyboard-visible {
       padding-bottom: calc(70px + var(--keyboard-height, 0px));

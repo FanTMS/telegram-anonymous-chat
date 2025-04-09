@@ -26,11 +26,12 @@ const HeaderContainer = styled.header`
   top: 0;
   left: 0;
   width: 100%;
-  z-index: 100;
+  z-index: 1000;
   padding-top: calc(12px + env(safe-area-inset-top, 0));
   height: ${props => props.isCompact ? 'var(--compact-header-height, 48px)' : '60px'};
   animation: ${fadeIn} 0.3s ease;
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   
   ${props => props.isCompact && `
     padding: 8px 10px;
