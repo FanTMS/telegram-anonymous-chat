@@ -2,6 +2,8 @@
  * Утилита для проверки запуска приложения
  */
 
+import { app } from '../firebase';
+
 export const checkAppStatus = () => {
   console.log('Приложение запущено успешно');
   
@@ -11,8 +13,8 @@ export const checkAppStatus = () => {
   
   // Проверка подключения к Firebase
   try {
-    // Минимальная проверка - Firebase инициализирован
-    const firebaseInitialized = typeof firebase !== 'undefined';
+    // Проверяем инициализацию Firebase
+    const firebaseInitialized = !!app;
     console.log('Firebase инициализирован:', firebaseInitialized);
   } catch (error) {
     console.error('Ошибка проверки Firebase:', error);

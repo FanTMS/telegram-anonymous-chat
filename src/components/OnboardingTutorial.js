@@ -3,9 +3,9 @@ import '../styles/OnboardingTutorial.css';
 // Добавляем импорт хука useTelegram
 import { useTelegram } from '../hooks/useTelegram';
 // Добавляем импорт необходимых функций для работы с Telegram
-import { setupMainButton, hideMainButton, triggerHapticFeedback } from '../utils/telegramUtils';
+import { _setupMainButton, _hideMainButton, triggerHapticFeedback } from '../utils/telegramUtils';
 // Добавляем импорт функции для работы с чатами
-import { findRandomChat } from '../utils/chatService';
+import { _findRandomChat } from '../utils/chatService';
 
 // Примеры начала общения
 const chatExamples = [

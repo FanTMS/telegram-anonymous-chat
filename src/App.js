@@ -941,4 +941,5 @@ const Root = () => {
     );
 };
 
+export { Root };
 export default App;

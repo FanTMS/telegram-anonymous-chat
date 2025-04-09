@@ -32,7 +32,8 @@
         "fix-paths": "node scripts/fix-static-paths.js",
         "ensure-index": "node scripts/ensure-index.js",
         "prestart": "npm run fix-paths",
-        "build": "cross-env DISABLE_ESLINT_PLUGIN=true react-scripts build && copy public\\_redirects build\\ && copy public\\404.html build\\"
+        "copyfiles": "node scripts/copy-files.js",
+        "build": "cross-env DISABLE_ESLINT_PLUGIN=true react-scripts build && node scripts/copy-files.js"
     },
     "eslintConfig": {
         "extends": [
