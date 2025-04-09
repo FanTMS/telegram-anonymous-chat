@@ -345,6 +345,7 @@
     height: calc(100vh - 120px);
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    padding-bottom: 16px;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -516,7 +517,7 @@
 }
 
 .message-input {
-    position: sticky;
+    position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
@@ -528,6 +529,11 @@
     z-index: 10;
     margin-top: auto;
     padding-bottom: calc(8px + env(safe-area-inset-bottom, 0));
+    max-width: 768px;
+    margin-left: auto;
+    margin-right: auto;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
 .message-input input {
@@ -540,6 +546,9 @@
     font-size: 15px;
     outline: none;
     margin: 0 8px;
+    min-height: 40px;
+    max-height: 100px;
+    resize: none;
 }
 
 .message-input input:focus {
@@ -1269,4 +1278,29 @@
 
 .input-container .message-input {
     display: none;
+}
+
+/* Handle keyboard visibility */
+.keyboard-visible .chat-messages {
+    height: calc(100vh - 120px - var(--keyboard-height, 0px));
+    padding-bottom: calc(16px + var(--keyboard-height, 0px));
+}
+
+.keyboard-visible .message-input {
+    bottom: var(--keyboard-height, 0px);
+}
+
+/* Ensure proper layout on iOS */
+@supports (-webkit-touch-callout: none) {
+    .chat-container {
+        height: -webkit-fill-available;
+    }
+    
+    .chat-messages {
+        height: calc(100vh - 120px - env(safe-area-inset-bottom, 0px));
+    }
+    
+    .message-input {
+        bottom: env(safe-area-inset-bottom, 0px);
+    }
 }

@@ -27,36 +27,66 @@ export const getTelegramWebApp = () => {
  */
 export const getTelegramUser = () => {
     try {
-        // Проверяем WebApp через window.Telegram
+        // First try to get data from Telegram WebApp
         if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
             const userData = window.Telegram.WebApp.initDataUnsafe.user;
             console.log('Получены данные пользователя из Telegram WebApp (window.Telegram):', userData);
             
-            // Сохраняем данные в sessionStorage
+            // Save data in both sessionStorage and localStorage for persistence
             try {
+                const persistentData = {
+                    ...userData,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem('telegram_user_persistent', JSON.stringify(persistentData));
                 sessionStorage.setItem('telegram_last_user', JSON.stringify(userData));
                 sessionStorage.setItem('telegramUser', JSON.stringify(userData));
+                localStorage.setItem('is_telegram_webapp', 'true');
             } catch (e) {
-                console.warn('Не удалось сохранить данные Telegram в sessionStorage:', e);
+                console.warn('Не удалось сохранить данные Telegram в хранилище:', e);
             }
             
             return userData;
         }
         
-        // Проверяем WebApp через twa-dev/sdk
+        // Try to get data from twa-dev/sdk
         if (typeof WebApp !== 'undefined' && WebApp.initDataUnsafe && WebApp.initDataUnsafe.user) {
             const userData = WebApp.initDataUnsafe.user;
             console.log('Получены данные пользователя из Telegram WebApp (twa-dev/sdk):', userData);
             
-            // Сохраняем данные для последующего восстановления
             try {
+                const persistentData = {
+                    ...userData,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem('telegram_user_persistent', JSON.stringify(persistentData));
                 sessionStorage.setItem('telegram_last_user', JSON.stringify(userData));
                 sessionStorage.setItem('telegramUser', JSON.stringify(userData));
+                localStorage.setItem('is_telegram_webapp', 'true');
             } catch (e) {
-                console.warn('Не удалось сохранить данные Telegram в sessionStorage:', e);
+                console.warn('Не удалось сохранить данные Telegram в хранилище:', e);
             }
             
             return userData;
+        }
+
+        // Try to get data from persistent storage first
+        const persistentData = localStorage.getItem('telegram_user_persistent');
+        if (persistentData) {
+            try {
+                const parsed = JSON.parse(persistentData);
+                // Check if data is not too old (7 days)
+                if (parsed.timestamp && (Date.now() - parsed.timestamp) < 7 * 24 * 60 * 60 * 1000) {
+                    console.log('Используем сохраненные данные пользователя Telegram из localStorage:', parsed);
+                    
+                    // Restore session storage data
+                    sessionStorage.setItem('telegram_last_user', JSON.stringify(parsed));
+                    sessionStorage.setItem('telegramUser', JSON.stringify(parsed));
+                    return parsed;
+                }
+            } catch (e) {
+                console.warn('Ошибка при чтении сохраненных данных Telegram:', e);
+            }
         }
         
         // Проверяем data из URL параметров (часто используется на мобильных устройствах)

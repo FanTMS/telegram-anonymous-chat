@@ -22,6 +22,7 @@ export const UserProvider = ({ children }) => {
     const isMobileTelegram = /Telegram/i.test(navigator.userAgent) || 
                            document.referrer.includes('t.me') || 
                            window.location.href.includes('tg://') ||
+                           localStorage.getItem('is_telegram_webapp') === 'true' ||
                            sessionStorage.getItem('is_telegram_webapp') === 'true';
 
     // Вспомогательная функция для сохранения данных пользователя
@@ -29,19 +30,116 @@ export const UserProvider = ({ children }) => {
         if (!userData) return;
         
         try {
-            // Сохраняем только в sessionStorage для предотвращения проблем с localStorage
+            // Сохраняем в оба хранилища для надежности
+            const persistentData = {
+                ...userData,
+                lastSaved: Date.now()
+            };
+            
+            localStorage.setItem('current_user', JSON.stringify(persistentData));
             sessionStorage.setItem('current_user', JSON.stringify(userData));
             
             // Сохраняем ID отдельно для быстрого доступа
             if (userData.id) {
+                localStorage.setItem('current_user_id', userData.id);
                 sessionStorage.setItem('current_user_id', userData.id);
             }
             
-            console.log('UserContext: Данные пользователя сохранены в sessionStorage', userData.id);
+            console.log('UserContext: Данные пользователя сохранены в хранилища', userData.id);
         } catch (e) {
             console.error('Ошибка при сохранении данных пользователя:', e);
         }
     };
+
+    // Функция для восстановления сессии
+    const restoreUserSession = async () => {
+        try {
+            // Сначала пытаемся получить данные из localStorage
+            const persistentUser = localStorage.getItem('current_user');
+            const persistentTelegram = localStorage.getItem('telegram_user_persistent');
+            
+            if (persistentUser) {
+                const userData = JSON.parse(persistentUser);
+                // Проверяем актуальность данных (7 дней)
+                if (userData.lastSaved && (Date.now() - userData.lastSaved) < 7 * 24 * 60 * 60 * 1000) {
+                    console.log('UserContext: Восстановлена сессия из localStorage');
+                    setUser(userData);
+                    return true;
+                }
+            }
+            
+            // Если нет сохраненного пользователя, но есть данные Telegram
+            if (persistentTelegram) {
+                const telegramData = JSON.parse(persistentTelegram);
+                if (telegramData.timestamp && (Date.now() - telegramData.timestamp) < 7 * 24 * 60 * 60 * 1000) {
+                    const userId = `tg_${telegramData.id}`;
+                    const newUser = {
+                        id: userId,
+                        name: telegramData.first_name || 'Пользователь Telegram',
+                        telegramData: {
+                            telegramId: telegramData.id?.toString(),
+                            username: telegramData.username || '',
+                            firstName: telegramData.first_name || '',
+                            lastName: telegramData.last_name || '',
+                            languageCode: telegramData.language_code || 'ru'
+                        },
+                        lastSaved: Date.now()
+                    };
+                    
+                    setUser(newUser);
+                    saveUserToStorage(newUser);
+                    return true;
+                }
+            }
+            
+            return false;
+        } catch (e) {
+            console.error('Ошибка при восстановлении сессии:', e);
+            return false;
+        }
+    };
+
+    // Эффект для инициализации пользователя
+    useEffect(() => {
+        const initializeUser = async () => {
+            setLoading(true);
+            
+            try {
+                // Пытаемся восстановить сессию
+                const sessionRestored = await restoreUserSession();
+                
+                if (!sessionRestored) {
+                    // Если сессия не восстановлена, пытаемся получить новые данные
+                    const tgUser = getTelegramUser();
+                    if (tgUser) {
+                        const userId = `tg_${tgUser.id}`;
+                        const newUser = {
+                            id: userId,
+                            name: tgUser.first_name || 'Пользователь Telegram',
+                            telegramData: {
+                                telegramId: tgUser.id?.toString(),
+                                username: tgUser.username || '',
+                                firstName: tgUser.first_name || '',
+                                lastName: tgUser.last_name || '',
+                                languageCode: tgUser.language_code || 'ru'
+                            },
+                            lastSaved: Date.now()
+                        };
+                        
+                        setUser(newUser);
+                        saveUserToStorage(newUser);
+                        setTelegramData(tgUser);
+                    }
+                }
+            } catch (e) {
+                console.error('Ошибка при инициализации пользователя:', e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        
+        initializeUser();
+    }, []);
 
     // Загрузка Telegram данных
     useEffect(() => {
