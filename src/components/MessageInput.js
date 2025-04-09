@@ -52,6 +52,14 @@ const InputContainer = styled.form`
 
   @media (max-width: 768px) {
     padding: 8px 12px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    width: 100%;
+    max-width: 768px;
+  }
+  
+  @media (min-width: 769px) {
+    width: 100%;
+    max-width: 768px;
   }
 `;
 

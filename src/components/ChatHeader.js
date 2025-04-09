@@ -32,6 +32,8 @@ const HeaderContainer = styled.header`
   animation: ${fadeIn} 0.3s ease;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  max-width: 768px;
+  margin: 0 auto;
   
   ${props => props.isCompact && `
     padding: 8px 10px;
@@ -56,6 +58,14 @@ const HeaderContainer = styled.header`
     left: 50%;
     transform: translateX(-50%);
     border-radius: 0 0 16px 16px;
+  }
+  
+  @media (max-width: 480px) {
+    max-width: 768px;
+    left: 0;
+    right: 0;
+    border-radius: 0;
+    margin: 0 auto;
   }
 `;
 

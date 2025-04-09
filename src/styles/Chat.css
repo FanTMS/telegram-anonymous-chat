@@ -862,14 +862,25 @@
     .chat-container {
         border-radius: 0;
         height: 100vh;
+        max-width: 768px;
+        width: 100%;
     }
 
     .chat-messages {
         height: calc(100vh - 120px);
+        margin-top: 54px;
     }
 
     .message-input {
         padding-bottom: calc(8px + env(safe-area-inset-bottom, 0));
+        max-width: 768px;
+        width: 100%;
+    }
+    
+    .chat-header {
+        height: 54px;
+        max-width: 768px;
+        width: 100%;
     }
 }
 
@@ -1296,17 +1307,28 @@
 @supports (-webkit-touch-callout: none) {
     .chat-container {
         height: -webkit-fill-available;
+        max-width: 768px;
+        width: 100%;
     }
     
     .chat-messages {
         height: calc(100vh - 114px - env(safe-area-inset-bottom, 0px));
+        margin-top: 54px;
     }
     
     .message-input {
         padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+        max-width: 768px;
+        width: 100%;
     }
     
     .keyboard-visible .chat-messages {
         height: calc(100vh - 114px - var(--keyboard-height, 0px));
+    }
+    
+    .chat-header {
+        height: 54px;
+        max-width: 768px;
+        width: 100%;
     }
 }
