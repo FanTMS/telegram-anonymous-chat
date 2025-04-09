@@ -3,7 +3,7 @@ import styled, { keyframes } from 'styled-components';
 import connectionService from '../utils/firebaseConnectionService';
 import { isCompactMode } from '../utils/telegramUtils';
 
-const slideUp = keyframes`
+const _slideUp = keyframes`
   from {
     transform: translateY(100%);
     opacity: 0;
@@ -226,7 +226,7 @@ const AttachmentButton = styled.button`
   `}
 `;
 
-const MessageComposingIndicator = styled.div`
+const _MessageComposingIndicator = styled.div`
   position: absolute;
   top: -28px;
   left: 16px;
@@ -418,7 +418,7 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
     }
   };
 
-  const adjustTextareaHeight = () => {
+  const _adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';

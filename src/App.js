@@ -5,6 +5,7 @@ import { ToastProvider } from './components/Toast';
 import { NotificationProvider } from './contexts/NotificationContext';
 import './styles/global.css';
 import './styles/compact-mode.css';
+import { checkAppStatus } from './utils/appCheck';
 
 // Импорт компонентов
 import RegistrationForm from './components/RegistrationForm';
@@ -31,12 +32,13 @@ import Friends from './pages/Friends';
 import AdminReports from './pages/AdminReports';
 import AdminStats from './pages/AdminStats';
 import AdminUsers from './pages/AdminUsers';
+import OnboardingTutorial from './components/OnboardingTutorial';
 
 import './styles/BeginnerGuide.css';
 import './App.css';
 
 import WebApp from '@twa-dev/sdk';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, _onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import connectionService from './utils/firebaseConnectionService';
 import { createRequiredIndexes } from './utils/firebaseIndexCreator';
@@ -86,7 +88,7 @@ const ProfileIcon = () => (
 );
 
 // Элементы навигации
-const navigationItems = [
+const _navigationItems = [
     {
         path: '/',
         label: 'Главная',
@@ -268,11 +270,21 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
 function App() {
     const [isConnected, setIsConnected] = useState(true);
     const [connectionError, setConnectionError] = useState(null);
-    const [telegramInitialized, setTelegramInitialized] = useState(false);
+    const [_telegramInitialized, setTelegramInitialized] = useState(false);
     const [error, setError] = useState(null);
     const [initializeAttempts, setInitializeAttempts] = useState(0);
 
     console.log('App компонент инициализирован');
+    
+    // Проверка запуска приложения
+    useEffect(() => {
+        try {
+            const status = checkAppStatus();
+            console.log('Статус приложения:', status);
+        } catch (err) {
+            console.error('Ошибка при проверке запуска:', err);
+        }
+    }, []);
 
     // Инициализация и настройка Telegram WebApp
     useEffect(() => {
@@ -857,7 +869,7 @@ function App() {
 
 // Обновленный компонент Root для обработки корневого маршрута
 const Root = () => {
-    const { isAuthenticated, loading, user } = useContext(UserContext);
+    const { isAuthenticated, loading, _user } = useContext(UserContext);
     const navigate = useNavigate();
     const location = useLocation();
     const [redirectAttempts, setRedirectAttempts] = useState(0);
