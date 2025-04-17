@@ -217,7 +217,8 @@ const MessageInput = forwardRef(({ onSendMessage, onSend, disabled = false, plac
       if (messagesContainer) {
         messagesContainer.classList.add('keyboard-visible');
         // Adjust padding to prevent content from being hidden behind the keyboard
-        messagesContainer.style.paddingBottom = `calc(70px + ${keyboardHeight || 0}px)`;
+        const keyboardHeightValue = parseInt(document.documentElement.style.getPropertyValue('--keyboard-height') || '0');
+        messagesContainer.style.paddingBottom = `calc(70px + ${keyboardHeightValue}px)`;
       }
     };
 

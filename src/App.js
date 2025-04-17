@@ -6,6 +6,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import './styles/global.css';
 import './styles/compact-mode.css';
 import { checkAppStatus } from './utils/appCheck';
+import BottomNavigation from './components/BottomNavigation';
 
 // Импорт компонентов
 import RegistrationForm from './components/RegistrationForm';
@@ -710,8 +711,9 @@ function App() {
                                 
                                 <Route path="/chat/:chatId" element={
                                     <ProtectedRoute>
-                                        <AppLayout hideNavigation>
+                                        <AppLayout hideNavigation={false}>
                                             <Chat />
+                                            <BottomNavigation items={navigationItems} />
                                         </AppLayout>
                                     </ProtectedRoute>
                                 } />

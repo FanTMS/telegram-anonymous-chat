@@ -229,7 +229,26 @@ const Chat = () => {
                 }
                 
                 // Получаем информацию о чате
-                const chatData = await getChatById(chatId);
+                let attempts = 0;
+                let chatData = null;
+                const maxAttempts = 3;
+                
+                while (attempts < maxAttempts && !chatData) {
+                    try {
+                        chatData = await getChatById(chatId);
+                        if (!chatData && attempts < maxAttempts - 1) {
+                            // Если не нашли чат, подождем немного и попробуем еще раз
+                            console.log(`Попытка ${attempts + 1}: Чат не найден, ожидание перед следующей попыткой...`);
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // Подождать 1 секунду
+                        }
+                    } catch (err) {
+                        console.error(`Попытка ${attempts + 1}: Ошибка при получении данных чата:`, err);
+                        if (attempts < maxAttempts - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // Подождать 1 секунду
+                        }
+                    }
+                    attempts++;
+                }
                 
                 if (!chatData) {
                     setError('Чат не найден или был удален');
