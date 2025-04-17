@@ -584,17 +584,52 @@ export const isIphoneWithNotch = () => {
  * @returns {void}
  */
 export const updateSafeAreaVars = () => {
-    // Получаем размеры безопасной области
-    const safeAreaTop = window.env ? window.env('safe-area-inset-top', 0) : 0;
-    const safeAreaBottom = window.env ? window.env('safe-area-inset-bottom', 0) : 0;
-    const safeAreaLeft = window.env ? window.env('safe-area-inset-left', 0) : 0;
-    const safeAreaRight = window.env ? window.env('safe-area-inset-right', 0) : 0;
+    // Получаем размеры безопасной области используя env() или резервные значения
+    let safeAreaTop = 0;
+    let safeAreaBottom = 0;
+    let safeAreaLeft = 0;
+    let safeAreaRight = 0;
+    
+    try {
+        const style = window.getComputedStyle(document.documentElement);
+        
+        // Пытаемся получить значения из CSS с помощью env()
+        safeAreaTop = parseInt(style.getPropertyValue('env(safe-area-inset-top)') || '0', 10);
+        safeAreaBottom = parseInt(style.getPropertyValue('env(safe-area-inset-bottom)') || '0', 10);
+        safeAreaLeft = parseInt(style.getPropertyValue('env(safe-area-inset-left)') || '0', 10);
+        safeAreaRight = parseInt(style.getPropertyValue('env(safe-area-inset-right)') || '0', 10);
+        
+        // Если значения недоступны через getComputedStyle, пробуем через window.env
+        if (isNaN(safeAreaTop) && window.env) {
+            safeAreaTop = window.env('safe-area-inset-top', 0);
+            safeAreaBottom = window.env('safe-area-inset-bottom', 0); 
+            safeAreaLeft = window.env('safe-area-inset-left', 0);
+            safeAreaRight = window.env('safe-area-inset-right', 0);
+        }
+        
+        // Резервные значения для iPhone с вырезом, если не удалось получить значения другими способами
+        if (isIphoneWithNotch() && safeAreaTop === 0) {
+            safeAreaTop = 44; // Стандартная высота вырезы на iPhone X и новее
+            safeAreaBottom = 34; // Высота нижней панели на iPhone X и новее в портретной ориентации
+            
+            // Проверка ориентации
+            if (window.innerWidth > window.innerHeight) {
+                safeAreaTop = 0; // В ландшафтной ориентации верхняя вырезка может отсутствовать
+                safeAreaLeft = 44; // Боковая вырезка в ландшафтной ориентации
+                safeAreaRight = 44; // Боковая вырезка с другой стороны
+            }
+        }
+    } catch (error) {
+        console.warn('Ошибка при получении значений безопасной области:', error);
+    }
     
     // Устанавливаем CSS переменные
     document.documentElement.style.setProperty('--safe-area-top', `${safeAreaTop}px`);
     document.documentElement.style.setProperty('--safe-area-bottom', `${safeAreaBottom}px`);
     document.documentElement.style.setProperty('--safe-area-left', `${safeAreaLeft}px`);
     document.documentElement.style.setProperty('--safe-area-right', `${safeAreaRight}px`);
+    
+    console.log(`Установлены значения безопасной области: top=${safeAreaTop}px, bottom=${safeAreaBottom}px, left=${safeAreaLeft}px, right=${safeAreaRight}px`);
 };
 
 /**
@@ -602,73 +637,150 @@ export const updateSafeAreaVars = () => {
  * @returns {object} Объект с функциями для добавления и удаления обработчиков
  */
 export const mobileKeyboardHandlers = () => {
+    // Сохраняем исходную высоту вьюпорта при загрузке
+    const originalWindowHeight = window.innerHeight;
+    let keyboardHeight = 0;
+    let isKeyboardVisible = false;
+    
     // Обработчик для определения показа клавиатуры
-    const handleKeyboardShow = () => {
+    const handleKeyboardShow = (event) => {
+        // Для iOS мы можем использовать visualViewport
         if (window.visualViewport) {
             const viewportHeight = window.visualViewport.height;
             const windowHeight = window.innerHeight;
-            const keyboardHeight = windowHeight - viewportHeight;
+            keyboardHeight = windowHeight - viewportHeight;
             
-            if (keyboardHeight > 0) {
+            // Проверяем, что высота клавиатуры значительна (не просто изменение размера окна)
+            if (keyboardHeight > 150) {
                 document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
-                document.body.classList.add('keyboard-visible');
                 
-                // Найти и добавить класс ко всем контейнерам сообщений
-                const messagesContainers = document.querySelectorAll('.chat-messages, [class*="MessagesContainer"]');
-                messagesContainers.forEach(container => {
-                    container.classList.add('keyboard-visible');
-                });
+                if (!isKeyboardVisible) {
+                    isKeyboardVisible = true;
+                    document.body.classList.add('keyboard-visible');
+                    
+                    // Найти и добавить класс ко всем контейнерам сообщений
+                    const messagesContainers = document.querySelectorAll('.chat-messages, [class*="MessagesContainer"]');
+                    messagesContainers.forEach(container => {
+                        container.classList.add('keyboard-visible');
+                    });
+                    
+                    // Добавить класс к контейнерам ввода
+                    const inputContainers = document.querySelectorAll('.message-input, [class*="InputContainer"]');
+                    inputContainers.forEach(container => {
+                        container.classList.add('keyboard-visible');
+                    });
+                    
+                    // Установка дополнительных переменных CSS для высоты
+                    const vh = window.visualViewport.height * 0.01;
+                    document.documentElement.style.setProperty('--vh', `${vh}px`);
+                    document.documentElement.style.setProperty('--viewport-height', `${window.visualViewport.height}px`);
+                    
+                    console.log(`Клавиатура показана. Высота: ${keyboardHeight}px, Viewport: ${viewportHeight}px`);
+                }
+            }
+        } else {
+            // Альтернативный подход для устройств без visualViewport
+            // Определяем высоту клавиатуры по разнице исходной высоты и текущей высоты окна
+            const currentWindowHeight = window.innerHeight;
+            keyboardHeight = originalWindowHeight - currentWindowHeight;
+            
+            if (keyboardHeight > 150) {
+                document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
                 
-                // Добавить класс к контейнерам ввода
-                const inputContainers = document.querySelectorAll('.message-input, [class*="InputContainer"]');
-                inputContainers.forEach(container => {
-                    container.classList.add('keyboard-visible');
-                });
+                if (!isKeyboardVisible) {
+                    isKeyboardVisible = true;
+                    document.body.classList.add('keyboard-visible');
+                    
+                    // Обновляем CSS переменные
+                    const vh = currentWindowHeight * 0.01;
+                    document.documentElement.style.setProperty('--vh', `${vh}px`);
+                    document.documentElement.style.setProperty('--viewport-height', `${currentWindowHeight}px`);
+                    
+                    console.log(`Клавиатура показана (alt). Высота: ${keyboardHeight}px`);
+                }
             }
         }
     };
     
     // Обработчик для определения скрытия клавиатуры
     const handleKeyboardHide = () => {
-        document.documentElement.style.setProperty('--keyboard-height', '0px');
-        document.body.classList.remove('keyboard-visible');
+        const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
         
-        // Найти и удалить класс со всех контейнеров сообщений
-        const messagesContainers = document.querySelectorAll('.chat-messages, [class*="MessagesContainer"]');
-        messagesContainers.forEach(container => {
-            container.classList.remove('keyboard-visible');
-        });
-        
-        // Удалить класс с контейнеров ввода
-        const inputContainers = document.querySelectorAll('.message-input, [class*="InputContainer"]');
-        inputContainers.forEach(container => {
-            container.classList.remove('keyboard-visible');
-        });
+        // Проверяем, действительно ли клавиатура скрыта
+        // Например, если viewportHeight близок к исходной высоте окна
+        if (Math.abs(viewportHeight - originalWindowHeight) < 100) {
+            if (isKeyboardVisible) {
+                isKeyboardVisible = false;
+                keyboardHeight = 0;
+                document.documentElement.style.setProperty('--keyboard-height', '0px');
+                document.body.classList.remove('keyboard-visible');
+                
+                // Найти и удалить класс со всех контейнеров сообщений
+                const messagesContainers = document.querySelectorAll('.chat-messages, [class*="MessagesContainer"]');
+                messagesContainers.forEach(container => {
+                    container.classList.remove('keyboard-visible');
+                });
+                
+                // Удалить класс с контейнеров ввода
+                const inputContainers = document.querySelectorAll('.message-input, [class*="InputContainer"]');
+                inputContainers.forEach(container => {
+                    container.classList.remove('keyboard-visible');
+                });
+                
+                // Восстанавливаем оригинальные значения CSS переменных
+                const vh = originalWindowHeight * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+                document.documentElement.style.setProperty('--viewport-height', `${originalWindowHeight}px`);
+                
+                console.log(`Клавиатура скрыта. Восстановлен viewport: ${viewportHeight}px`);
+            }
+        }
     };
     
     // Функция для добавления обработчиков
     const addListeners = () => {
         if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', () => {
-                if (window.visualViewport.height < window.innerHeight) {
-                    handleKeyboardShow();
-                } else {
-                    handleKeyboardHide();
-                }
-            });
+            console.log('Добавлены обработчики visualViewport для клавиатуры');
+            window.visualViewport.addEventListener('resize', handleKeyboardShow);
+            window.visualViewport.addEventListener('scroll', handleKeyboardShow);
         }
         
-        // Фолбек для iOS
-        window.addEventListener('focusin', (e) => {
+        // Слушаем изменения размера окна для устройств без visualViewport
+        window.addEventListener('resize', handleKeyboardShow);
+        
+        // Обработчики фокуса для полей ввода (особенно важно для iOS)
+        document.addEventListener('focusin', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                handleKeyboardShow();
+                // Для iOS добавляем задержку, чтобы клавиатура успела появиться
+                setTimeout(handleKeyboardShow, 300);
             }
         });
         
-        window.addEventListener('focusout', (e) => {
+        document.addEventListener('focusout', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                handleKeyboardHide();
+                // Для iOS добавляем задержку, чтобы клавиатура успела скрыться
+                setTimeout(handleKeyboardHide, 300);
             }
+        });
+        
+        // Обработчик ориентации экрана
+        window.addEventListener('orientationchange', () => {
+            // Сбрасываем значения при изменении ориентации
+            isKeyboardVisible = false;
+            handleKeyboardHide();
+            
+            // Повторно устанавливаем после небольшой задержки
+            setTimeout(() => {
+                const vh = window.innerHeight * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+                
+                // Обновляем исходную высоту, так как она изменится при повороте
+                if (!isKeyboardVisible) {
+                    // Устанавливаем новую оригинальную высоту только если клавиатура скрыта
+                    // Иначе можем получить неверное значение
+                    // originalWindowHeight = window.innerHeight;
+                }
+            }, 300);
         });
     };
     
@@ -676,10 +788,18 @@ export const mobileKeyboardHandlers = () => {
     const removeListeners = () => {
         if (window.visualViewport) {
             window.visualViewport.removeEventListener('resize', handleKeyboardShow);
+            window.visualViewport.removeEventListener('scroll', handleKeyboardShow);
         }
         
-        window.removeEventListener('focusin', handleKeyboardShow);
-        window.removeEventListener('focusout', handleKeyboardHide);
+        window.removeEventListener('resize', handleKeyboardShow);
+        
+        document.removeEventListener('focusin', handleKeyboardShow);
+        document.removeEventListener('focusout', handleKeyboardHide);
+        window.removeEventListener('orientationchange', handleKeyboardHide);
+        
+        // Возвращаем значения по умолчанию
+        document.documentElement.style.setProperty('--keyboard-height', '0px');
+        document.body.classList.remove('keyboard-visible');
     };
     
     return { addListeners, removeListeners, handleKeyboardShow, handleKeyboardHide };

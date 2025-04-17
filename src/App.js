@@ -5,6 +5,7 @@ import { ToastProvider } from './components/Toast';
 import { NotificationProvider } from './contexts/NotificationContext';
 import './styles/global.css';
 import './styles/compact-mode.css';
+import './styles/mobile.css';
 import { checkAppStatus } from './utils/appCheck';
 import BottomNavigation from './components/BottomNavigation';
 

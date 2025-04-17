@@ -30,6 +30,13 @@ const NavigationContainer = styled.div`
     padding-left: var(--safe-area-left, env(safe-area-inset-left, 0));
     padding-right: var(--safe-area-right, env(safe-area-inset-right, 0));
   }
+
+  &[data-is-mobile="true"] {
+    height: 60px;
+    padding-bottom: var(--safe-area-bottom, env(safe-area-inset-bottom, 0));
+    padding-left: var(--safe-area-left, env(safe-area-inset-left, 0));
+    padding-right: var(--safe-area-right, env(safe-area-inset-right, 0));
+  }
   
   @media (min-width: 481px) {
     width: 480px;
@@ -58,6 +65,10 @@ const NavigationContainer = styled.div`
     &.tg-compact-mode {
       padding-bottom: constant(safe-area-inset-bottom);
     }
+  }
+
+  &.keyboard-visible {
+    transform: translateY(100%);
   }
 `;
 
@@ -222,6 +233,7 @@ const BottomNavigation = ({ items = [], isCompactMode = false }) => {
     const [isVisible, setIsVisible] = useState(true);
     const [lastScrollY, setLastScrollY] = useState(0);
     const notifications = useNotifications();
+    const [isMobile, setIsMobile] = useState(false);
     
     // Safely access notification values with fallbacks
     const unreadChatsCount = notifications?.unreadChatsCount || 0;
@@ -230,6 +242,53 @@ const BottomNavigation = ({ items = [], isCompactMode = false }) => {
     console.log("BottomNavigation: unreadChatsCount =", unreadChatsCount, "unreadChats =", unreadChats);
 
     const currentPath = location.pathname;
+
+    // Определяем, является ли устройство мобильным
+    useEffect(() => {
+        const checkMobile = () => {
+            const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            setIsMobile(isMobileDevice);
+        };
+        
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        
+        return () => {
+            window.removeEventListener('resize', checkMobile);
+        };
+    }, []);
+
+    // Скрываем нижнюю навигацию при показе клавиатуры на мобильных устройствах
+    useEffect(() => {
+        if (!isMobile) return;
+        
+        const handleKeyboardVisibility = () => {
+            const isKeyboardVisible = document.body.classList.contains('keyboard-visible');
+            if (isKeyboardVisible) {
+                setIsVisible(false);
+            } else {
+                setIsVisible(true);
+            }
+        };
+        
+        // Наблюдаем за классом на body
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.attributeName === 'class') {
+                    handleKeyboardVisibility();
+                }
+            });
+        });
+        
+        observer.observe(document.body, { attributes: true });
+        
+        // При первоначальной загрузке тоже проверяем
+        handleKeyboardVisibility();
+        
+        return () => {
+            observer.disconnect();
+        };
+    }, [isMobile]);
 
     // Определение, активен ли пункт меню
     const isItemActive = (item) => {
@@ -307,40 +366,33 @@ const BottomNavigation = ({ items = [], isCompactMode = false }) => {
         return null;
     }
 
-    // Создаем дополнительный класс для компактного режима
-    const navClass = isCompactMode ? 'tg-compact-mode' : '';
-
     return (
-        <NavigationContainer $hidden={!isVisible} className={navClass}>
-            <NavItemContainer className={navClass}>
-                {items.map((item) => {
+        <NavigationContainer 
+            $hidden={!isVisible} 
+            className={isCompactMode ? 'tg-compact-mode' : ''}
+            data-is-mobile={isMobile ? 'true' : 'false'}
+        >
+            <NavItemContainer className={isCompactMode ? 'tg-compact-mode' : ''}>
+                {items.map((item, index) => {
                     const active = isItemActive(item);
-                    
-                    // Show badge for Chats tab when there are unread messages
-                    const showBadge = item.path === '/chats' && unreadChatsCount > 0;
+                    const hasNotifications = item.path === '/chats' && unreadChatsCount > 0;
                     
                     return (
-                        <NavItem
-                            key={item.path}
+                        <NavItem 
+                            key={index} 
                             $active={active}
-                            onClick={(e) => handleNavClick(item.path, e, item.path)}
+                            onClick={(e) => handleNavClick(item.path, e, index)}
                         >
-                            {showBadge && (
-                                <BadgeIndicator>
-                                    {unreadChatsCount > 99 ? '99+' : unreadChatsCount}
-                                </BadgeIndicator>
-                            )}
-                            
+                            {ripple.visible && ripple.itemId === index && 
+                                <Ripple style={{ left: ripple.x, top: ripple.y }} />
+                            }
                             <IconContainer>
                                 <IconRenderer icon={item.icon} />
                             </IconContainer>
+                            <Label $active={active}>{item.label}</Label>
                             
-                            <Label $active={active}>
-                                {item.label}
-                            </Label>
-                            
-                            {ripple.visible && ripple.itemId === item.path && (
-                                <Ripple style={{ left: ripple.x, top: ripple.y }} />
+                            {hasNotifications && (
+                                <BadgeIndicator>{unreadChatsCount}</BadgeIndicator>
                             )}
                         </NavItem>
                     );

@@ -29,10 +29,17 @@ const MobileContainer = styled.div`
   &.tg-compact-mode {
     max-width: 100%;
     box-shadow: none;
-    height: var(--tg-viewport-stable-height, 100vh);
+    height: calc(var(--vh, 1vh) * 100);
     /* Явно указываем отступы для устройств с "челкой" и вырезами */
     padding-top: var(--safe-area-top, env(safe-area-inset-top, 0px));
     padding-bottom: 0; /* Обработка в SafeAreaView */
+    padding-left: var(--safe-area-left, env(safe-area-inset-left, 0px));  
+    padding-right: var(--safe-area-right, env(safe-area-inset-right, 0px));
+  }
+
+  &[data-is-mobile="true"] {
+    height: calc(var(--vh, 1vh) * 100);
+    padding-top: var(--safe-area-top, env(safe-area-inset-top, 0px));
     padding-left: var(--safe-area-left, env(safe-area-inset-left, 0px));  
     padding-right: var(--safe-area-right, env(safe-area-inset-right, 0px));
   }
@@ -65,6 +72,15 @@ const SafeAreaView = styled.div`
     padding-left: 0; /* Боковые отступы применяются к MobileContainer */
     padding-right: 0;
   }
+
+  &[data-is-mobile="true"] {
+    padding-top: 0;
+    padding-bottom: calc(60px + var(--safe-area-bottom, env(safe-area-inset-bottom, 0px))); 
+  }
+
+  &.keyboard-visible {
+    padding-bottom: var(--keyboard-height, 0px);
+  }
 `;
 
 const PageContent = styled.main`
@@ -84,7 +100,15 @@ const PageContent = styled.main`
   }
   
   &.tg-compact-mode {
-    max-height: var(--tg-viewport-stable-height, 100vh);
+    max-height: var(--tg-viewport-stable-height, calc(var(--vh, 1vh) * 100));
+  }
+
+  &[data-is-mobile="true"] {
+    max-height: calc(var(--vh, 1vh) * 100);
+  }
+
+  &.keyboard-visible {
+    max-height: var(--keyboard-visible-height);
   }
 `;
 
@@ -107,6 +131,7 @@ const AppLayout = ({ children, hideNavigation = false }) => {
     const location = useLocation();
     const contentRef = useRef(null);
     const containerRef = useRef(null);
+    const safeAreaViewRef = useRef(null);
     
     // Обработка изменения размера окна или переориентации
     useEffect(() => {
@@ -120,6 +145,10 @@ const AppLayout = ({ children, hideNavigation = false }) => {
             document.documentElement.style.setProperty('--tg-viewport-width', `${viewportDimensions.width}px`);
             document.documentElement.style.setProperty('--tg-viewport-height', `${viewportDimensions.height}px`);
             document.documentElement.style.setProperty('--tg-viewport-stable-height', `${viewportDimensions.stableHeight}px`);
+            
+            // Устанавливаем --vh для точного расчета высоты на мобильных устройствах
+            const vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
             
             // Применяем ограничения прокрутки
             if (contentRef.current) {
@@ -183,6 +212,46 @@ const AppLayout = ({ children, hideNavigation = false }) => {
             }
         }
 
+        // Проверяем, является ли устройство мобильным
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // Устанавливаем атрибуты для мобильных устройств
+        if (isMobile) {
+            document.body.setAttribute('data-is-mobile', 'true');
+            
+            if (containerRef.current) {
+                containerRef.current.setAttribute('data-is-mobile', 'true');
+            }
+            
+            if (safeAreaViewRef.current) {
+                safeAreaViewRef.current.setAttribute('data-is-mobile', 'true');
+            }
+            
+            if (contentRef.current) {
+                contentRef.current.setAttribute('data-is-mobile', 'true');
+            }
+            
+            // Установка vh для iOS
+            const setVhProperty = () => {
+                const vh = window.innerHeight * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+                console.log(`Установлена высота вьюпорта: --vh = ${vh}px`);
+            };
+            
+            setVhProperty();
+            window.addEventListener('resize', setVhProperty);
+            window.addEventListener('orientationchange', () => {
+                // Добавляем небольшую задержку для iOS
+                setTimeout(setVhProperty, 300);
+            });
+            
+            return () => {
+                window.removeEventListener('resize', setVhProperty);
+                window.removeEventListener('orientationchange', setVhProperty);
+                document.body.removeAttribute('data-is-mobile');
+            };
+        }
+        
         // Устанавливаем CSS переменные для безопасных зон
         document.documentElement.style.setProperty(
             '--safe-area-top', 'env(safe-area-inset-top, 0px)'
@@ -206,6 +275,7 @@ const AppLayout = ({ children, hideNavigation = false }) => {
             const fixIOSSafariHeight = () => {
                 const vh = window.innerHeight * 0.01;
                 document.documentElement.style.setProperty('--vh', `${vh}px`);
+                console.log(`Обновлена высота для iOS: --vh = ${vh}px`);
             };
             
             fixIOSSafariHeight();
@@ -217,16 +287,26 @@ const AppLayout = ({ children, hideNavigation = false }) => {
     // Получаем информацию, нужна ли прокрутка на текущей странице
     const allowScroll = shouldAllowScrolling(location.pathname);
     const isCompact = isCompactMode();
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     return (
         <>
             <DesktopContainer />
-            <MobileContainer ref={containerRef} className={isCompact ? 'tg-compact-mode' : ''}>
+            <MobileContainer 
+                ref={containerRef} 
+                className={isCompact ? 'tg-compact-mode' : ''}
+                data-is-mobile={isMobile ? 'true' : 'false'}
+            >
                 <ConnectionStatus />
-                <SafeAreaView className={isCompact ? 'tg-compact-mode' : ''}>
+                <SafeAreaView 
+                    ref={safeAreaViewRef}
+                    className={isCompact ? 'tg-compact-mode' : ''}
+                    data-is-mobile={isMobile ? 'true' : 'false'}
+                >
                     <PageContent 
                         ref={contentRef} 
                         className={`${allowScroll ? 'scrollable' : ''} ${isCompact ? 'tg-compact-mode' : ''}`}
+                        data-is-mobile={isMobile ? 'true' : 'false'}
                     >
                         {children}
                     </PageContent>
