@@ -47,6 +47,8 @@ const NavigationContainer = styled.div`
   
   @media (max-width: 480px) {
     transform: ${props => props.$hidden ? 'translateY(100%)' : 'translateY(0)'};
+    width: 100%;
+    max-width: 100%;
   }
   
   /* Дополнительные стили для iPhone с вырезами */
@@ -276,30 +278,29 @@ const BottomNavigation = ({ items = [], isCompactMode = false }) => {
     // Скрываем/показываем меню при скролле только для прокручиваемых страниц
     useEffect(() => {
         const handleScroll = () => {
-            // В компактном режиме всегда показываем меню
-            if (isCompactMode) {
+            // Don't hide navigation on chat screens
+            if (currentPath.includes('/chat/')) {
                 setIsVisible(true);
                 return;
             }
-            
-            const scrollY = window.scrollY;
-            const threshold = 20; // Минимальная разница для срабатывания
 
-            // Показываем меню при скролле вверх или если мы в верхней части страницы
-            if (scrollY < lastScrollY - threshold || scrollY < 100) {
+            const scrollY = window.scrollY;
+            const scrollThreshold = 20;
+            
+            if (scrollY > lastScrollY + scrollThreshold && scrollY > 100) {
+                // Scrolling down, hide nav
+                setIsVisible(false);
+            } else if (scrollY < lastScrollY - scrollThreshold || scrollY < 100) {
+                // Scrolling up or near top, show nav
                 setIsVisible(true);
             }
-            // Скрываем меню при скролле вниз
-            else if (scrollY > lastScrollY + threshold) {
-                setIsVisible(false);
-            }
-
+            
             setLastScrollY(scrollY);
         };
 
         window.addEventListener('scroll', handleScroll, { passive: true });
         return () => window.removeEventListener('scroll', handleScroll);
-    }, [lastScrollY, isCompactMode]);
+    }, [lastScrollY, currentPath]);
 
     // Если нет элементов, не рендерим меню
     if (!items || items.length === 0) {

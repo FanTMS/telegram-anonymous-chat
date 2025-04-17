@@ -191,18 +191,33 @@ const MessageInput = forwardRef(({ onSendMessage, onSend, disabled = false, plac
         
         if (keyboardHeight > 0) {
           document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
+          
+          // Ensure the input field is visible and not hidden by keyboard
+          if (textareaRef.current) {
+            setTimeout(() => {
+              textareaRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }, 100);
+          }
         }
       }
       
       // Add class to the input container
       if (containerRef.current) {
         containerRef.current.classList.add('keyboard-visible');
+        containerRef.current.style.position = 'fixed';
+        containerRef.current.style.bottom = '0';
+        containerRef.current.style.left = '0';
+        containerRef.current.style.right = '0';
+        containerRef.current.style.zIndex = '1000';
+        containerRef.current.style.backgroundColor = 'var(--tg-theme-bg-color, #ffffff)';
       }
       
       // Add class to parent messages container if it exists
       const messagesContainer = document.querySelector('.chat-messages, [class*="MessagesContainer"]');
       if (messagesContainer) {
         messagesContainer.classList.add('keyboard-visible');
+        // Adjust padding to prevent content from being hidden behind the keyboard
+        messagesContainer.style.paddingBottom = `calc(70px + ${keyboardHeight || 0}px)`;
       }
     };
 
@@ -216,12 +231,19 @@ const MessageInput = forwardRef(({ onSendMessage, onSend, disabled = false, plac
       // Remove class from the input container
       if (containerRef.current) {
         containerRef.current.classList.remove('keyboard-visible');
+        containerRef.current.style.position = '';
+        containerRef.current.style.bottom = '';
+        containerRef.current.style.left = '';
+        containerRef.current.style.right = '';
+        containerRef.current.style.zIndex = '';
+        containerRef.current.style.backgroundColor = '';
       }
       
       // Remove class from parent messages container if it exists
       const messagesContainer = document.querySelector('.chat-messages, [class*="MessagesContainer"]');
       if (messagesContainer) {
         messagesContainer.classList.remove('keyboard-visible');
+        messagesContainer.style.paddingBottom = `calc(70px + env(safe-area-inset-bottom, 0px))`;
       }
     };
 

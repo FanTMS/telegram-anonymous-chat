@@ -451,43 +451,21 @@ const Chat = () => {
 
     // Завершение чата
     const handleEndChat = async () => {
-        try {
-            // Проверяем, не завершен ли уже чат
-            if (chatEnded) {
-                console.log('Чат уже был завершен');
-                return;
+        if (window.confirm('Вы действительно хотите завершить чат?')) {
+            try {
+                setChatEnded(true);
+                await endChat(chatId, userId);
+                
+                // Add a small delay before redirecting to ensure state is updated
+                setTimeout(() => {
+                    // Navigate back to chats list
+                    navigate('/anonymous-chats');
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Error ending chat:', error);
+                setChatEnded(false);
             }
-            
-            // Для чатов поддержки возможность завершения отключена
-            if (isSupportChat || chat?.type === 'support') {
-                console.log('Завершение чатов технической поддержки отключено');
-                return;
-            }
-            
-            // Для обычных чатов - стандартное завершение
-            await endChat(chatId, userId);
-            
-            // Проверяем, есть ли уже системное сообщение о завершении
-            const hasEndMessage = messages.some(
-                msg => msg.type === 'system' && msg.text.includes('Чат был завершен')
-            );
-            
-            // Добавляем системное сообщение только если его еще нет
-            if (!hasEndMessage) {
-                await addDoc(collection(db, "messages"), {
-                    chatId: chatId,
-                    type: 'system',
-                    text: 'Чат был завершен',
-                    timestamp: serverTimestamp(),
-                    clientTimestamp: new Date(),
-                    read: true
-                });
-            }
-            
-            setChatEnded(true);
-        } catch (error) {
-            console.error('Error ending chat:', error);
-            setError('Не удалось завершить чат. Попробуйте позже.');
         }
     };
 
@@ -581,6 +559,29 @@ const Chat = () => {
             return date.toLocaleDateString('ru-RU', options);
         }
     };
+
+    // Add this new useEffect to handle chat end status detection and redirection
+    useEffect(() => {
+        // Listen for chat status changes
+        if (chat && chat.id) {
+            const unsubscribe = onSnapshot(doc(db, 'chats', chat.id), (doc) => {
+                const updatedChat = { id: doc.id, ...doc.data() };
+                
+                // Check if chat status has changed to "ended" and we're not already in ended state
+                if (updatedChat.status === 'ended' && !chatEnded) {
+                    setChatEnded(true);
+                    
+                    // Add a small delay before redirecting to ensure state is updated
+                    setTimeout(() => {
+                        // Navigate back to chats list
+                        navigate('/anonymous-chats');
+                    }, 1500);
+                }
+            });
+            
+            return () => unsubscribe();
+        }
+    }, [chat, chatEnded, navigate]);
 
     // Отображаем индикатор загрузки базы данных
     if (dbLoading) {

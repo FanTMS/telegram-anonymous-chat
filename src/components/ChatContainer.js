@@ -57,6 +57,8 @@ const Header = styled.header`
     width: 100%;
     max-width: 100%;
     height: 54px;
+    display: flex !important;
+    opacity: 1 !important;
   }
 `;
 
@@ -88,9 +90,15 @@ const MessagesContainer = styled.div`
     margin-top: 0;
     width: 100%;
     max-width: 100%;
+    position: fixed;
+    top: 0;
+    bottom: 70px;
+    left: 0;
+    right: 0;
 
     &.keyboard-visible {
       padding-bottom: calc(70px + var(--keyboard-height, 0px));
+      bottom: var(--keyboard-height, 0px);
     }
   }
 `;
@@ -154,9 +162,28 @@ const ChatContainer = ({ children, title, onBack, isSupportChat, onEndChat }) =>
 
     // Update on resize
     window.addEventListener('resize', updateHeaderHeight);
+    
+    // Handle keyboard events
+    const handleKeyboardVisibilityChange = () => {
+      updateHeaderHeight();
+      
+      // Ensure the header is visible when the keyboard is hidden
+      if (!document.body.classList.contains('keyboard-visible')) {
+        const header = document.querySelector('header');
+        if (header) {
+          header.style.display = 'flex';
+          header.style.opacity = '1';
+        }
+      }
+    };
+    
+    window.addEventListener('resize', handleKeyboardVisibilityChange);
+    document.addEventListener('visibilitychange', handleKeyboardVisibilityChange);
 
     return () => {
       window.removeEventListener('resize', updateHeaderHeight);
+      window.removeEventListener('resize', handleKeyboardVisibilityChange);
+      document.removeEventListener('visibilitychange', handleKeyboardVisibilityChange);
     };
   }, []);
 
