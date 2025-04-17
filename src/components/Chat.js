@@ -228,38 +228,11 @@ const Chat = () => {
     const [isSending, setIsSending] = useState(false);
     const [dbLoading, setDbLoading] = useState(true);
     const [chatEnded, setChatEnded] = useState(false);
+    const [isSupportChat, setIsSupportChat] = useState(false);
 
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
     
-    // Определяем, является ли чат чатом технической поддержки
-    const isSupportChat = chat?.type === 'support';
-
-    // Проверка соединения с базой данных
-    useEffect(() => {
-        const checkDbConnection = async () => {
-            try {
-                // Устанавливаем таймаут для проверки
-                const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('Таймаут соединения с базой данных')), 10000);
-                });
-
-                // Запрос к базе данных
-                const dbCheckPromise = getDoc(doc(db, 'system', 'config'));
-
-                // Ждем результат с таймаутом
-                await Promise.race([timeoutPromise, dbCheckPromise]);
-                setDbLoading(false);
-            } catch (error) {
-                console.error('Ошибка при проверке подключения к БД:', error);
-                setDbLoading(false);
-                setError('Ошибка подключения к базе данных. Пожалуйста, проверьте соединение с интернетом и перезагрузите страницу.');
-            }
-        };
-
-        checkDbConnection();
-    }, []);
-
     // Обработчик завершения загрузки базы данных
     const handleDbLoadComplete = () => {
         setDbLoading(false);
@@ -292,11 +265,11 @@ const Chat = () => {
                     setLoading(false);
                     return;
                 }
-
+                
                 setChat(chatData);
                 
                 // Проверяем, завершен ли чат
-                if (chatData.status === 'ended' || chatData.status === 'resolved') {
+                if (chatData.status === 'ended' || chatData.status === 'resolved' || chatData.isActive === false) {
                     setChatEnded(true);
                 }
                 
@@ -309,11 +282,9 @@ const Chat = () => {
                         
                         if (partnerDoc.exists()) {
                             const partnerData = partnerDoc.data();
-                            setPartnerInfo({
+                            setChatPartner({
                                 id: partnerId,
-                                name: partnerData.displayName || 'Собеседник',
-                                avatar: partnerData.photoURL,
-                                lastSeen: partnerData.lastSeen
+                                ...partnerData
                             });
                         }
                     } catch (err) {
@@ -352,18 +323,55 @@ const Chat = () => {
                 id: doc.id,
                 ...doc.data(),
                 timestamp: doc.data().timestamp?.toDate() || doc.data().clientTimestamp || new Date()
-            })).sort((a, b) => a.timestamp - b.timestamp); // Сортируем по времени
-            
-            setMessages(newMessages);
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp);
 
-            // Проверка на системные сообщения о завершении чата
-            const endedMessages = newMessages.filter(
-                msg => msg.type === 'system' && 
-                (msg.text.includes('Чат был завершен') || msg.text.includes('закрыто специалистом'))
-            );
+            // Отфильтровываем повторяющиеся системные сообщения о завершении чата, 
+            // оставляя только одно самое последнее сообщение о завершении
+            let hasEndMessage = false;
+            let latestEndMessageIndex = -1;
             
-            if (endedMessages.length > 0) {
+            // Находим последнее сообщение о завершении чата
+            for (let i = newMessages.length - 1; i >= 0; i--) {
+                const msg = newMessages[i];
+                if (msg.type === 'system' && 
+                    (msg.text.includes('Чат был завершен') || msg.text.includes('закрыто специалистом'))) {
+                    hasEndMessage = true;
+                    latestEndMessageIndex = i;
+                    break;
+                }
+            }
+            
+            // Отфильтровываем все остальные сообщения о завершении чата
+            const filteredMessages = newMessages.filter((msg, index) => {
+                if (msg.type === 'system' && 
+                    (msg.text.includes('Чат был завершен') || msg.text.includes('закрыто специалистом'))) {
+                    return index === latestEndMessageIndex;
+                }
+                return true;
+            });
+            
+            setMessages(filteredMessages);
+
+            // Обновляем статус чата только если мы еще не установили флаг chatEnded
+            if (hasEndMessage && !chatEnded) {
                 setChatEnded(true);
+                
+                // Также обновить чат в базе данных, если статус еще не обновлен
+                const updateChatIfNeeded = async () => {
+                    const chatRef = doc(db, 'chats', chatId);
+                    const chatDoc = await getDoc(chatRef);
+                    if (chatDoc.exists() && chatDoc.data().status !== 'ended' && chatDoc.data().status !== 'resolved') {
+                        await updateDoc(chatRef, { 
+                            status: 'ended',
+                            endedAt: serverTimestamp()
+                        });
+                    }
+                };
+                
+                updateChatIfNeeded().catch(err => 
+                    console.error('Ошибка при обновлении статуса чата:', err)
+                );
             }
 
             // Прокручиваем вниз к последнему сообщению
@@ -410,7 +418,14 @@ const Chat = () => {
 
     // Отправка сообщения
     const handleSendMessage = async (messageText) => {
-        if (!messageText || !isAuthenticated || !chat || isSending || chatEnded) return;
+        if (!messageText || !isAuthenticated || !chat) return;
+        
+        // Проверяем, не завершен ли чат
+        if (chatEnded || chat.status === 'ended' || chat.status === 'resolved') {
+            // Вместо setError, можно показать временное уведомление
+            console.warn('Нельзя отправлять сообщения в завершенный чат');
+            return;
+        }
         
         try {
             setIsSending(true);
@@ -426,6 +441,10 @@ const Chat = () => {
             }
         } catch (err) {
             console.error('Ошибка при отправке сообщения:', err);
+            // Показываем ошибку только если это не завершенный чат
+            if (!err.message?.includes('в завершенный чат')) {
+                setError(`Ошибка: ${err.message || 'Не удалось отправить сообщение'}`);
+            }
             setIsSending(false);
         }
     };
@@ -433,31 +452,39 @@ const Chat = () => {
     // Завершение чата
     const handleEndChat = async () => {
         try {
-            // Для обычных чатов - стандартное завершение
-            if (!isSupportChat) {
-                await endChat(chatId);
-                navigate('/chats');
+            // Проверяем, не завершен ли уже чат
+            if (chatEnded) {
+                console.log('Чат уже был завершен');
                 return;
             }
-
-            // Для чата поддержки - только админ может завершить
-            if (isSupportChat && isAdmin) {
-                const chatRef = doc(db, 'chats', chatId);
-                await updateDoc(chatRef, {
-                    status: 'resolved',
-                    resolvedAt: serverTimestamp(),
-                    resolvedBy: userId
-                });
-
-                // Добавляем системное сообщение о завершении
-                await addDoc(collection(db, 'chats', chatId, 'messages'), {
-                    type: 'system',
-                    text: 'Обращение закрыто специалистом поддержки',
-                    createdAt: serverTimestamp()
-                });
-                
-                setChatEnded(true);
+            
+            // Для чатов поддержки возможность завершения отключена
+            if (isSupportChat || chat?.type === 'support') {
+                console.log('Завершение чатов технической поддержки отключено');
+                return;
             }
+            
+            // Для обычных чатов - стандартное завершение
+            await endChat(chatId, userId);
+            
+            // Проверяем, есть ли уже системное сообщение о завершении
+            const hasEndMessage = messages.some(
+                msg => msg.type === 'system' && msg.text.includes('Чат был завершен')
+            );
+            
+            // Добавляем системное сообщение только если его еще нет
+            if (!hasEndMessage) {
+                await addDoc(collection(db, "messages"), {
+                    chatId: chatId,
+                    type: 'system',
+                    text: 'Чат был завершен',
+                    timestamp: serverTimestamp(),
+                    clientTimestamp: new Date(),
+                    read: true
+                });
+            }
+            
+            setChatEnded(true);
         } catch (error) {
             console.error('Error ending chat:', error);
             setError('Не удалось завершить чат. Попробуйте позже.');
@@ -670,12 +697,19 @@ const Chat = () => {
                 )}
             </MessagesContainer>
 
-            <MessageInput
-                onSendMessage={handleSendMessage}
-                disabled={!chat || !chat.isActive || chatEnded}
-                placeholder={chatEnded ? "Чат завершен" : "Напишите сообщение..."}
-                onTyping={handleTypingStatus}
-            />
+            <div className="message-input-container">
+                {!chatEnded ? (
+                    <MessageInput
+                        onSend={handleSendMessage}
+                        onTyping={handleTypingStatus}
+                        disabled={isSending}
+                    />
+                ) : (
+                    <div className="chat-ended-input">
+                        <p>Этот чат был завершен</p>
+                    </div>
+                )}
+            </div>
         </ChatContainer>
     );
 };

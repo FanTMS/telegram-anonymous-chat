@@ -368,38 +368,6 @@ const ChatHeader = ({
                         <span>Завершить</span>
                     </EndChatButton>
                 )}
-                
-                {isSupportChat && isAdmin && !chatEnded && (
-                    <EndChatButton isAdmin onClick={onEndChat} isCompact={compact}>
-                        <svg 
-                            viewBox="0 0 24 24" 
-                            fill="none" 
-                            stroke="currentColor" 
-                            strokeWidth="2" 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round"
-                        >
-                            <path d="M5 13l4 4L19 7"/>
-                        </svg>
-                        <span>Завершить</span>
-                    </EndChatButton>
-                )}
-                
-                {chatEnded && (
-                    <EndChatButton disabled isCompact={compact}>
-                        <svg 
-                            viewBox="0 0 24 24" 
-                            fill="none" 
-                            stroke="currentColor" 
-                            strokeWidth="2" 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round"
-                        >
-                            <path d="M18 6L6 18M6 6l12 12"/>
-                        </svg>
-                        <span>Завершен</span>
-                    </EndChatButton>
-                )}
             </RightSection>
         </HeaderContainer>
     );

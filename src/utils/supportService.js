@@ -135,6 +135,12 @@ export const getSupportRequests = async (status = null, maxResults = 50) => {
  */
 export const updateSupportRequest = async (requestId, status, adminId, response = null) => {
     try {
+        // Запрещаем установку статуса 'resolved' (завершение чата поддержки отключено)
+        if (status === 'resolved') {
+            console.log('Функция завершения чатов технической поддержки отключена');
+            return false;
+        }
+        
         const requestRef = doc(db, 'supportRequests', requestId);
         const requestDoc = await getDoc(requestRef);
 
@@ -220,6 +226,21 @@ export const addSupportChat = async (userId, message) => {
         // Проверяем существование чата поддержки для пользователя
         let supportChatId = await getSupportChatId(userId);
         console.log('Найден существующий чат поддержки:', supportChatId);
+
+        // Если чат существует, проверяем, не является ли он завершенным
+        if (supportChatId) {
+            const chatRef = doc(db, 'chats', supportChatId);
+            const chatDoc = await getDoc(chatRef);
+            
+            if (chatDoc.exists()) {
+                const chatData = chatDoc.data();
+                // Если чат завершен или неактивен, создаем новый
+                if (chatData.status === 'resolved' || chatData.status === 'ended' || !chatData.isActive) {
+                    console.log('Найденный чат поддержки завершен, создаем новый');
+                    supportChatId = null;
+                }
+            }
+        }
 
         if (!supportChatId) {
             console.log('Создание нового чата поддержки...');
@@ -428,8 +449,13 @@ export const createSupportTicket = async (userId, initialMessage) => {
     }
 };
 
-// Завершение обращения в поддержку
+// Завершение обращения в поддержку - функция отключена
 export const resolveSupportTicket = async (chatId, adminId) => {
+    console.log('Функция завершения чатов технической поддержки отключена');
+    // Возвращаем false вместо выполнения кода завершения чата
+    return false;
+    
+    /* Оригинальный код закомментирован
     try {
         const chatRef = doc(db, 'chats', chatId);
         await updateDoc(chatRef, {
@@ -450,6 +476,7 @@ export const resolveSupportTicket = async (chatId, adminId) => {
         console.error('Error resolving support ticket:', error);
         throw error;
     }
+    */
 };
 
 // Получение истории обращений пользователя

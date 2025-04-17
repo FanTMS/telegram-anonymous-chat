@@ -26,35 +26,6 @@ const AdminSupportChat = ({ chat, messages, onSendMessage, onClose }) => {
         }
     };
 
-    const handleEndChat = async () => {
-        try {
-            const chatRef = doc(db, 'chats', chat.id);
-            await updateDoc(chatRef, {
-                status: 'resolved',
-                resolvedAt: serverTimestamp(),
-                waitingForRating: true
-            });
-
-            // Добавляем системное сообщение о завершении чата
-            await addDoc(collection(db, 'chats', chat.id, 'messages'), {
-                type: 'system',
-                text: 'Обращение закрыто специалистом поддержки',
-                createdAt: serverTimestamp()
-            });
-
-            // Добавляем сообщение с запросом оценки
-            await addDoc(collection(db, 'chats', chat.id, 'messages'), {
-                type: 'rating_request',
-                text: 'Пожалуйста, оцените качество поддержки от 1 до 5 звезд',
-                createdAt: serverTimestamp()
-            });
-
-            navigate('/admin');
-        } catch (error) {
-            console.error('Error ending chat:', error);
-        }
-    };
-
     return (
         <div className="admin-support-chat">
             <div className="admin-chat-header">
@@ -70,24 +41,6 @@ const AdminSupportChat = ({ chat, messages, onSendMessage, onClose }) => {
                     </div>
                 </div>
                 <div className="header-actions">
-                    <button 
-                        className="end-chat-button admin"
-                        onClick={handleEndChat}
-                    >
-                        <svg 
-                            width="20" 
-                            height="20" 
-                            viewBox="0 0 24 24" 
-                            fill="none" 
-                            stroke="currentColor" 
-                            strokeWidth="1.75" 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round"
-                        >
-                            <path d="M5 13l4 4L19 7"/>
-                        </svg>
-                        <span>Завершить обращение</span>
-                    </button>
                     <button 
                         className="back-to-panel"
                         onClick={() => navigate('/admin')}

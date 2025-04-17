@@ -40,7 +40,8 @@ export const ToastProvider = ({ children }) => {
     const [toasts, setToasts] = useState([]);
 
     const showToast = (message, type = 'error', duration = 3000) => {
-        const id = Date.now();
+        // Используем комбинацию Date.now() и случайной строки для уникальности ID
+        const id = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         setToasts(prev => [...prev, { id, message, type, duration, visible: true }]);
         return id;
     };

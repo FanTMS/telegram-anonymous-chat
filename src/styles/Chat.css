@@ -1388,3 +1388,55 @@
     opacity: 0.7;
     cursor: not-allowed;
 }
+
+/* Add styles for the resolved chat notice */
+.chat-resolved-notice {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background-color: rgba(255, 240, 200, 0.7);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    margin-bottom: 8px;
+}
+
+.chat-resolved-icon {
+    font-size: 24px;
+    margin-right: 12px;
+}
+
+.chat-resolved-text {
+    font-size: 14px;
+    color: #664d03;
+    line-height: 1.4;
+}
+
+/* Style for chat ended input notification */
+.chat-ended-input {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(51, 144, 236, 0.08);
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    padding: 15px;
+    text-align: center;
+    width: 100%;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+}
+
+.chat-ended-input p {
+    color: var(--tg-theme-hint-color, #999);
+    font-size: 14px;
+    margin: 0;
+    font-weight: 500;
+}
+
+/* For Telegram Web App */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .chat-ended-input {
+        padding-bottom: calc(15px + env(safe-area-inset-bottom, 0px));
+    }
+}

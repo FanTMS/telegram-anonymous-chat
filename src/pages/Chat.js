@@ -6,16 +6,20 @@ import {
     getChatMessages,
     sendChatMessage,
     checkChatMatchStatus,
-    endChat
+    endChat,
+    updateChatStatus
 } from '../utils/chatService';
 import { addSupportChat } from '../utils/supportService';
 import UserStatus from '../components/UserStatus';
 import { useToast } from '../components/Toast';
-import { collection, query, orderBy, limit, getDocs, onSnapshot, doc, where, updateDoc, serverTimestamp, getDoc, arrayUnion, arrayRemove, writeBatch } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, onSnapshot, doc, where, updateDoc, serverTimestamp, getDoc, arrayUnion, arrayRemove, writeBatch, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import '../styles/Chat.css';
 import { ensureUserFields } from '../utils/userStructureMigration';
 import ReportDialog from '../components/ReportDialog';
+import MessagesContainer from '../components/MessagesContainer';
+import MessageInput from '../components/MessageInput';
+import '../styles/MessagesContainer.css';
 
 const Chat = () => {
     const { chatId } = useParams();
@@ -43,6 +47,7 @@ const Chat = () => {
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [friendRequestStatus, setFriendRequestStatus] = useState('none'); // 'none', 'sent', 'received', 'friends'
     const [showReportDialog, setShowReportDialog] = useState(false);
+    const [chatEnded, setChatEnded] = useState(false);
 
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
@@ -235,6 +240,9 @@ const Chat = () => {
                 if (!chatData.isActive && chatData.status === 'ended') {
                     setChat({...chatData, isEnded: true});
                     showToast('Этот чат был завершен', 'info');
+                } else if (chatData.type === 'support' && chatData.status === 'resolved') {
+                    setChat({...chatData, isEnded: true});
+                    showToast('Этот диалог с технической поддержкой был завершен. Если у вас новый вопрос, отправьте сообщение и будет создан новый диалог.', 'info');
                 } else {
                     setChat(chatData);
                 }
@@ -262,10 +270,40 @@ const Chat = () => {
                 // Настраиваем слушатель сообщений в реальном времени
                 setupMessagesSubscription();
                 
-                // Проверяем статус дружбы только если это не чат поддержки
-                if (chatData.participants && chatData.participants.length > 0) {
-                    const partnerId = chatData.participants.find(id => id !== userId);
-                    await checkFriendStatus(partnerId);
+                // Определяем ID собеседника
+                const partnerId = chatData.participants?.find(id => id !== userId);
+
+                // Загружаем информацию о собеседнике
+                if (partnerId) {
+                    if (partnerId === 'support') {
+                        // Если собеседник - поддержка
+                        setPartnerInfo({ 
+                            id: 'support', 
+                            name: 'Техническая поддержка', 
+                            isOnline: true // Можно установить по умолчанию или получать реальный статус
+                        });
+                    } else {
+                        // Если собеседник - обычный пользователь
+                        try {
+                            const partnerRef = doc(db, 'users', partnerId);
+                            const partnerDoc = await getDoc(partnerRef);
+                            if (partnerDoc.exists()) {
+                                setPartnerInfo({ id: partnerDoc.id, ...partnerDoc.data() });
+                                // Проверяем статус дружбы только для обычных пользователей
+                                await checkFriendStatus(partnerId);
+                            } else {
+                                console.warn('Информация о собеседнике не найдена:', partnerId);
+                                setPartnerInfo({ id: partnerId, name: 'Собеседник' }); // Устанавливаем дефолтное имя
+                            }
+                        } catch (userError) {
+                            console.error('Ошибка при загрузке информации о собеседнике:', userError);
+                            setPartnerInfo({ id: partnerId, name: 'Собеседник' }); // Устанавливаем дефолтное имя при ошибке
+                        }
+                    }
+                } else {
+                    console.warn('Не удалось определить ID собеседника в чате:', chatId);
+                    // Можно установить какое-то дефолтное состояние, если собеседник не определен
+                    setPartnerInfo({ name: 'Собеседник' }); 
                 }
             } catch (error) {
                 console.error('Ошибка при загрузке данных чата:', error);
@@ -286,124 +324,124 @@ const Chat = () => {
                 unsubscribeMessages();
             }
         };
-    }, [chatId, user, navigate, showToast]);
+    }, [chatId, userId, navigate, showToast]);
 
     // Настраиваем слушатель сообщений в реальном времени
     const setupMessagesSubscription = () => {
-        if (!chatId) return;
-        
-        // Отписываемся от предыдущего слушателя, если он существует
-        if (unsubscribeMessages) {
-            unsubscribeMessages();
-        }
+        if (!chatId) return null;
         
         try {
-            const messagesQuery = query(
-                collection(db, "messages"),
+            const messagesRef = collection(db, 'messages');
+            const q = query(
+                messagesRef,
                 where("chatId", "==", chatId),
-                orderBy("timestamp", "asc")
+                orderBy('timestamp', 'desc'),
+                limit(100)
             );
             
             console.log('Настройка подписки на сообщения в чате:', chatId);
             
-            const unsubscribe = onSnapshot(messagesQuery, async (querySnapshot) => {
-                // Оптимизированное обновление сообщений
-                let newMessages = [];
-                let hasChanges = false;
+            const unsubscribe = onSnapshot(q, async (snapshot) => {
+                // Extract messages from snapshot
+                const newMessages = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                    timestamp: doc.data().timestamp?.toDate() || doc.data().clientTimestamp || new Date()
+                }));
                 
-                // Создаем карту существующих сообщений для быстрого поиска
-                const existingMessagesMap = {};
-                messages.forEach(msg => {
-                    if (msg.id && !msg.id.startsWith('temp-')) {
-                        existingMessagesMap[msg.id] = msg;
+                // Sort messages by timestamp
+                const sortedMessages = [...newMessages].sort((a, b) => a.timestamp - b.timestamp);
+                
+                // Deduplicate messages by content
+                const messageMap = new Map();
+                sortedMessages.forEach(msg => {
+                    // Create a unique key based on sender, text and approximate timestamp (rounded to the minute)
+                    const msgTime = msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp);
+                    const timeKey = Math.floor(msgTime.getTime() / 60000); // Round to the nearest minute
+                    const key = `${msg.senderId}_${msg.text}_${timeKey}`;
+                    
+                    // Keep only the message with a valid ID (not temp ID)
+                    if (!messageMap.has(key) || (messageMap.has(key) && msg.id.startsWith('temp-') && !messageMap.get(key).id.startsWith('temp-'))) {
+                        messageMap.set(key, msg);
                     }
                 });
                 
-                // Проверяем новые и измененные сообщения
-                querySnapshot.forEach((doc) => {
-                    const messageData = {
-                        id: doc.id,
-                        ...doc.data(),
-                        timestamp: doc.data().timestamp?.toDate() || new Date()
+                // Convert the map back to an array and sort by timestamp
+                let uniqueMessages = Array.from(messageMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+                
+                // De-duplicate system end chat messages - find only the most recent one
+                const systemEndMessages = uniqueMessages.filter(msg => 
+                    msg.type === 'system' && 
+                    (msg.text.includes('Чат был завершен') || msg.text.includes('закрыто специалистом'))
+                );
+                
+                // If we have multiple system end messages, keep only the latest one
+                if (systemEndMessages.length > 1) {
+                    console.log(`Found ${systemEndMessages.length} system end messages, filtering to keep only the latest`);
+                    
+                    // Find the most recent end message
+                    const latestEndMessage = systemEndMessages.reduce((latest, current) => 
+                        (latest.timestamp > current.timestamp) ? latest : current
+                    );
+                    
+                    // Filter out all other end messages except the latest one
+                    uniqueMessages = uniqueMessages.filter(msg => 
+                        !(msg.type === 'system' && 
+                        (msg.text.includes('Чат был завершен') || msg.text.includes('закрыто специалистом'))) || 
+                        msg.id === latestEndMessage.id
+                    );
+                }
+                
+                setMessages(uniqueMessages);
+
+                // Update chat status if we have an end message
+                if (systemEndMessages.length > 0 && !chatEnded) {
+                    setChatEnded(true);
+                    
+                    // Update chat in database if status not already updated
+                    const updateChatIfNeeded = async () => {
+                        try {
+                            const chatRef = doc(db, 'chats', chatId);
+                            const chatDoc = await getDoc(chatRef);
+                            if (chatDoc.exists() && chatDoc.data().status !== 'ended' && chatDoc.data().status !== 'resolved') {
+                                await updateDoc(chatRef, { 
+                                    status: 'ended',
+                                    endedAt: serverTimestamp()
+                                });
+                                console.log('Updated chat status to ended');
+                            }
+                        } catch (err) {
+                            console.error('Error updating chat status:', err);
+                        }
                     };
                     
-                    // Безопасно удаляем telegramData для предотвращения ошибки React #31
-                    if (messageData.telegramData) {
-                        // Сохраняем нужные данные из telegramData, если они требуются
-                        if (messageData.telegramData.firstName) {
-                            messageData.tgFirstName = messageData.telegramData.firstName;
-                        }
-                        // Полностью удаляем объект telegramData
-                        delete messageData.telegramData;
-                    }
+                    updateChatIfNeeded();
+                }
+
+                // Scroll to bottom if we're already near the bottom
+                if (messagesContainerRef.current) {
+                    const { scrollHeight, scrollTop, clientHeight } = messagesContainerRef.current;
+                    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
                     
-                    // Если сообщение новое или изменилось, отмечаем, что есть изменения
-                    if (!existingMessagesMap[doc.id]) {
-                        hasChanges = true;
-                    }
-                    
-                    newMessages.push(messageData);
-                });
-                
-                // Если есть новые или измененные сообщения, обновляем состояние
-                if (hasChanges || newMessages.length !== messages.length) {
-                    // Заменяем временные сообщения финальными версиями
-                    const tempMessages = messages.filter(msg => msg.id.startsWith('temp-'));
-                    if (tempMessages.length > 0) {
-                        // Находим соответствующие финальные сообщения для временных (по тексту и отправителю)
-                        tempMessages.forEach(tempMsg => {
-                            const matchingFinalMsg = newMessages.find(msg => 
-                                msg.text === tempMsg.text && 
-                                msg.senderId === tempMsg.senderId &&
-                                !msg.id.startsWith('temp-')
-                            );
-                            
-                            // Если нашли соответствующее финальное сообщение, удаляем временное
-                            if (matchingFinalMsg) {
-                                newMessages = newMessages.filter(msg => msg.id !== tempMsg.id);
-                            }
-                        });
-                    }
-                    
-                    // Mark messages as read
-                    if (user && userId && newMessages.length > 0) {
-                        markChatAsRead();
-                    }
-                    
-                    setMessages(newMessages);
-                    
-                    // Определяем, нужно ли прокручивать вниз
-                    const container = messagesContainerRef.current;
-                    if (container) {
-                        const { scrollHeight, scrollTop, clientHeight } = container;
-                        const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
-                        
-                        if (isNearBottom) {
-                            // Используем requestAnimationFrame для более плавного скролла
-                            requestAnimationFrame(() => {
-                                scrollToBottom(true);
-                            });
-                        }
+                    if (isNearBottom) {
+                        scrollToBottom(true);
                     }
                 }
             }, (error) => {
-                console.error('Ошибка при получении сообщений в реальном времени:', error);
+                console.error('Error receiving real-time messages:', error);
             });
             
-            setUnsubscribeMessages(() => unsubscribe);
-            
-            // Возвращаем функцию отписки для использования при размонтировании
             return unsubscribe;
         } catch (error) {
-            console.error('Ошибка при настройке слушателя сообщений:', error);
-            setError('Не удалось загрузить сообщения. Пожалуйста, попробуйте позже.');
+            console.error('Error setting up message listener:', error);
+            setError('Unable to load messages. Please try again later.');
             return null;
         }
     };
 
     // Функция для маркировки чата как прочитанного
     const markChatAsRead = async () => {
-        if (!user || !userId || !chatId) return;
+        if (!userId || !chatId) return;
         
         try {
             // Обновляем индикатор непрочитанных сообщений в чате
@@ -451,7 +489,7 @@ const Chat = () => {
 
     // Вызываем функцию маркировки чата как прочитанный при открытии компонента
     useEffect(() => {
-        if (chatId && user && userId) {
+        if (chatId && userId) {
             console.log("Marking chat as read on component mount:", chatId);
             markChatAsRead();
             
@@ -461,7 +499,7 @@ const Chat = () => {
                 markChatAsRead();
             };
         }
-    }, [chatId, user?.uid]);
+    }, [chatId, userId]);
 
     // Редирект неавторизованного пользователя на страницу регистрации
     useEffect(() => {
@@ -500,6 +538,13 @@ const Chat = () => {
     }, []);
 
     const handleBackClick = () => {
+        // If it's a support chat, just navigate back to chats list without confirmation
+        if (chat?.type === 'support' || partnerInfo?.id === 'support') {
+            navigate('/chats');
+            return;
+        }
+        
+        // For regular chats, show the end chat confirmation if the chat is active
         if (chat?.isActive) {
             setShowEndChatModal(true);
         } else {
@@ -517,8 +562,23 @@ const Chat = () => {
         try {
             console.log('Отправка сообщения. Чат:', chat?.type, 'UserID:', userId, 'ChatID:', chatId);
             
-            // Добавляем сообщение локально для мгновенного отображения
+            // Check if this is a support chat that has been resolved
+            if (chat?.type === 'support' && (chat?.status === 'resolved' || !chat?.isActive)) {
+                console.log('Попытка отправить сообщение в завершенный чат поддержки. Создаем новый чат.');
+                
+                // Create a new support chat
+                await addSupportChat(userId, messageText);
+                showToast('Ваше сообщение отправлено. Создан новый чат с технической поддержкой.', 'success');
+                
+                // Redirect to chats list
+                navigate('/chats');
+                return;
+            }
+            
+            // Create a unique temporary ID that can be used to identify and remove this message later
             const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+            
+            // For optimistic UI update: show the message immediately with a temporary ID
             const tempMessage = {
                 id: tempId,
                 senderId: userId,
@@ -527,48 +587,56 @@ const Chat = () => {
                 timestamp: new Date(),
                 chatId: chatId,
                 pending: true,
-                isTemp: true
+                isTemp: true,
+                // Add a signature to help with deduplication
+                tempSignature: `${userId}_${messageText}_${Math.floor(Date.now() / 60000)}`
             };
             
-            // Явно проверяем, что объект tempMessage не содержит telegramData
+            // Remove telegramData if it somehow got added
             if ('telegramData' in tempMessage) {
                 delete tempMessage.telegramData;
             }
 
-            // Добавляем временное сообщение в список
-            setMessages(prevMessages => [...prevMessages, tempMessage]);
+            // Add temporary message to the state
+            setMessages(prevMessages => {
+                // Check if this message looks like a duplicate
+                const isDuplicate = prevMessages.some(msg => 
+                    msg.senderId === userId && 
+                    msg.text === messageText && 
+                    // Check if the message was sent in the last minute
+                    (new Date() - (msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp))) < 60000
+                );
+                
+                // If it looks like a duplicate, don't add it to the local state
+                if (isDuplicate) {
+                    console.log('Detected potential duplicate message, not adding to local state');
+                    return prevMessages;
+                }
+                
+                return [...prevMessages, tempMessage];
+            });
             
-            // Прокручиваем чат вниз к новому сообщению
+            // Scroll to bottom to show the new message
             requestAnimationFrame(() => {
                 scrollToBottom(true);
             });
 
-            // Отправляем сообщение на сервер
-            if (chat?.type === 'support') {
-                // Если это чат поддержки, используем функцию sendChatMessage
-                // Используем обычную функцию для отправки сообщений, т.к. чат уже создан
-                console.log('Отправка сообщения в чат поддержки через sendChatMessage');
-                await sendChatMessage(chatId, userId, messageText);
-            } else {
-                // Для обычных чатов используем стандартную функцию
-                console.log('Отправка сообщения в обычный чат');
-                await sendChatMessage(chatId, userId, messageText);
-            }
+            // Send the message to the server
+            await sendChatMessage(chatId, userId, messageText);
             
-            // Firebase автоматически обновит состояние через onSnapshot
             console.log('Сообщение успешно отправлено:', messageText);
         } catch (error) {
             console.error("Ошибка при отправке сообщения:", error);
             setError(error.message || "Не удалось отправить сообщение");
             showToast("Не удалось отправить сообщение", "error");
 
-            // Убираем временное сообщение при ошибке
+            // Remove the temporary message on error
             setMessages(prevMessages =>
                 prevMessages.filter(msg => !msg.id.startsWith('temp-'))
             );
         } finally {
             setIsSending(false);
-            // Фокусируем ввод снова
+            // Focus input again
             if (inputRef.current) {
                 inputRef.current.focus();
             }
@@ -582,46 +650,101 @@ const Chat = () => {
         }
     };
 
+    const handleEndChat = async () => {
+        try {
+            // Проверяем, не завершен ли уже чат
+            if (chatEnded) {
+                console.log('Чат уже был завершен');
+                return;
+            }
+            
+            // Проверяем, является ли чат чатом поддержки
+            if (chat?.type === 'support' || partnerInfo?.id === 'support') {
+                console.log('Завершение чатов технической поддержки отключено');
+                showToast('Завершение чатов с технической поддержкой отключено', 'info');
+                return;
+            }
+            
+            // Для обычных чатов - стандартное завершение
+            await endChat(chatId, userId);
+            
+            // Проверяем, есть ли уже системное сообщение о завершении
+            const hasEndMessage = messages.some(
+                msg => msg.type === 'system' && msg.text.includes('Чат был завершен')
+            );
+            
+            // Добавляем системное сообщение только если его еще нет
+            if (!hasEndMessage) {
+                await addDoc(collection(db, "messages"), {
+                    chatId: chatId,
+                    type: 'system',
+                    text: 'Чат был завершен',
+                    timestamp: serverTimestamp(),
+                    clientTimestamp: new Date(),
+                    read: true
+                });
+            }
+            
+            setChatEnded(true);
+        } catch (error) {
+            console.error('Error ending chat:', error);
+            setError('Не удалось завершить чат. Попробуйте позже.');
+        }
+    };
+
     const handleEndChatClick = () => {
+        // Блокируем попытку завершить чат поддержки
+        if (chat?.type === 'support' || partnerInfo?.id === 'support') {
+            showToast('Завершение чатов с технической поддержкой отключено', 'info');
+            return;
+        }
+        
         setShowEndChatModal(true);
     };
 
     const handleEndChatConfirm = async () => {
         try {
-            setIsLoading(true); // Добавляем индикатор загрузки
+            setIsSending(true);
             
-            if (!chatId) {
-                showToast('Ошибка: ID чата не определен', 'error');
+            // Дополнительная проверка на тип чата
+            if (chat?.type === 'support' || partnerInfo?.id === 'support') {
+                showToast('Завершение чатов с технической поддержкой отключено', 'info');
                 setShowEndChatModal(false);
                 return;
             }
             
-            // Проверяем, что у нас есть ID пользователя
-            if (!userId) {
-                showToast('Ошибка: Не удалось определить пользователя', 'error');
-                setShowEndChatModal(false);
-                return;
+            // Update chat status
+            await updateChatStatus(chatId, 'ended');
+            
+            // Check if we already have an end message to avoid duplicates
+            const hasEndMessage = messages.some(
+                msg => msg.type === 'system' && msg.text.includes('Чат был завершен')
+            );
+            
+            // Only add system message if one doesn't exist already
+            if (!hasEndMessage) {
+                // Create a system message with the correct parameters
+                await addDoc(collection(db, "messages"), {
+                    chatId: chatId,
+                    type: 'system',
+                    text: 'Чат был завершен.',
+                    senderId: 'system',
+                    timestamp: serverTimestamp(),
+                    clientTimestamp: new Date(),
+                    read: true
+                });
             }
             
-            // Проверяем, что чат еще активен
-            if (chat && !chat.isActive) {
-                showToast('Чат уже завершен', 'info');
-                navigate('/chats');
-                return;
-            }
-            
-            // Вызываем функцию завершения чата
-            await endChat(chatId, userId);
-            showToast('Чат завершен', 'success');
-            navigate('/chats');
-        } catch (error) {
-            console.error('Ошибка при завершении чата:', error);
-            
-            // Более понятное сообщение для пользователя
-            showToast('Не удалось завершить чат. Попробуйте еще раз позже.', 'error');
-        } finally {
-            setIsLoading(false);
+            // Update component state
+            setChatEnded(true);
             setShowEndChatModal(false);
+            showToast('Чат завершен', 'success');
+            
+        } catch (error) {
+            console.error('Error ending chat:', error);
+            showToast('Не удалось завершить чат. Попробуйте еще раз.', 'error');
+        } finally {
+            setIsSending(false);
         }
     };
 
@@ -635,7 +758,7 @@ const Chat = () => {
         setInputMessage(newValue);
         
         // Если пользователь что-то вводит, отправляем статус "печатает"
-        if (newValue && chatId && user) {
+        if (newValue && chatId && userId) {
             try {
                 const chatRef = doc(db, 'chats', chatId);
                 
@@ -675,16 +798,22 @@ const Chat = () => {
 
     // Добавляем отдельный useEffect для настройки подписки на сообщения
     useEffect(() => {
-        if (chatId && user && !isLoading) {
+        // Зависим от userId вместо всего объекта user для стабильности
+        if (chatId && userId && !isLoading) { 
+            console.log('Setting up message subscription for chat:', chatId);
             const unsubscribe = setupMessagesSubscription();
             
+            // Store the unsubscribe function
+            setUnsubscribeMessages(() => unsubscribe);
+            
             return () => {
+                console.log('Cleaning up message subscription for chat:', chatId);
                 if (unsubscribe) {
                     unsubscribe();
                 }
             };
         }
-    }, [chatId, user, isLoading]);
+    }, [chatId, userId, isLoading]);
 
     const checkFriendStatus = async (partnerId) => {
         try {
@@ -823,15 +952,92 @@ const Chat = () => {
         setShowReportDialog(true);
     };
 
+    // Group messages and render them with date separators
+    const renderMessageGroups = () => {
+        return messages.map((message, index) => {
+            const isOutgoing = userId && message.senderId === userId;
+            const showSenderInfo = !isOutgoing && 
+                                  (index === 0 || 
+                                   messages[index - 1].senderId !== message.senderId);
+                                                      
+            // Группируем сообщения по дате для добавления разделителей между днями
+            const showDateSeparator = index > 0 && 
+                message.timestamp && messages[index-1].timestamp &&
+                new Date(message.timestamp.toDate?.() || message.timestamp).toDateString() !== 
+                new Date(messages[index-1].timestamp.toDate?.() || messages[index-1].timestamp).toDateString();
+                
+            // Определяем тип сообщения (системное, обычное)
+            const isSystemMessage = message.type === 'system' || message.senderId === 'system';
+            
+            return (
+                <React.Fragment key={message.id}>
+                    {showDateSeparator && (
+                        <div className="date-separator">
+                            <span>{new Date(message.timestamp.toDate?.() || message.timestamp).toLocaleDateString(navigator.language || 'ru-RU', {
+                                day: 'numeric',
+                                month: 'long'
+                            })}</span>
+                        </div>
+                    )}
+                    
+                    {isSystemMessage ? (
+                        <div className="system-message">
+                            <span>{typeof message.text === 'string' ? message.text : JSON.stringify(message.text)}</span>
+                        </div>
+                    ) : (
+                        <div
+                            className={`message ${isOutgoing ? 'outgoing' : 'incoming'} ${message.pending ? 'pending' : ''} ${message.senderId === 'support' ? 'support-message' : ''}`}
+                        >
+                            <div className="message-content">
+                                {showSenderInfo && (
+                                    <div className="message-sender">{message.senderName || 'Собеседник'}</div>
+                                )}
+                                <p>{typeof message.text === 'object' ? JSON.stringify(message.text) : message.text}</p>
+                                <span className="message-time">
+                                    {typeof message.timestamp === 'object' || typeof message.timestamp === 'number' || typeof message.timestamp === 'string' 
+                                      ? formatMessageTime(message.timestamp) 
+                                      : ''}
+                                    {isOutgoing && (
+                                        <span className={`message-status ${message.read ? 'read' : ''}`}>
+                                            {message.pending ? 
+                                                <span className="sending-indicator">⌛</span> : 
+                                                message.read ? 
+                                                    <span className="read-indicator">✓✓</span> : 
+                                                    <span className="sent-indicator">✓</span>
+                                            }
+                                        </span>
+                                    )}
+                                </span>
+                            </div>
+                        </div>
+                    )}
+                </React.Fragment>
+            );
+        });
+    };
+
+    // Cleanup all subscriptions when component unmounts
+    useEffect(() => {
+        return () => {
+            if (unsubscribeMessages) {
+                console.log('Final cleanup of message subscription');
+                unsubscribeMessages();
+            }
+            if (unsubscribeChat) {
+                console.log('Final cleanup of chat subscription');
+                unsubscribeChat();
+            }
+        };
+    }, []);
+
     return (
-        <div className="chat-container telegram-chat" ref={chatContainerRef}>
-            <div className="chat-header">
-                <div className="header-left">
-                    <button 
-                        className="back-button" 
-                        onClick={handleBackClick}
-                    >
-                        <i className="fas fa-arrow-left"></i>
+        <div className="chat-container" ref={chatContainerRef}>
+            <header className="chat-header">
+                <div className="partner-info">
+                    <button className="back-button" onClick={handleBackClick}>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
                     </button>
                     <div 
                         className="chat-user-info"
@@ -850,17 +1056,16 @@ const Chat = () => {
                         />
                     </div>
                 </div>
-                <div className="header-actions">
-                    <button 
-                        className="end-chat-button" 
-                        onClick={() => setShowEndChatModal(true)}
-                    >
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                        <span style={{ marginLeft: '4px' }}>Завершить чат</span>
-                    </button>
+                <div className="chat-actions">
+                    {/* Кнопка "Завершить чат" не отображается для чатов поддержки */}
+                    {chat?.type !== 'support' && partnerInfo?.id !== 'support' && (
+                        <button className="end-chat-btn" onClick={handleEndChatClick}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M18 6L6 18M6 6l12 12"></path>
+                            </svg>
+                            Завершить чат
+                        </button>
+                    )}
                     <button
                         className="header-action-button"
                         onClick={() => setShowProfileModal(true)}
@@ -883,137 +1088,90 @@ const Chat = () => {
                         </svg>
                     </button>
                 </div>
-            </div>
+            </header>
 
-            {isLoading ? (
-                <div className="chat-loading">
-                    <div className="chat-loading-spinner"></div>
-                    <p>Загрузка чата...</p>
-                </div>
-            ) : error ? (
-                <div className="chat-error">
-                    <div className="error-icon">!</div>
-                    <p>{error}</p>
-                    <button className="error-back-button" onClick={handleBackClick}>
-                        Вернуться к чатам
-                    </button>
-                </div>
-            ) : (
-                <>
-                    <div className="chat-messages" ref={messagesContainerRef}>
-                        {messages.length === 0 ? (
+            <MessagesContainer
+                className={`chat-messages ${isKeyboardOpen ? 'keyboard-visible' : ''}`}
+                ref={messagesContainerRef}
+                onScroll={checkScrollPosition}
+            >
+                {isLoading ? (
+                    <div className="chat-loading">
+                        <div className="chat-loading-spinner"></div>
+                        <p>Загрузка сообщений...</p>
+                    </div>
+                ) : error ? (
+                    <div className="chat-error">
+                        <div className="error-icon">!</div>
+                        <p>{error}</p>
+                        <button className="error-back-button" onClick={handleBackClick}>
+                            Вернуться к списку чатов
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        {messages.length === 0 && (
                             <div className="no-messages">
                                 <div className="no-messages-icon">💬</div>
-                                <p>Начните общение! Отправьте первое сообщение, чтобы завести беседу.</p>
+                                <p>Напишите первое сообщение, чтобы начать общение</p>
                             </div>
-                        ) : (
-                            <>
-                                {messages.map((message, index) => {
-                                    const isOutgoing = userId && message.senderId === userId;
-                                    const showSenderInfo = !isOutgoing && 
-                                                          (index === 0 || 
-                                                           messages[index - 1].senderId !== message.senderId);
-                                                           
-                                    // Группируем сообщения по дате для добавления разделителей между днями
-                                    const showDateSeparator = index > 0 && 
-                                        message.timestamp && messages[index-1].timestamp &&
-                                        new Date(message.timestamp.toDate?.() || message.timestamp).toDateString() !== 
-                                        new Date(messages[index-1].timestamp.toDate?.() || messages[index-1].timestamp).toDateString();
-                                        
-                                    // Определяем тип сообщения (системное, обычное)
-                                    const isSystemMessage = message.type === 'system' || message.senderId === 'system';
-                                    
-                                    return (
-                                        <React.Fragment key={message.id}>
-                                            {showDateSeparator && (
-                                                <div className="date-separator">
-                                                    <span>{new Date(message.timestamp.toDate?.() || message.timestamp).toLocaleDateString(navigator.language || 'ru-RU', {
-                                                        day: 'numeric',
-                                                        month: 'long'
-                                                    })}</span>
-                                                </div>
-                                            )}
-                                            
-                                            {isSystemMessage ? (
-                                                <div className="system-message">
-                                                    <span>{typeof message.text === 'string' ? message.text : JSON.stringify(message.text)}</span>
-                                                </div>
-                                            ) : (
-                                                <div
-                                                    className={`message ${isOutgoing ? 'outgoing' : 'incoming'} ${message.pending ? 'pending' : ''} ${message.senderId === 'support' ? 'support-message' : ''}`}
-                                                >
-                                                    <div className="message-content">
-                                                        {showSenderInfo && (
-                                                            <div className="message-sender">{message.senderName || 'Собеседник'}</div>
-                                                        )}
-                                                        <p>{typeof message.text === 'object' ? JSON.stringify(message.text) : message.text}</p>
-                                                        <span className="message-time">
-                                                            {typeof message.timestamp === 'object' || typeof message.timestamp === 'number' || typeof message.timestamp === 'string' 
-                                                              ? formatMessageTime(message.timestamp) 
-                                                              : ''}
-                                                            {isOutgoing && (
-                                                                <span className={`message-status ${message.read ? 'read' : ''}`}>
-                                                                    {message.pending ? 
-                                                                        <span className="sending-indicator">⌛</span> : 
-                                                                        message.read ? 
-                                                                            <span className="read-indicator">✓✓</span> : 
-                                                                            <span className="sent-indicator">✓</span>
-                                                                    }
-                                                                </span>
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </React.Fragment>
-                                    );
-                                })}
-                                <div ref={messagesEndRef} />
-                            </>
                         )}
-                    </div>
-
-                    <div className={`message-input ${isKeyboardOpen ? 'keyboard-visible' : ''}`}>
-                        <input
-                            type="text"
-                            placeholder="Введите сообщение..."
-                            value={inputMessage}
-                            onChange={handleInputChange}
-                            onKeyDown={handleKeyDown}
-                            ref={inputRef}
-                            disabled={isSending}
-                        />
-                        <button 
-                            onClick={handleSendMessage} 
-                            disabled={!inputMessage.trim() || isSending}
-                            className={isSending ? 'sending' : ''}
-                            aria-label="Отправить сообщение"
-                        >
-                            {isSending ? (
-                                <div className="send-loader"></div>
-                            ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="22" y1="2" x2="11" y2="13"></line>
-                                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        
+                        {renderMessageGroups()}
+                        
+                        {isPartnerTyping && (
+                            <div className="partner-typing">
+                                <span>Печатает</span>
+                                <div className="typing-dots">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
+                        )}
+                        
+                        <div ref={messagesEndRef}></div>
+                        
+                        {showScrollButton && (
+                            <button className="scroll-bottom-btn" onClick={() => scrollToBottom(true)}>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
                                 </svg>
-                            )}
-                        </button>
-                    </div>
+                            </button>
+                        )}
 
-                    {showScrollButton && (
-                        <button 
-                            className="scroll-bottom-btn" 
-                            onClick={() => scrollToBottom(true)}
-                            aria-label="Прокрутить вниз"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <polyline points="8 12 12 16 16 12"></polyline>
-                                <line x1="12" y1="8" x2="12" y2="16"></line>
-                            </svg>
-                        </button>
-                    )}
-                </>
+                        {chatEnded && (
+                            <div className="chat-ended-notice">
+                                <span>Этот чат был завершен</span>
+                            </div>
+                        )}
+                    </>
+                )}
+            </MessagesContainer>
+
+            {/* Show notice for resolved support chats */}
+            {chat?.type === 'support' && (chat?.status === 'resolved' || !chat?.isActive) && (
+                <div className="chat-resolved-notice">
+                    <div className="chat-resolved-icon">ℹ️</div>
+                    <div className="chat-resolved-text">
+                        Этот диалог с технической поддержкой завершен. 
+                        <br />Отправьте сообщение, чтобы создать новый диалог.
+                    </div>
+                </div>
+            )}
+
+            {/* Input container */}
+            {!isLoading && !error && !chatEnded && (
+                <div className={`chat-input-container ${isKeyboardOpen ? 'keyboard-open' : ''}`}>
+                    <MessageInput
+                        value={inputMessage}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyDown}
+                        onSendMessage={handleSendMessage}
+                        disabled={isLoading || chatEnded || chat?.status === 'ended'}
+                        ref={inputRef}
+                    />
+                </div>
             )}
 
             {showEndChatModal && (

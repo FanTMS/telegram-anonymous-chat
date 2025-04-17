@@ -88,7 +88,7 @@ const ProfileIcon = () => (
 );
 
 // Элементы навигации
-const _navigationItems = [
+const navigationItems = [
     {
         path: '/',
         label: 'Главная',
@@ -941,5 +941,5 @@ const Root = () => {
     );
 };
 
-export { Root };
+export { Root, navigationItems };
 export default App;

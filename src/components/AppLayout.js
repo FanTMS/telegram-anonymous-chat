@@ -4,6 +4,7 @@ import { useTelegram } from '../utils/useTelegram';
 import styled from 'styled-components';
 import ConnectionStatus from './ConnectionStatus';
 import BottomNavigation from './BottomNavigation';
+import { navigationItems } from '../App';
 import { 
   isCompactMode, 
   applyCompactModeStyles, 
@@ -100,40 +101,6 @@ const DesktopContainer = styled.div`
   left: 0;
   z-index: -1;
 `;
-
-// Элементы навигации
-const navigationItems = [
-    {
-        path: '/',
-        label: 'Главная',
-        icon: 'home',
-        includesPaths: ['/home']
-    },
-    {
-        path: '/chats',
-        label: 'Чаты',
-        icon: 'chat',
-        includesPaths: ['/chat/']
-    },
-    {
-        path: '/friends',
-        label: 'Друзья',
-        icon: 'user-friends',
-        includesPaths: ['/friends/']
-    },
-    {
-        path: '/groups',
-        label: 'Группы',
-        icon: 'group',
-        includesPaths: ['/groups/']
-    },
-    {
-        path: '/profile',
-        label: 'Профиль',
-        icon: 'person',
-        includesPaths: ['/settings']
-    }
-];
 
 const AppLayout = ({ children, hideNavigation = false }) => {
     const { WebApp, isAvailable, supportsMethod } = useTelegram();

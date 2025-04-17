@@ -62,22 +62,45 @@ const ChatsList = () => {
                 const userChats = await getUserChats(userId);
                 console.log('Получены чаты пользователя:', userChats);
 
+                // Фильтруем дубликаты по ID
+                const uniqueChatsMap = new Map();
+                userChats.forEach(chat => {
+                    uniqueChatsMap.set(chat.id, chat);
+                });
+                const uniqueChats = Array.from(uniqueChatsMap.values());
+
                 // Проверяем наличие чата поддержки
-                let hasSupportChat = false;
+                const supportChats = uniqueChats.filter(chat => 
+                    chat.type === 'support' || chat.isSupportChat
+                );
+                
                 let supportChat = null;
                 
-                // Ищем чат поддержки в полученных чатах
-                for (const chat of userChats) {
-                    if (chat.type === 'support' || chat.isSupportChat) {
-                        hasSupportChat = true;
-                        supportChat = chat;
-                        setSupportChatId(chat.id);
-                        break;
+                if (supportChats.length > 0) {
+                    // Если обнаружено несколько чатов поддержки, используем самый свежий
+                    supportChat = supportChats.reduce((latest, current) => {
+                        const latestTime = latest.lastMessageTime?.toDate?.() || latest.lastActivity?.toDate?.() || latest.createdAt?.toDate?.() || new Date(0);
+                        const currentTime = current.lastMessageTime?.toDate?.() || current.lastActivity?.toDate?.() || current.createdAt?.toDate?.() || new Date(0);
+                        return currentTime > latestTime ? current : latest;
+                    }, supportChats[0]);
+                    
+                    // Удаляем все чаты поддержки из списка, мы добавим только один
+                    const filteredChats = uniqueChats.filter(chat => 
+                        !(chat.type === 'support' || chat.isSupportChat) || chat.id === supportChat.id
+                    );
+                    
+                    setSupportChatId(supportChat.id);
+                    
+                    // Добавляем выбранный чат поддержки обратно в список, если его каким-то образом удалили
+                    if (!filteredChats.find(chat => chat.id === supportChat.id)) {
+                        filteredChats.push(supportChat);
                     }
-                }
-                
-                // Если чат поддержки не найден, создаем его
-                if (!hasSupportChat) {
+                    
+                    // Обновляем список чатов без дубликатов
+                    uniqueChats.length = 0;
+                    uniqueChats.push(...filteredChats);
+                } else {
+                    // Если чат поддержки не найден, создаем его
                     console.log('Чат поддержки не найден, создаем новый');
                     try {
                         const newSupportChatId = await createSupportChat(userId);
@@ -92,7 +115,7 @@ const ChatsList = () => {
                             
                             if (supportChatData) {
                                 // Добавляем чат поддержки к списку чатов
-                                userChats.push({
+                                uniqueChats.push({
                                     ...supportChatData,
                                     id: newSupportChatId,
                                     isSupportChat: true,
@@ -109,7 +132,7 @@ const ChatsList = () => {
                 }
 
                 // Сортировка чатов: сначала закрепленные, затем по времени
-                userChats.sort((a, b) => {
+                uniqueChats.sort((a, b) => {
                     // Если один чат закреплен, а другой нет
                     if (a.pinned && !b.pinned) return -1;
                     if (!a.pinned && b.pinned) return 1;
@@ -121,9 +144,9 @@ const ChatsList = () => {
                     return timeB.getTime() - timeA.getTime();
                 });
 
-                console.log('Отсортированные чаты:', userChats);
-                setChats(userChats);
-                setFilteredChats(userChats);
+                console.log('Отсортированные чаты без дубликатов:', uniqueChats);
+                setChats(uniqueChats);
+                setFilteredChats(uniqueChats);
                 setLastRefreshed(new Date());
                 setIsLoading(false);
             } catch (err) {
